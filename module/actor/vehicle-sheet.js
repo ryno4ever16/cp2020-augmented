@@ -95,10 +95,10 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     const isMM = rule === "MaximumMetal";
     let mmOn = false;
     try { mmOn = mmEnabled(); } catch (e) { /* settings not ready */ }
-    let controlEnabled = true;
-    try { controlEnabled = game.settings.get("cp2020-augmented", "vehicleControlEnabled"); } catch (e) { /* default */ }
-    let damageEnabled = true;
-    try { damageEnabled = game.settings.get("cp2020-augmented", "vehicleDamageEnabled"); } catch (e) { /* default */ }
+    // ⏪ The vehicleControlEnabled / vehicleDamageEnabled switches were RETIRED 2026-08-29
+    // (settings-trim): both gated press-driven sheet features — don't press is the opt-out.
+    const controlEnabled = true;
+    const damageEnabled = true;
 
     // Reactive Armor wear (MM p.23): the deflection roll drops 1 per two absorbed shaped/HE hits.
     const rHits = Number(system?.reactiveHits) || 0;

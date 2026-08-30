@@ -598,8 +598,11 @@ export async function resolveAreaDamages({ target, areaDamages, ap, edged = fals
  * Between-hit SP degradation MUST match the async auto-apply path (applyAreaDamages) so the dialog
  * Apply button and auto-apply produce identical totals: the cached per-location SP is the
  * UN-multiplied base (the armor mono/edged/ammo multiplier is applied FRESH each hit off that base),
- * and degradation between hits is the SAME ablation model gated behind the SAME `damageAblation`
- * setting (threaded in as `ablate`). This is a pure resolver — it SIMULATES the ablation the async
+ * and degradation between hits is the SAME ablation model gated behind the SAME per-application `ablate`
+ * value (threaded in by the caller). ⏪ That value used to come from a `damageAblation` world switch;
+ * the switch retired 2026-08-29 (settings-trim), MERGED into `damageArmorMode` — "full" MEANS
+ * wear-on-penetration — and the damage window's own checkbox still overrides it per application. Nothing
+ * in this file reads either key: `ablate` arrives already decided. This is a pure resolver — it SIMULATES the ablation the async
  * path performs via real document writes (ablateLocationOnce → _deriveLiveSP re-derive); the actual
  * writes happen in DamageDialog._onApply's apply loop.
  */

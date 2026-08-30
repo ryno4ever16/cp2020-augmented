@@ -42,7 +42,7 @@ import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDot
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 // combatFxEnabled is read (with the presentation rail's patternFlowOwns) at the pattern's apply, so one
 // round is not sounded twice — once on arrival by the rail and again when the corridor is confirmed.
-import { mechRoundTickEnabled, combatFxEnabled } from "../settings.js";
+import { mechRoundTickEnabled, combatFxEnabled, specialMeleeEffectsEnabled } from "../settings.js";
 import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, firingActorOf, localize, localizeParam, tryLocalize, cappedWoundDamage } from "../utils.js";
 import { renderChatCard, getHtmlElement }                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
@@ -185,11 +185,19 @@ function _isShotCard(message, payload) {
   return true;
 }
 
+// ⏪ `multiActionAutoTrack` RETIRED 2026-08-29 (settings-trim): the counter always tracks — it also
+// feeds the movement advisory — and the number it produces lands as a LABELED, editable line in the
+// roll dialog (_hookMultiActionPenalty's renderModifiersDialog handler), which is what the manual-only
+// mode existed to make legible. Kept as a hard-true accessor for its callers.
+// ⚠ `multiActionPenaltyEnabled` was retired in the same pass and RESTORED the same day (user ruling):
+// this rule engages AUTOMATICALLY on every second action, so without the switch a table that skips it
+// pays a zero-the-prefill tax on every roll. The gate is back (default ON — the penalty is visible and
+// editable where it applies); the badge, ➕ control, prefill and note all read through it as before.
 function _isMultiActionEnabled() {
-  try { return game.settings.get("cp2020-augmented", "multiActionPenaltyEnabled"); } catch { return false; }
+  try { return game.settings.get("cp2020-augmented", "multiActionPenaltyEnabled") !== false; } catch { return true; }
 }
 function _isMultiActionAutoTrack() {
-  try { return game.settings.get("cp2020-augmented", "multiActionAutoTrack"); } catch { return false; }
+  return true;
 }
 /** True when there is a started combat that this actor is a combatant in. The multi-action counter is
  *  combat-scoped: only a running combat has the round boundary that resets it (see the round-reset and
@@ -398,7 +406,9 @@ export function registerDamageHooks() {
         await actor.unsetFlag("cp2020-augmented", "aimRounds");
       } else {
         await actor.setFlag("cp2020-augmented", "aimRounds", next);
-        if (_isMultiActionEnabled() && _isMultiActionAutoTrack()) await _incrementActionCount(actor);
+        // ⏪ The auto-track gate is retired (settings-trim 2026-08-29) — pressing the control IS the
+        // declaration, so it always stamps the counter.
+        await _incrementActionCount(actor);
       }
       ui.combat?.render();
     }
@@ -464,7 +474,8 @@ export function registerDamageHooks() {
         // to invent here — a dodge IS an action, so counting it is exactly what makes this actor's
         // NEXT action this round pre-fill −3 through the shared multi-action counter. Adding a
         // separate −3 on top would charge the same clause twice.
-        if (_isMultiActionEnabled() && _isMultiActionAutoTrack()) await _incrementActionCount(actor);
+        // ⏪ The auto-track gate is retired (settings-trim 2026-08-29): the counter always stamps.
+        await _incrementActionCount(actor);
         await postSavePromptCard({
           title: localizeParam("DodgeDeclareTitle", { name: actor.name }),
           body: localizeParam("DodgeDeclareBody", { name: actor.name }),
@@ -486,7 +497,8 @@ export function registerDamageHooks() {
         await actor.setFlag("cp2020-augmented", "parrying", true);
         // Same joint as the dodge above: p.112's "-3 TO DEFENDER'S OTHER ACTIONS" is represented by
         // counting the parry as an action, not by a second penalty of its own.
-        if (_isMultiActionEnabled() && _isMultiActionAutoTrack()) await _incrementActionCount(actor);
+        // ⏪ The auto-track gate is retired (settings-trim 2026-08-29): the counter always stamps.
+        await _incrementActionCount(actor);
         await postSavePromptCard({
           title: localizeParam("ParryDeclareTitle", { name: actor.name }),
           body: localize("ParryDeclareBody"),
@@ -908,12 +920,14 @@ function _hookRenderChatMessage() {
  *      lane is a permanent hand-authored kill lane and never auto-expires.
  *
  * Evasion: Athletics + REF + 1d10 vs saveDC (CP2020 p.101). Failure: 1d6 random hits with the weapon's
- * damage formula, routed back through the weaponFired pipeline. The whole feature is gated by the
- * `suppressiveFireSaves` setting.
+ * damage formula, routed back through the weaponFired pipeline. No world switch fronts the flow: the
+ * declaration plus the lane placement is the opt-in, and cancelling the preview declines it.
  */
+// ⏪ `suppressiveFireSaves` RETIRED 2026-08-29 (settings-trim): declaring the burst and PLACING the lane
+// is the opt-in, and the placement preview cancels — the switch only gated whether the lane was offered
+// at all. NOTE it shipped default:false, so answering true turns the flow ON for every world.
 function _suppressiveSavesEnabled() {
-  try { return game.settings.get("cp2020-augmented", "suppressiveFireSaves"); }
-  catch { return false; }
+  return true;
 }
 
 function _hookSuppressiveFire() {
@@ -924,7 +938,7 @@ function _hookSuppressiveFire() {
     // opening width from the DECLARED zoneWidth and relays the confirmed geometry to the active GM to plant.
     // The base suppressive card (posted just before this) quotes the DC for the DECLARED width, so with zones
     // ON it matches the planted lane's card unless the shooter re-sizes on the canvas (a visible, expected
-    // divergence); with zones OFF (this handler bails on the setting gate) the base flow is untouched.
+    // divergence); a shooter who cancels the preview plants nothing and leaves the base flow untouched.
     const { armSuppressivePreview } = await import("./suppressive-placement.js");
     await armSuppressivePreview(payload);
   });
@@ -1318,10 +1332,10 @@ async function _pickTargetDialog() {
  * clears the flag when the actor fires.
  */
 function _hookAimTracking() {
-  const isEnabled = () => {
-    try { return game.settings.get("cp2020-augmented", "aimTrackingEnabled"); }
-    catch { return true; }
-  };
+  // ⏪ `aimTrackingEnabled` RETIRED 2026-08-29 (settings-trim): this was a pure presence gate on a
+  // combat-tracker control that fires nothing until pressed — pressing 🎯 is the opt-in, ignoring it is
+  // the opt-out. Kept as a hard-true closure because the three handlers below still read through it.
+  const isEnabled = () => true;
 
   Hooks.on("renderCombatTracker", (tracker, html) => {
     if (!isEnabled()) return;
@@ -1390,10 +1404,9 @@ function _hookAimTracking() {
  * All waiting flags clear on round end.
  */
 function _hookWaitForTurn() {
-  const isEnabled = () => {
-    try { return game.settings.get("cp2020-augmented", "waitForTurnEnabled"); }
-    catch { return true; }
-  };
+  // ⏪ `waitForTurnEnabled` RETIRED 2026-08-29 (settings-trim): a presence gate on a tracker control that
+  // does nothing until pressed — pressing ⏸ is the opt-in. Kept as a hard-true closure for its readers.
+  const isEnabled = () => true;
 
   Hooks.on("renderCombatTracker", (tracker, html) => {
     if (!isEnabled()) return;
@@ -1491,10 +1504,10 @@ function _hookWaitForTurn() {
  * Nothing is auto-resolved and every number stays editable; the GM's typing always wins.
  */
 function _hookDodgeParry() {
-  const isEnabled = () => {
-    try { return game.settings.get("cp2020-augmented", "activeDodgeParryEnabled"); }
-    catch { return true; }
-  };
+  // ⏪ `activeDodgeParryEnabled` RETIRED 2026-08-29 (settings-trim): a presence gate on the 🛡/⛨ tracker
+  // controls, which write nothing until pressed — pressing is the opt-in, and the prefill below only
+  // pays out on a flag a press set. Kept as a hard-true closure; it is threaded into the prefill hook.
+  const isEnabled = () => true;
 
   Hooks.on("renderCombatTracker", (tracker, html) => {
     if (!isEnabled()) return;
@@ -1679,11 +1692,10 @@ async function _runOverTimeTick(combat) {
   const token = canvas?.tokens?.placeables?.find(t => t.id === combatant.tokenId) ?? null;
 
   // ── Acid armor DOT ────────────────────────────────────────────────────────
-  const acidEnabled = (() => {
-    try { return game.settings.get("cp2020-augmented", "acidArmorDotEnabled"); }
-    catch { return true; }
-  })();
-  if (acidEnabled && !actor.statuses?.has("dead")) {
+  // ⏪ `acidArmorDotEnabled` RETIRED 2026-08-29 (settings-trim): the marker this tick reads is only ever
+  // written by a round that carries `dotEnabled`, and no shipped ammo item sets it — a GM must author
+  // the round by hand, which is already two acts of consent before a tick can happen.
+  if (!actor.statuses?.has("dead")) {
     const rawDot = actor.getFlag?.("cp2020-augmented", "dotState");
     // Migrate legacy single-object format to array
     const dotStates = Array.isArray(rawDot) ? rawDot : (rawDot ? [rawDot] : []);
@@ -1732,19 +1744,21 @@ async function _runOverTimeTick(combat) {
   }
 
   // ── Fire / Incendiary DOT (burns HP at the hit location, not armor) ───────
-  const fireEnabled = (() => {
-    try { return game.settings.get("cp2020-augmented", "fireDotEnabled"); }
-    catch { return true; }
-  })();
-  if (fireEnabled && !actor.statuses?.has("dead")) {
+  // ⏪ `fireDotEnabled` RETIRED 2026-08-29 (settings-trim): OFF bought the dead state — an incendiary
+  // round that lands and burns nothing. Loading the round is the consent; the per-victim confirm window
+  // is where a specific application is declined.
+  if (!actor.statuses?.has("dead")) {
     const rawFire = actor.getFlag?.("cp2020-augmented", "fireDotState");
     const fireStates = Array.isArray(rawFire) ? rawFire : (rawFire ? [rawFire] : []);
     if (fireStates.length > 0) {
       const surviving = [];
       // BTM reduces ALL damage that reaches the target — fire bypasses armor SP, not body toughness.
       const fireBtm = Number(actor.system?.stats?.bt?.modifier) || 0;
-      // Fire also chars worn armor: one ablation per turn at the location (optional-rule gated).
-      const fireAblate = (() => { try { return game.settings.get("cp2020-augmented", "damageAblation"); } catch { return false; } })();
+      // Fire also chars worn armor: one degradation per turn at the location.
+      // ⏪ `damageAblation` RETIRED 2026-08-29 (settings-trim) — MERGED into `damageArmorMode`: the "full"
+      // mode now MEANS SP-with-wear-on-penetration, so the mode read alone answers the question. Stored
+      // worlds were remapped at migration (full-without-wear → "simple"), so behavior is preserved.
+      const fireAblate = (() => { try { return game.settings.get("cp2020-augmented", "damageArmorMode") === "full"; } catch { return false; } })();
       for (const fs of fireStates) {
         const { location, turnsLeft, formula } = fs;
         const mult = Number(fs.mult ?? 1);
@@ -1853,11 +1867,10 @@ async function _runOverTimeTick(combat) {
   }
 
   // ── Choke DOT ────────────────────────────────────────────────────────────
-  const meleeEnabled = (() => {
-    try { return game.settings.get("cp2020-augmented", "specialMeleeEffectsEnabled"); }
-    catch { return true; }
-  })();
-  if (meleeEnabled) {
+  // ⏪ The raw read of `specialMeleeEffectsEnabled` was replaced 2026-08-29 (settings-trim) by the shared
+  // accessor: the module's own copy of the key retired, but the FORK's system still registers one, so the
+  // accessor honours that host copy where it exists and answers true on a vanilla host.
+  if (specialMeleeEffectsEnabled()) {
     const isDead = actor.statuses?.has("dead");
 
     const chokeState = actor.getFlag?.("cp2020-augmented", "chokeState");
@@ -1906,10 +1919,9 @@ async function _runOverTimeTick(combat) {
 }
 
 function _hookGasCloud() {
-  const gasEnabled = () => {
-    try { return game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled"); }
-    catch { return true; }
-  };
+  // ⏪ `gasGrenadeCloudEnabled` RETIRED 2026-08-29 (settings-trim): OFF bought the dead state — a loaded
+  // gas round that lands and does nothing, untracked. Loading the round is the consent.
+  const gasEnabled = () => true;
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     if (!gasEnabled()) return;
@@ -2130,11 +2142,10 @@ async function _adjudicateGasCloud({ turnsLeft, stunSaveMod, weaponName, tokenDo
  *      vehicle-ordnance chemical clouds, and any pre-behavior cloud). A region that ALSO carries the
  *      behavior is owned by path 1 and skipped here so it is never adjudicated twice.
  *  Ungated by the round-tick master so both the per-turn hook (gated above) and the manual combat-tracker
- *  control run it; still respects the gas-cloud feature toggle. */
+ *  control run it.
+ *  ⏪ `gasGrenadeCloudEnabled` RETIRED 2026-08-29 (settings-trim): a placed cloud IS the consent, and a
+ *  scene carrying none makes this pass a no-op on its own. */
 async function _runGasCloudTick(combat) {
-  const gasEnabled = (() => { try { return game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled"); } catch { return true; } })();
-  if (!gasEnabled) return;
-
   const scene = canvas?.scene;
   if (!scene) return;
 
@@ -2369,7 +2380,9 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
     armorMultHard: Number(armorMultHard ?? 1),
     penDamageMult: Number(penDamageMult ?? 1),
     armorMode:     game.settings.get("cp2020-augmented", "damageArmorMode"),
-    ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
+    // ⏪ `damageAblation` RETIRED 2026-08-29 (settings-trim) — MERGED into `damageArmorMode`: "full" now
+    // MEANS SP-with-wear-on-penetration, so the wear default is derived from the mode itself.
+    ablate:        game.settings.get("cp2020-augmented", "damageArmorMode") === "full",
     // ⭐ THE SOAK, and NOT a second chew. `coverSP` is folded as the outermost armour layer by exactly
     // the fold the aimed path uses (resolveHitMath → combineArmorSP); `cover` is deliberately left
     // unset, which is what stops applyAreaDamages booking a per-figure structure debit on top of the
@@ -2394,9 +2407,10 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
                   weaponName: String(weaponName || "") };
   // A shock rider counts only where the round got through and did not land in a limb's own structure —
   // the same reading the single-target flow applies (RAW: no shock through a cyberlimb).
+  // ⏪ `taserCumPenaltyEnabled` RETIRED 2026-08-29 (settings-trim): firing the round that carries the
+  // shock rider is the consent, and a payload without one never reaches this line.
   if (rider.stunSaveOnHit && hits.some(h => h.penetrates && !h.cyberlimb)) {
-    const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-    if (taserEnabled) await updateTaserState(tok.actor, rider);
+    await updateTaserState(tok.actor, rider);
   }
   // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js. The location
   // is this shell's own rolled one, which is what the single-target flow passes as well.
@@ -2456,7 +2470,10 @@ async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize(
  * token in the blast takes damage through the normal pipeline. Mirrors gas-cloud + suppressive-confirm.
  */
 function _hookExplosion() {
-  const enabled = () => { try { return game.settings.get("cp2020-augmented", "explosivesEnabled"); } catch { return true; } };
+  // ⏪ `explosivesEnabled` RETIRED 2026-08-29 (settings-trim): OFF bought the dead state — a loaded blast
+  // round that lands and does nothing. Loading/throwing the warhead is the consent; the GM's placement
+  // confirm is where a specific detonation is declined.
+  const enabled = () => true;
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     if (!enabled()) return;
@@ -2773,12 +2790,11 @@ async function _placeExplosion(payload) {
  * exempts whoever a barrier genuinely shielded. A word warhead gets exactly that set, which is what
  * makes "the grenade went off behind a wall" answer the same way for a stun grenade as for a frag one.
  *
- * ⚠ ONE CONSEQUENCE OF RIDING THIS FLOW, STATED RATHER THAN HIDDEN: these warheads inherit the area
- * flow's own master (`explosivesEnabled`, checked at `_hookExplosion`). A table that switches off
- * detonation automation switches these off with it and resolves them by hand, exactly as it already
- * does for every other grenade. No toggle of their own is added — throwing the grenade IS the consent
- * (memory `feedback-action-as-consent-rules`), and a second switch would only be a second thing to
- * disagree with the first.
+ * ⚠ ONE CONSEQUENCE OF RIDING THIS FLOW, STATED RATHER THAN HIDDEN: these warheads inherit whatever
+ * fronts the area flow at `_hookExplosion` — which since the 2026-08-29 settings trim is nothing but the
+ * act itself. No toggle of their own is added, and none is inherited: throwing the grenade IS the
+ * consent (memory `feedback-action-as-consent-rules`), and the GM's placement confirm is where a
+ * particular detonation is declined.
  *
  * ⚠ GM ROUTING IS INHERITED TOO, and needed no new wiring: `weaponFired` is raised only on the firing
  * client, and `_hookExplosion` already places on the primary GM SESSION or relays there
@@ -4268,6 +4284,12 @@ let _spreadSweepBusy = false;
  * Multi-action penalty tracker (CP2020 p.98 — −3 per additional action).
  * Auto-tracks weapon fire, Aim, Dodge, and Parry; ➕ button for untracked actions.
  * Pre-fills extraMod in the attack dialog. Resets all counts on round end.
+ *
+ * ⏪ NO WORLD SWITCH FRONTS ANY OF IT since 2026-08-29 (settings-trim). The counter always tracks, and
+ * the number it produces reaches the roll as a PRE-FILLED, LABELED, EDITABLE line at the point of use —
+ * the same shape the declared-defence −2 takes (`_hookDeclaredDefensePrefill`): the value goes into the
+ * dialog's own `extraMod` field and a note beside it says where the value came from. Deleting or typing
+ * over that field is the per-roll opt-out, which is why the pair of on/off keys was redundant.
  */
 function _hookMultiActionPenalty() {
   Hooks.on("renderCombatTracker", (tracker, html) => {
@@ -4319,27 +4341,58 @@ function _hookMultiActionPenalty() {
     }
   });
 
-  Hooks.on("renderModifiersDialog", (app, html) => {
-    if (!_isMultiActionEnabled()) return;
+  // THE PENALTY AT THE POINT OF USE. It used to fold silently into `extraMod` and stop there — a number
+  // that moved with nothing on screen saying why, indistinguishable from a bug and impossible to argue
+  // with. It now lands the way the declared-defence −2 does: the value seeds the same editable
+  // `extraMod` field, and a labeled line above the confirm row names the figure, which action of the
+  // round this is, and the value that was seeded. Clearing or overtyping the field is the per-roll
+  // opt-out that the retired on/off keys used to provide world-wide.
+  Hooks.on("renderModifiersDialog", async (app, html) => {
     const actor = (app._weapon ?? app.options?.weapon)?.actor;
     if (!actor) return;
     const penalty = _getMultiActionPenalty(actor);
     if (penalty === 0) return;
     const root  = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
-    const input = root?.querySelector?.("input[name='extraMod']");
+    if (!root?.querySelector) return;
+    // Second render pass over the same DOM: re-running would fold the value in twice. The line is the receipt.
+    if (root.querySelector(".cp-multi-action-note")) return;
+    const input = root.querySelector("input[name='extraMod']");
     if (!input) return;
     const existing = Number(input.value) || 0;
     input.value = String(existing + penalty);
+
+    // The number the note quotes must be the one the field was seeded with, so it reads the SAME
+    // count+1 the penalty helper used: this dialog is the action being DECLARED, and the counter is not
+    // stamped until the roll goes out.
+    const declaring = _getActionCount(actor) + 1;
+    const notes = [ _isAcpa(actor)
+      ? localizeParam("MultiActionAcpaDialogNote", { name: actor.name, count: declaring, penalty, max: _acpaMaxActions(actor) })
+      : localizeParam("MultiActionDialogNote",     { name: actor.name, count: declaring, penalty }) ];
+
+    const render = foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate;
+    const holder = document.createElement("div");
+    holder.innerHTML = await render("modules/cp2020-augmented/templates/dialog/declared-defense-note.hbs", { notes });
+    const node = holder.firstElementChild;
+    if (!node) return;
+    // The shared note template carries the declared-defence hook's OWN idempotency marker classes. Both
+    // hooks render into this one window, so leaving them on would make whichever ran first look, to the
+    // other, like it had already run — and the loser would skip its own seeding. Re-tag to this line's
+    // marker. Only the marker names change; `cp-field-note` (which carries the styling) stays.
+    node.classList.replace("cp-declared-defense", "cp-multi-action-note");
+    node.querySelectorAll(".cp-declared-defense-note")
+        .forEach(p => p.classList.replace("cp-declared-defense-note", "cp-multi-action-note-line"));
+    // Sit directly above the confirm row so it is the last thing read before the roll goes out.
+    const buttonRow = root.querySelector("button[type='submit']")?.closest(".flexrow") ?? null;
+    if (buttonRow) buttonRow.before(node);
+    else (root.querySelector(".weapon-modifiers") ?? root).append(node);
   });
 
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {
     // Stamp the shared per-round action counter on weapon fire. This is the single increment site
-    // (a second listener would double-count). It fires when multi-action auto-tracking is on, OR
-    // when the once-per-turn movement gate is on — the gate reads the same counter to lock movement
-    // after a tracked action, so it needs weapon fire to register even when the penalty is off.
-    const trackForMultiAction = _isMultiActionEnabled() && _isMultiActionAutoTrack();
-    const trackForMovementGate = (() => { try { return game.settings.get("cp2020-augmented", "restrictMovementOncePerTurn") === true; } catch { return false; } })();
-    if (!trackForMultiAction && !trackForMovementGate) return;
+    // (a second listener would double-count), and it is UNCONDITIONAL.
+    // ⏪ It used to ask two questions first — multi-action auto-tracking, and the once-per-turn movement
+    // rule, which reads this same counter. Both keys retired 2026-08-29 (settings-trim), and with the
+    // counter always tracking the second clause is moot: the stamp lands for every reader.
     // THE COUNTER BELONGS TO THE FIGURE THAT ACTED. The tracker badge and the dialog prefill both read
     // it off the combatant's / weapon's own actor, so an id lookup here recorded the action on the base
     // and every unlinked copy of that base inherited it — one mook's shot handed its siblings a −3 they
@@ -4585,8 +4638,9 @@ function _hookSocketRelay() {
 
         await target.sheet?.render(false);
 
-        const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-        if (taserEnabled && data.stunSaveOnHit && data.resolvedHits.some(h => h.penetrates && !routesToSdp(target, h.location))) {
+        // ⏪ `taserCumPenaltyEnabled` RETIRED 2026-08-29 (settings-trim): firing the round that carries the
+        // shock rider is the consent.
+        if (data.stunSaveOnHit && data.resolvedHits.some(h => h.penetrates && !routesToSdp(target, h.location))) {
           await updateTaserState(target, data);
         }
 

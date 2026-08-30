@@ -531,6 +531,41 @@ async function migrateAugmentedSettings() {
     await dropLegacy("damageAutoApply");
     console.log(`${SCOPE} | retired setting dropped: damageAutoApply (every damage resolution now opens its own confirmation window).`);
   }
+
+  // ── 2026-08-29 settings trim ──────────────────────────────────────────────────────────────────
+  // damageAblation MERGED into damageArmorMode: "full" now MEANS SP + ablation (the label finally
+  // true). A world that stored full-without-ablation (or never touched either — the old shipped
+  // default) must keep its effective behavior, so it becomes "simple" (SP only). Only the
+  // (full, ablate:true) pair keeps "full". Self-gating: once the ablation doc is dropped this whole
+  // branch never re-enters.
+  const oldAblate = rawSetting("damageAblation");
+  {
+    const modeDoc = rawSetting("damageArmorMode");
+    const mode = modeDoc !== undefined ? modeDoc : "full";   // old registration default
+    if (mode === "full" && oldAblate !== true) {
+      await game.settings.set(SCOPE, "damageArmorMode", "simple");
+      console.log(`${SCOPE} | armor mode migrated: full-without-ablation → "simple" ("full" now means SP + ablation).`);
+    }
+    if (oldAblate !== undefined) await dropLegacy("damageAblation");
+  }
+
+  // acidDotStackMode + fireDotStackMode MERGED into dotStackMode. Fire's stored value wins a tie
+  // (the only shipped DOT starter is the incendiary round, so fire is the mode a table actually
+  // exercised); acid's fills in when fire never stored one. Non-default values only — a stored
+  // "stack" IS the new default and needs no write.
+  const oldFireMode = rawSetting("fireDotStackMode");
+  const oldAcidMode = rawSetting("acidDotStackMode");
+  const mergedDot = oldFireMode ?? oldAcidMode;
+  if (mergedDot !== undefined && rawSetting("dotStackMode") === undefined && mergedDot !== "stack") {
+    await game.settings.set(SCOPE, "dotStackMode", mergedDot);
+    console.log(`${SCOPE} | DOT stacking merged: "${mergedDot}" carried into dotStackMode.`);
+  }
+  for (const k of ["fireDotStackMode", "acidDotStackMode"]) {
+    if (rawSetting(k) !== undefined) await dropLegacy(k);
+  }
+  // The other 2026-08-29 retirements (presence gates, ammo-consent gates, movement/arc modes, the
+  // shopping master, the dual-owned shadows) have NO successor key and carry nothing worth merging —
+  // their stored docs are orphaned unread, the same treatment as every retirement above.
 }
 
 /**

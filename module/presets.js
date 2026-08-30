@@ -27,7 +27,10 @@ const SCOPE = "cp2020-augmented";
 // never registers as applied and the picker re-offers it on every reload. On vanilla the system key is
 // absent, so settingScope() falls back to the module scope and it round-trips normally.
 const SYSTEM_SCOPE = "cyberpunk2020";
-const DUAL_OWNED = new Set(["specialMeleeEffectsEnabled", "fnff2Enabled"]);
+// ⏪ specialMeleeEffectsEnabled left this set with the 2026-08-29 settings trim: the module no
+// longer registers a shadow (action = consent), so there is nothing for a preset to write on
+// vanilla, and the fork's system copy is the system's own business, not a module preset's.
+const DUAL_OWNED = new Set(["fnff2Enabled"]);
 function settingScope(key) {
   if (DUAL_OWNED.has(key)) {
     try { if (game.settings.settings.has(`${SYSTEM_SCOPE}.${key}`)) return SYSTEM_SCOPE; } catch (e) { /* not the fork */ }
@@ -37,49 +40,52 @@ function settingScope(key) {
 
 // MANUAL = every preset-controlled setting at its "off / Core" value. Its KEYS define the full universe
 // a preset touches; the deltas below only override.
+// ⏪ 2026-08-29 SETTINGS TRIM: the universe shrank from ~29 keys to 12. Every retired feature switch
+// (dodge/aim/wait presence gates, the ammo-consent gates, suppressive, movement, shotgun, occlusion,
+// gas, acid/fire DOT, taser, special-melee, shopping master, vehicle control/damage, arc mode) left
+// with its registration — those features are now always available and opt in/out BY USE, so no tier
+// has anything to say about them. What remains for a preset to bundle: the automation master and the
+// genuine rule/book choices.
 const MANUAL = {
-  // Combat automation — the module's master OFF + every feature off
+  // The combat-automation master OFF — Manual means the module automates nothing.
   combatAutomationEnabled: false,
-  activeDodgeParryEnabled: false, aimTrackingEnabled: false, waitForTurnEnabled: false,
-  multiActionPenaltyEnabled: false, multiActionAutoTrack: false, limbLossEnabled: false, suppressiveFireSaves: false,
-  shotgunSpreadEnabled: false, explosivesEnabled: false, areaEffectOcclusion: false, gasGrenadeCloudEnabled: false,
-  taserCumPenaltyEnabled: false, acidArmorDotEnabled: false, fireDotEnabled: false, specialMeleeEffectsEnabled: false,
-  // Subsystems — Shopping + Improvement-Point (RAW) tracking are ON at EVERY tier: both are ignorable
-  // if unused (the neglect detector keeps RAW IP safe as a default), so they belong in the baseline
-  // rather than a tier upgrade. Vehicles stay off until Standard. (⏪ `ipHideUI` was named here as a
-  // manual presence choice presets never touch; the setting was retired outright 2026-08-28.)
-  shoppingEnabled: true, vehicleControlEnabled: false, vehicleDamageEnabled: false, ipRawTracking: true,
-  // Bookkeeping rules + supplements — off / Core
-  restrictMovementOncePerTurn: false, damageAblation: false, mmEnabled: false, vehicleRuleSystem: "Core",
-  vehicleArmorDamageEnabled: false, vehicleMoraleEnabled: false, vehicleArcEnforcement: "free",
+  // Rule choices at their lightest: SP without wear, no severe-limb consequences, no per-action
+  // penalty (multiActionPenaltyEnabled survived the trim — restored same day, the rule engages
+  // automatically so it keeps a switch).
+  limbLossEnabled: false, multiActionPenaltyEnabled: false,
+  damageArmorMode: "simple",
+  // Subsystems — Improvement-Point (RAW) tracking is ON at EVERY tier: ignorable if unused (the
+  // neglect detector keeps it safe as a default). (⏪ shoppingEnabled was pinned true here until the
+  // trim retired the switch — the shop is simply always present now.)
+  ipRawTracking: true,
+  // Supplements — off / Core
+  mmEnabled: false, vehicleRuleSystem: "Core",
+  vehicleArmorDamageEnabled: false, vehicleMoraleEnabled: false,
   fnff2Enabled: false, explosivesDetailed: false,
   // Universal baseline (same in every tier; Crunch overrides limbModel)
-  headHitDoubling: true, damageArmorMode: "full", limbModel: "core",
+  headHitDoubling: true, limbModel: "core",
 };
 
-// STANDARD = Manual + the combat master + full combat automation + vehicles. (Shopping + RAW IP are
-// already on from Manual — they're ignorable subsystems available at every tier.)
+// STANDARD = Manual + the combat master + severe limb consequences.
 const STANDARD_DELTA = {
   combatAutomationEnabled: true,
   // `damageAutoApply` was in this delta until 2026-08-14 — which is how a table got a preset that
   // silently stopped asking before it wrote damage. The setting is retired (there is no module-wide
   // rule any more; each instance of damage is decided at that instance), so no tier references it.
-  activeDodgeParryEnabled: true, aimTrackingEnabled: true, waitForTurnEnabled: true,
-  multiActionPenaltyEnabled: true, multiActionAutoTrack: true, limbLossEnabled: true, suppressiveFireSaves: true,
-  shotgunSpreadEnabled: true, explosivesEnabled: true, areaEffectOcclusion: true, gasGrenadeCloudEnabled: true,
-  taserCumPenaltyEnabled: true, acidArmorDotEnabled: true, fireDotEnabled: true, specialMeleeEffectsEnabled: true,
-  vehicleControlEnabled: true, vehicleDamageEnabled: true,
+  limbLossEnabled: true, multiActionPenaltyEnabled: true,
 };
 
-// BY THE BOOK = Standard + the divisive-but-faithful bookkeeping rules. (IP is already RAW from Standard.)
+// BY THE BOOK = Standard + the divisive-but-faithful bookkeeping: armor wears per RAW.
+// (⏪ restrictMovementOncePerTurn rode here until the trim — over-movement now warns unconditionally.)
 const BYBOOK_DELTA = {
-  restrictMovementOncePerTurn: true, damageAblation: true,
+  damageArmorMode: "full",
 };
 
 // MAXIMUM CRUNCH = By the Book + the supplement layer (Maximum Metal + Listen Up + FNFF2).
+// (⏪ vehicleArcEnforcement:"strict" rode here until the trim — arcs now always warn, never block.)
 const CRUNCH_DELTA = {
   mmEnabled: true, vehicleRuleSystem: "MaximumMetal", vehicleArmorDamageEnabled: true, vehicleMoraleEnabled: true,
-  vehicleArcEnforcement: "strict", limbModel: "listenup", explosivesDetailed: true, fnff2Enabled: true,
+  limbModel: "listenup", explosivesDetailed: true, fnff2Enabled: true,
 };
 
 const MANUAL_MAP   = { ...MANUAL };
@@ -96,15 +102,14 @@ export const PRESETS = [
 ];
 
 /** Notable ACTIVE features a preset can switch on, named in the confirm dialog (esp. silent ones). */
+// ⏪ 2026-08-29 trim: the ablation row now keys on the merged damageArmorMode; the restrictMove,
+// shopping and vehicles rows left with their retired settings (those features are always present now).
 const NOTABLE = [
-  { id: "rawIp",        key: "ipRawTracking",              on: (v) => v === true,      nameKey: "PresetFeatureRawIp" },
-  { id: "maximumMetal", key: "mmEnabled",                  on: (v) => v === true,      nameKey: "PresetFeatureMaximumMetal" },
-  { id: "limbLoss",     key: "limbLossEnabled",            on: (v) => v === true,      nameKey: "PresetFeatureLimbLoss" },
-  { id: "ablation",     key: "damageAblation",             on: (v) => v === true,      nameKey: "PresetFeatureAblation" },
-  { id: "restrictMove", key: "restrictMovementOncePerTurn", on: (v) => v === true,     nameKey: "PresetFeatureRestrictMove" },
-  { id: "listenUp",     key: "limbModel",                  on: (v) => v === "listenup", nameKey: "PresetFeatureListenUp" },
-  { id: "shopping",     key: "shoppingEnabled",            on: (v) => v === true,      nameKey: "PresetFeatureShopping" },
-  { id: "vehicles",     key: "vehicleControlEnabled",      on: (v) => v === true,      nameKey: "PresetFeatureVehicles" },
+  { id: "rawIp",        key: "ipRawTracking",   on: (v) => v === true,       nameKey: "PresetFeatureRawIp" },
+  { id: "maximumMetal", key: "mmEnabled",       on: (v) => v === true,       nameKey: "PresetFeatureMaximumMetal" },
+  { id: "limbLoss",     key: "limbLossEnabled", on: (v) => v === true,       nameKey: "PresetFeatureLimbLoss" },
+  { id: "ablation",     key: "damageArmorMode", on: (v) => v === "full",     nameKey: "PresetFeatureAblation" },
+  { id: "listenUp",     key: "limbModel",       on: (v) => v === "listenup", nameKey: "PresetFeatureListenUp" },
 ];
 
 /** PURE: the resolved value map for a tier id, or null. */

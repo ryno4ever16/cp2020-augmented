@@ -442,13 +442,16 @@ export const AREA_COVER_SOAKED = "soaked";   // a VALUED object is in the way: i
 export const AREA_COVER_EXEMPT = "exempt";   // a NAKED move-blocking wall: no damage, no chew (unchanged)
 
 /**
- * Is the area↔cover interaction switched on at all? The same world switch `areaOcclusionTest` reads,
- * asked once here so the SOAK half and the EXEMPT half cannot be enabled independently: a table that
- * turned area occlusion off has said "areas hit everything in them, plainly", and half-honouring that
- * by still folding SP would be a third behaviour nobody chose. Defaults ON when settings are absent.
+ * Is the area↔cover interaction switched on at all?
+ *
+ * ⏪ `areaEffectOcclusion` RETIRED 2026-08-29 (settings-trim): PLACING the walls and the priced cover
+ * objects is the consent, and a scene carrying neither leaves both halves finding nothing — so the
+ * switch only ever offered a way to contradict the map. Kept as a hard-true accessor because callers
+ * outside this file read through it, and because the SOAK half and the EXEMPT half must still be
+ * answered by ONE question rather than two that could disagree.
  */
 export function areaCoverEnabled() {
-  try { return !!game.settings.get(SCOPE, "areaEffectOcclusion"); } catch (e) { return true; }
+  return true;
 }
 
 /** Centre of a token in scene pixels, from a placeable OR a bare TokenDocument. */

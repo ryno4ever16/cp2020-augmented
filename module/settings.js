@@ -226,6 +226,11 @@ export function registerAugmentedSettings() {
   // deliberately from System Settings → "Settings Presets".
 
   // --- damageArmorMode ---
+  // Since the 2026-08-29 ablation merge (tombstone below) the mode is the whole armor truth:
+  // "full" = SP with wear-on-penetration (RAW), "simple" = SP only, "none" = no armor. The default
+  // is "simple" BECAUSE the pre-merge shipped default was full-without-wear — same effective
+  // behavior, honest new name. Wear is one of the permanently-writes-to-characters rules the setup
+  // notice promises start OFF.
   game.settings.register(SCOPE, "damageArmorMode", {
     name: "SETTINGS.DamageArmorMode",
     hint: "SETTINGS.DamageArmorModeHint",
@@ -237,18 +242,18 @@ export function registerAugmentedSettings() {
       "simple": "SETTINGS.DamageArmorModeChoiceSimple",
       "none":   "SETTINGS.DamageArmorModeChoiceNone",
     },
-    default: "full",
+    default: "simple",
   });
 
-  // --- damageAblation ---
-  game.settings.register(SCOPE, "damageAblation", {
-    name: "SETTINGS.DamageAblation",
-    hint: "SETTINGS.DamageAblationHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: false,
-  });
+  // ⏪⏪ `damageAblation` STOOD HERE UNTIL 2026-08-29 AND IS RETIRED — MERGED INTO `damageArmorMode`
+  // (settings-trim ruling). The two double-covered one gate: DamageApplicator only ever ablated when
+  // ablate AND mode === "full", so "Full (SP + Ablation)" with the checkbox off was behaviorally
+  // identical to "Simple" — three real states expressed by two redundant controls, with the choice
+  // label lying about one of them. Now the MODE is the whole truth: "full" = SP with ablation (the
+  // label finally true), "simple" = SP only, "none" = no armor. The damage window's per-application
+  // Ablate checkbox survives as the point-of-use override, defaulting from the mode. Worlds are
+  // migrated in migrateAugmentedSettings: (full + ablate-off/unset) → "simple" so nobody's effective
+  // behavior changes; the orphaned boolean doc is left unread.
 
   // The world `damageAutoApply` toggle was RETIRED (user ruling, 2026-08-14): "auto apply should be
   // removed as a feature and the option of whether to apply it can be handled at each instance of
@@ -277,25 +282,15 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
-  // --- rerollGoneLimbLocation ---
-  game.settings.register(SCOPE, "rerollGoneLimbLocation", {
-    name: "SETTINGS.RerollGoneLimbLocation",
-    hint: "SETTINGS.RerollGoneLimbLocationHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: true,
-  });
+  // ⏪ `rerollGoneLimbLocation` RETIRED 2026-08-29 (settings-trim): the book itself rules the
+  // off-state absurd ("that roll is pretty silly, ignore it and re-roll", p.100), so the re-roll now
+  // runs unconditionally (utils.js answers true). Aimed/GM-chosen locations are still never re-rolled.
 
-  // --- suppressiveFireSaves ---
-  game.settings.register(SCOPE, "suppressiveFireSaves", {
-    name: "SETTINGS.SuppressiveFireSaves",
-    hint: "SETTINGS.SuppressiveFireSavesHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: false,
-  });
+  // ⏪ `suppressiveFireSaves` RETIRED 2026-08-29 (settings-trim, action-as-consent): declaring the
+  // burst and PLACING the lane is the opt-in, and the placement preview cancels (Esc/teardown) — the
+  // world switch only gated presence. NOTE this one shipped default:false, so retirement TURNS THE
+  // FLOW ON for every world that never touched it: a declaration now always offers the lane. The
+  // read in damage-hooks answers true; a stored false is orphaned unread.
 
   // ⏪ `autoDeathSavePerTurn` and `autoSaveRePrompt` were REGISTERED HERE — retired 2026-08-28
   // (user ruling at the 1.2.0 gate): the per-turn Death Save (p.105) and unconscious Stun-recovery
@@ -304,48 +299,20 @@ export function registerAugmentedSettings() {
   // objection is answered structurally there — one standing ask per body per kind — not by a
   // setting. A world's stored values for the old keys are orphaned harmlessly.
 
-  // --- activeDodgeParryEnabled ---
-  game.settings.register(SCOPE, "activeDodgeParryEnabled", {
-    name: "SETTINGS.ActiveDodgeParryEnabled",
-    hint: "SETTINGS.ActiveDodgeParryEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
-
-  // --- aimTrackingEnabled ---
-  game.settings.register(SCOPE, "aimTrackingEnabled", {
-    name: "SETTINGS.AimTrackingEnabled",
-    hint: "SETTINGS.AimTrackingEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
-
-  // --- waitForTurnEnabled ---
-  game.settings.register(SCOPE, "waitForTurnEnabled", {
-    name: "SETTINGS.WaitForTurnEnabled",
-    hint: "SETTINGS.WaitForTurnEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
+  // ⏪⏪ `activeDodgeParryEnabled`, `aimTrackingEnabled` and `waitForTurnEnabled` STOOD HERE UNTIL
+  // 2026-08-29 AND ARE RETIRED TOGETHER (settings-trim, the ipHideUI class): each was a pure presence
+  // gate on a combat-tracker control that fires NOTHING until pressed — press to opt in, ignore to
+  // opt out, and the switch only added a way to lose the control. The reads in damage-hooks answer
+  // true; stored values orphan unread.
 
   // (specialMeleeEffectsEnabled is registered below, in the dual-owned block that stands down when the
   //  fork's system already owns the key — an earlier plain registration here was dead, the second won.)
 
-  // --- gasGrenadeCloudEnabled ---
-  game.settings.register(SCOPE, "gasGrenadeCloudEnabled", {
-    name: "SETTINGS.GasGrenadeCloudEnabled",
-    hint: "SETTINGS.GasGrenadeCloudEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
+  // ⏪ `gasGrenadeCloudEnabled` RETIRED 2026-08-29 (settings-trim, load-the-round-is-consent): OFF
+  // bought the dead state — a loaded gas round that lands and does nothing, untracked. The reads in
+  // damage-hooks and vehicle-ordnance answer true. (`gasCloudAutoMove` below SURVIVES by user call —
+  // drift vs GM-controlled wind is a genuine preference; earmarked to maybe become a per-cloud
+  // control, at which point it dies too.)
 
   // --- gasCloudAutoMove ---
   game.settings.register(SCOPE, "gasCloudAutoMove", {
@@ -362,124 +329,60 @@ export function registerAugmentedSettings() {
   //  on/off switch was removed. Every passive path (the stat-loss overlay, the round tick, the death
   //  button, the zone tick) no-ops when the actor/scene has no radiation state.)
 
-  // --- taserCumPenaltyEnabled ---
-  game.settings.register(SCOPE, "taserCumPenaltyEnabled", {
-    name: "SETTINGS.TaserCumPenaltyEnabled",
-    hint: "SETTINGS.TaserCumPenaltyEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
+  // ⏪⏪ SETTINGS-TRIM RETIREMENTS 2026-08-29 (this block stood between gasCloudAutoMove and
+  // explosivesDetailed; all follow the load/place/press-is-consent ruling; stored values orphan
+  // unread, every read path answers the one remaining answer):
+  // - `taserCumPenaltyEnabled` — p.101 cumulative save penalty; firing the round is the consent.
+  // - `acidArmorDotEnabled` — the DOT arms only from `dotEnabled` on the ammo item (and no shipped
+  //   item sets it — a GM must hand-author acid, double consent).
+  // - `fireDotEnabled` — OFF was the dead state: incendiary that burns nothing, untracked. The
+  //   per-victim confirm window is where a GM declines a specific application.
+  // - `acidDotStackMode` + `fireDotStackMode` — MERGED into the single `dotStackMode` below (no book
+  //   text distinguishes them; migrated in migrateAugmentedSettings, fire's stored value wins ties).
+  // - `multiActionAutoTrack` — REDESIGNED AWAY: the counter always tracks (it also feeds the
+  //   movement advisory), and the penalty lands as a pre-filled, LABELED, editable line in the
+  //   roll dialog (the dodge-prefill idiom), so the number explains itself at the point of use.
+  //   Manual ➕/reset in the tracker stays. ⚠ `multiActionPenaltyEnabled` was retired in the same
+  //   pass and RESTORED the same day (user ruling, 2026-08-29): unlike the ammo/presence gates,
+  //   this rule engages AUTOMATICALLY on every second action, so a table that skips it would have
+  //   to zero the prefill on every roll — a per-roll tax, not an ignore-it opt-out. It is the
+  //   head-hit-doubling class (a rule choice that touches every roll keeps its switch). It
+  //   re-registers below, now defaulting ON since the penalty is visible and editable where it
+  //   applies (the old OFF default guarded a silent fold that no longer exists).
+  // - `restrictMovementOncePerTurn` — REDESIGNED AWAY: over-allowance movement after acting now
+  //   WARNS instead of blocking, unconditionally (movement-gate.js) — the upstream philosophy: show
+  //   the bad choice rather than refuse it.
+  // - `shotgunSpreadEnabled` — OFF made buckshot behave like a slug, which loading a slug already
+  //   does; the mechanic engages only for spread-configured rounds (lookups.js answers true).
+  // - `explosivesEnabled` — same dead-state class as the gas retirement above: OFF meant loaded
+  //   blast rounds land and do nothing (added to the cut by user word, 2026-08-29).
+  // - `areaEffectOcclusion` — placing walls is the consent (a wall-less scene exempts nobody), and
+  //   blocking is Core p.108 RAW. Caveat noted at the ruling: a table that walls for vision but
+  //   wants blasts to ignore walls loses the option; ruled acceptable.
 
-  // --- acidArmorDotEnabled ---
-  game.settings.register(SCOPE, "acidArmorDotEnabled", {
-    name: "SETTINGS.AcidArmorDotEnabled",
-    hint: "SETTINGS.AcidArmorDotEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
-
-  // --- acidDotStackMode ---
-  game.settings.register(SCOPE, "acidDotStackMode", {
-    name: "SETTINGS.AcidDotStackMode",
-    hint: "SETTINGS.AcidDotStackModeHint",
-    scope: "world",
-    config: true,
-    type: String,
-    choices: {
-      "stack":    "SETTINGS.AcidDotStackModeChoiceStack",
-      "reset":    "SETTINGS.AcidDotStackModeChoiceReset",
-      "separate": "SETTINGS.AcidDotStackModeChoiceSeparate",
-    },
-    default: "stack",
-  });
-
-  // --- fireDotEnabled ---
-  game.settings.register(SCOPE, "fireDotEnabled", {
-    name: "SETTINGS.FireDotEnabled",
-    hint: "SETTINGS.FireDotEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
-
-  // --- fireDotStackMode ---
-  game.settings.register(SCOPE, "fireDotStackMode", {
-    name: "SETTINGS.FireDotStackMode",
-    hint: "SETTINGS.FireDotStackModeHint",
-    scope: "world",
-    config: true,
-    type: String,
-    choices: {
-      "stack":    "SETTINGS.FireDotStackModeChoiceStack",
-      "reset":    "SETTINGS.FireDotStackModeChoiceReset",
-      "separate": "SETTINGS.FireDotStackModeChoiceSeparate",
-    },
-    default: "stack",
-  });
-
-  // --- multiActionPenaltyEnabled ---
+  // --- multiActionPenaltyEnabled (restored 2026-08-29 — see the block above) ---
   game.settings.register(SCOPE, "multiActionPenaltyEnabled", {
     name: "SETTINGS.MultiActionPenaltyEnabled",
     hint: "SETTINGS.MultiActionPenaltyEnabledHint",
     scope: "world",
     config: true,
     type: Boolean,
-    default: false,
+    default: true,
   });
 
-  // --- multiActionAutoTrack ---
-  game.settings.register(SCOPE, "multiActionAutoTrack", {
-    name: "SETTINGS.MultiActionAutoTrack",
-    hint: "SETTINGS.MultiActionAutoTrackHint",
+  // --- dotStackMode (one selector for every damage-over-time payload; replaces the acid/fire pair) ---
+  game.settings.register(SCOPE, "dotStackMode", {
+    name: "SETTINGS.DotStackMode",
+    hint: "SETTINGS.DotStackModeHint",
     scope: "world",
     config: true,
-    type: Boolean,
-    default: false,
-  });
-
-  // --- restrictMovementOncePerTurn ---
-  game.settings.register(SCOPE, "restrictMovementOncePerTurn", {
-    name: "SETTINGS.RestrictMovementOncePerTurn",
-    hint: "SETTINGS.RestrictMovementOncePerTurnHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-  });
-
-  // --- shotgunSpreadEnabled ---
-  game.settings.register(SCOPE, "shotgunSpreadEnabled", {
-    name: "SETTINGS.ShotgunSpreadEnabled",
-    hint: "SETTINGS.ShotgunSpreadEnabledHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: true,
-  });
-
-  // --- explosivesEnabled ---
-  game.settings.register(SCOPE, "explosivesEnabled", {
-    name: "SETTINGS.ExplosivesEnabled",
-    hint: "SETTINGS.ExplosivesEnabledHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: true,
-  });
-
-  // --- areaEffectOcclusion ---
-  game.settings.register(SCOPE, "areaEffectOcclusion", {
-    name: "SETTINGS.AreaEffectOcclusion",
-    hint: "SETTINGS.AreaEffectOcclusionHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: true,
+    type: String,
+    choices: {
+      "stack":    "SETTINGS.DotStackModeChoiceStack",
+      "reset":    "SETTINGS.DotStackModeChoiceReset",
+      "separate": "SETTINGS.DotStackModeChoiceSeparate",
+    },
+    default: "stack",
   });
 
   // (A world toggle for the cover segment auto-detect used to sit here. It was retired: PLACING a
@@ -514,38 +417,15 @@ export function registerAugmentedSettings() {
     default: "core",
   });
 
-  // --- hitLocationCoreDisplay (Core human table vs each actor's own) ---
-  // Orthogonal to the limb model: ON (default) forces the canonical Core human hit-location table;
-  // OFF honors a per-actor custom hit-location table. (Was referenced in utils.js but never registered.)
-  game.settings.register(SCOPE, "hitLocationCoreDisplay", {
-    name: "SETTINGS.HitLocationCoreDisplay",
-    hint: "SETTINGS.HitLocationCoreDisplayHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: true,
-  });
+  // ⏪ `hitLocationCoreDisplay` RETIRED 2026-08-29 (settings-trim): a NO-OP by its own hint — OFF
+  // handed the roll to the base system's per-actor lookup, "which in the base system today still
+  // means the Core chart". A switch between identical outcomes. utils.js pins the Core-table
+  // behavior (today's ON default). Re-introduce only if the base 1.2 ships per-actor tables.
+  // (Closes the standing hitLocationCoreDisplay-no-op gate item.)
 
-  // --- Vehicles (Core CP2020 "Vehicles in FNFF", p.112) — available WITHOUT Maximum Metal ---
-  // These two are core vehicle automation; they default ON and work under the Core ruleset on their
-  // own. They live above the Maximum Metal header so they stay configurable when MM is off.
-  game.settings.register(SCOPE, "vehicleControlEnabled", {
-    name: "SETTINGS.VehicleControlEnabled",
-    hint: "SETTINGS.VehicleControlEnabledHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: true,
-  });
-
-  game.settings.register(SCOPE, "vehicleDamageEnabled", {
-    name: "SETTINGS.VehicleDamageEnabled",
-    hint: "SETTINGS.VehicleDamageEnabledHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: true,
-  });
+  // ⏪ `vehicleControlEnabled` + `vehicleDamageEnabled` RETIRED 2026-08-29 (settings-trim): both
+  // gated press-driven vehicle-sheet features, and OFF only turned the press into a refusal
+  // warning — don't press is the opt-out. Reads across vehicle-*.js answer true.
 
   // ===================== MAXIMUM METAL (master + overlay) =====================
   // Master switch. Everything registered from here down belongs to the Maximum Metal layer; the
@@ -598,19 +478,10 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
-  // --- Vehicles: Weapon mount arc enforcement (Phase 5) ---
-  game.settings.register(SCOPE, "vehicleArcEnforcement", {
-    name: "SETTINGS.VehicleArcEnforcement",
-    hint: "SETTINGS.VehicleArcEnforcementHint",
-    scope:   "world",
-    config:  true,
-    type:    String,
-    choices: {
-      "free":   "SETTINGS.VehicleArcEnforcementChoiceFree",
-      "strict": "SETTINGS.VehicleArcEnforcementChoiceStrict",
-    },
-    default: "free",
-  });
+  // ⏪ `vehicleArcEnforcement` RETIRED 2026-08-29 (settings-trim): the free/strict pair was the
+  // movement-gate pattern again — the WARN behavior ("free", the shipped default) is now
+  // unconditional and "strict" (hard-block) is deleted, per the show-don't-refuse philosophy.
+  // vehicleArcEnforcement() below pins "free".
 
   // --- Martial arts: FNFF2 ruleset toggle ---
   // FNFF2 (Friday Night Fistfight 2) expands the martial-art styles + per-action bonuses used by
@@ -630,37 +501,15 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
-  // --- Martial arts: special hit-effects toggle ---
-  // Hold/Grapple set a status flag on the target; Choke sets a 1d6/turn flag; Throw/Sweep post a
-  // knockdown reminder; Escape clears them. Same system-owns-it-on-the-fork pattern as fnff2Enabled,
-  // but defaults ON (the effects are core CP2020 p.100–102). See applyMartialHitEffects (martial.js).
-  const systemOwnsSpecialMelee = (() => {
-    try { return game.settings.settings.has("cyberpunk2020.specialMeleeEffectsEnabled"); } catch { return false; }
-  })();
-  game.settings.register(SCOPE, "specialMeleeEffectsEnabled", {
-    name: "SETTINGS.SpecialMeleeEffects",
-    hint: "SETTINGS.SpecialMeleeEffectsHint",
-    scope: "world",
-    config: !systemOwnsSpecialMelee,
-    type: Boolean,
-    default: true,
-  });
+  // ⏪ `specialMeleeEffectsEnabled` (module shadow) RETIRED 2026-08-29 (settings-trim): the effects
+  // fire only from a DECLARED action (Hold/Choke/Throw press) — action is the consent. On the fork
+  // the SYSTEM still owns its own copy and the accessor below keeps honoring it; on vanilla the
+  // answer is now always true.
 
-  // --- Automated rangefinding ---
-  // Pre-selects the range band in the attack dialog from the measured token distance. Fork-owned on
-  // the fork (system scope); the module registers a shadow so vanilla installs get an off-switch
-  // (without it the read threw and the feature was permanently ON). Read via autoRangefindingEnabled().
-  const systemOwnsRangefinding = (() => {
-    try { return game.settings.settings.has("cyberpunk2020.autoRangefinding"); } catch { return false; }
-  })();
-  game.settings.register(SCOPE, "autoRangefinding", {
-    name: "SETTINGS.AutoRangefinding",
-    hint: "SETTINGS.AutoRangefindingHint",
-    scope: "world",
-    config: !systemOwnsRangefinding,
-    type: Boolean,
-    default: true,
-  });
+  // ⏪ `autoRangefinding` (module shadow) RETIRED 2026-08-29 (settings-trim): it only PRE-SELECTS
+  // the range band and the dialog stays fully editable — the manual override is the escape hatch,
+  // so the switch bought nothing. The fork's system copy is still honored by the accessor below;
+  // on vanilla the answer is always true.
 
   // GM-registered custom calibers as world DATA (config:false; set via macro/API, merged in
   // lookups.js getCalibers). Fork-owned on the fork; the module registers a shadow so a vanilla GM
@@ -745,16 +594,11 @@ export function registerAugmentedSettings() {
   game.settings.register(SCOPE, "ipNeglectNudged", { scope: "world", config: false, type: Boolean, default: false });
 
   // --- Shopping / economy ([[shopping-design]]) ---
-  // Master gate for the Augmented shop (the sidebar cart, the catalog window, custom shops). On by
-  // default once the module is enabled; the system stands down its own shop when this module is active.
-  game.settings.register(SCOPE, "shoppingEnabled", {
-    name: "SETTINGS.ShoppingEnabled",
-    hint: "SETTINGS.ShoppingEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true
-  });
+  // ⏪ `shoppingEnabled` RETIRED 2026-08-29 (settings-trim, the ipHideUI class): a pure presence
+  // gate — the vanilla base system ships no shop to stand down, so OFF only hid the buttons, and
+  // press-to-open is the consent. shoppingEnabled() below answers true; every call site unchanged.
+  // The PERMISSION settings (playersCanShop / playersCanBuyAmmo / shopBuySource) are a different
+  // class and survive.
 
   game.settings.register(SCOPE, "playersCanShop", {
     name: "SETTINGS.PlayersCanShop",
@@ -959,24 +803,32 @@ export function registerAugmentedSettings() {
   });
 }
 
-/** Whether the Augmented combat-automation layer is enabled. Off by default (opt-in). */
+/** Whether the Augmented combat-automation layer is enabled. ON by default (the hint used to claim
+ *  "off by default" — that was never true; text corrected 2026-08-29). */
 export function combatAutomationEnabled() {
   try { return game.settings.get(SCOPE, "combatAutomationEnabled") === true; }
   catch { return false; }
 }
 
-/** Martial-arts special hit-effects. System setting on the fork, module-owned on vanilla; default ON. */
+/** Martial-arts special hit-effects. ⏪ Module shadow RETIRED 2026-08-29 (action = consent): on the
+ *  fork the SYSTEM's own copy still governs; on vanilla the answer is always true. Call sites unchanged. */
 export function specialMeleeEffectsEnabled() {
-  try { return game.settings.get("cyberpunk2020", "specialMeleeEffectsEnabled") === true; } catch { /* not the fork */ }
-  try { return game.settings.get(SCOPE, "specialMeleeEffectsEnabled") === true; } catch { /* not registered */ }
+  try {
+    if (game.settings.settings.has("cyberpunk2020.specialMeleeEffectsEnabled")) {
+      return game.settings.get("cyberpunk2020", "specialMeleeEffectsEnabled") === true;
+    }
+  } catch { /* not the fork */ }
   return true;
 }
 
-/** Automated rangefinding toggle. Fork's system copy is authoritative; falls back to the module
- *  shadow (vanilla), then the ON default. Same dual-scope shape as specialMeleeEffectsEnabled. */
+/** Automated rangefinding. ⏪ Module shadow RETIRED 2026-08-29 (the dialog's manual override is the
+ *  escape hatch): the fork's system copy still governs where it exists; on vanilla always true. */
 export function autoRangefindingEnabled() {
-  try { return game.settings.get("cyberpunk2020", "autoRangefinding") === true; } catch { /* not the fork */ }
-  try { return game.settings.get(SCOPE, "autoRangefinding") === true; } catch { /* not registered */ }
+  try {
+    if (game.settings.settings.has("cyberpunk2020.autoRangefinding")) {
+      return game.settings.get("cyberpunk2020", "autoRangefinding") === true;
+    }
+  } catch { /* not the fork */ }
   return true;
 }
 
@@ -991,10 +843,9 @@ export function effectiveVehicleRuleSystem() {
   catch { return "Core"; }
 }
 
-/** Mount-arc enforcement: "free" (warn-but-allow, default) or "strict" (block out-of-arc shots). */
-export function vehicleArcEnforcement() {
-  try { return game.settings.get(SCOPE, "vehicleArcEnforcement") || "free"; } catch { return "free"; }
-}
+/** Mount-arc handling. ⏪ RETIRED AS A SWITCH 2026-08-29: warn-but-allow ("free") is now the only
+ *  behavior — show the bad choice, never refuse it. Kept as a function so no call site changed. */
+export function vehicleArcEnforcement() { return "free"; }
 
 // --- IP (Improvement Points) accessors ([[ip-tracker-design]]) ---
 // IP is ALWAYS present as a dual-bucket store (per-skill flag `ip` bank + a fungible actor flag
@@ -1036,10 +887,10 @@ export function ipShowPending() {
 }
 
 // --- Shopping / economy accessors ([[shopping-design]]) ---
-/** Master gate: is the Augmented shop enabled at all? (Off when the setting is missing.) */
-export function shoppingEnabled() {
-  try { return game.settings.get(SCOPE, "shoppingEnabled") === true; } catch { return false; }
-}
+/** ⏪ RETIRED AS A SWITCH, KEPT AS A FUNCTION (2026-08-29, the ipHideUI idiom): the shop is always
+ *  present — press to opt in, ignore to opt out. Every call site unchanged.
+ *  ⏪ Revert = restore the registration and this body's `game.settings.get`. */
+export function shoppingEnabled() { return true; }
 /**
  * Whether the NPC generator's entry point is offered at all. Read at the directory button AND again in
  * `openNpcGenerator`, so a macro meets the same gate the button does.
@@ -1114,6 +965,12 @@ export function cyberlimbRepairGmOnly() {
 /** Permission scoping — hide the two bulk-scraped base packs from players (default ON; fail-closed). */
 export function hideScrapedPacks() {
   try { return game.settings.get(SCOPE, "hideScrapedPacks") !== false; } catch { return true; }
+}
+
+/** DOT stacking behavior for every damage-over-time payload: "stack" (default) / "reset" /
+ *  "separate". One selector — replaced the identical acid/fire pair 2026-08-29 (settings-trim). */
+export function dotStackMode() {
+  try { return game.settings.get(SCOPE, "dotStackMode") || "stack"; } catch { return "stack"; }
 }
 
 /** Combat FX rail — muzzle flash light, shot audio, optional Sequencer sprites (default ON). */

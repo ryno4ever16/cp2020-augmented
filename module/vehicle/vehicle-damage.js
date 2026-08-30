@@ -288,8 +288,7 @@ function _facingKey(facing) {
  */
 export async function openVehicleDamageDialog(actor) {
   if (!actor || actor.type !== "cp2020-augmented.vehicle") return null;
-  const enabled = (() => { try { return game.settings.get(SCOPE, "vehicleDamageEnabled"); } catch { return true; } })();
-  if (!enabled) { ui.notifications?.warn?.(localize("Vehicle.DamageDisabled")); return null; }
+  // ⏪ vehicleDamageEnabled gate RETIRED 2026-08-29 (settings-trim): pressing the control IS the opt-in.
   const ruleSystem = effectiveVehicleRuleSystem();
   const isMM = ruleSystem === "MaximumMetal";
   const sys = actor.system ?? {};
@@ -775,13 +774,8 @@ async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen,
  * actual rolled weapon damage when the caller has it (used for ACPA); else ACPA estimates it from Pen.
  */
 export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front", goodShotSteps = 0, extraRounds = 0, range = "normal", hefPenetrator = false, heat = false, highDensityAP = false, ap = false, railgun = false, rawDamage = null, fxSilent = false } = {}) {
-  // Master toggle. The weaponFired auto-dispatch (dispatchAttack) reaches this resolver directly,
-  // bypassing the dialog's own pre-check — so without this guard, auto-fire would write the vehicle
-  // even when the GM has vehicle-damage automation disabled. No warning here (the manual dialog warns);
-  // the auto-path simply no-ops.
-  const _vdEnabled = (() => { try { return game.settings.get(SCOPE, "vehicleDamageEnabled"); } catch { return true; } })();
-  if (!_vdEnabled) return null;
-
+  // ⏪ The vehicleDamageEnabled master gate that stood here was RETIRED 2026-08-29 (settings-trim);
+  // the auto-dispatch path now always resolves, the same as the manual dialog.
   const sys = actor.system ?? {};
   const isACPA = !!sys.isACPA;
   const avKey = _facingKey(facing);
@@ -872,9 +866,10 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
             lines += `<br><b>${r.pilotDamage}</b> reaches the pilot − armor SP ${pilotSP} = ${afterSP}, − BTM ${pilotBtm} → <b>${netDamage}</b> to the pilot (${charLoc}).`;
             // Ablate the pilot's armor on penetration — the EXACT gate the personnel path uses in
             // applyAreaDamages (ablate setting + FULL armor mode + penetration + a real wound).
-            const _ablate = (() => { try { return game.settings.get(SCOPE, "damageAblation"); } catch { return false; } })();
+            // ⏪ damageAblation was MERGED into damageArmorMode 2026-08-29: "full" now means
+            // SP + ablation, so the mode alone is the gate (same as applyAreaDamages).
             const _armorMode = (() => { try { return game.settings.get(SCOPE, "damageArmorMode"); } catch { return ARMOR_MODES.FULL; } })();
-            if (_ablate && _armorMode === ARMOR_MODES.FULL && afterSP > 0 && netDamage > 0) {
+            if (_armorMode === ARMOR_MODES.FULL && afterSP > 0 && netDamage > 0) {
               await ablateLocationOnce(pilot, charLoc, "");
             }
           }

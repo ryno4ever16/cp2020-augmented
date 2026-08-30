@@ -148,7 +148,11 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async _prepareContext(_options) {
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
-    const ablate    = this._ablate    ?? game.settings.get("cp2020-augmented", "damageAblation");
+    // ⏪ `damageAblation` RETIRED 2026-08-29 (settings-trim) — MERGED into `damageArmorMode`: the "full"
+    // mode now MEANS SP-with-wear-on-penetration, so the mode alone supplies the DEFAULT. This window's
+    // own `input[name='ablate']` checkbox still overrides it per application — that is the point-of-use
+    // control the merge preserves.
+    const ablate    = this._ablate    ?? (game.settings.get("cp2020-augmented", "damageArmorMode") === "full");
 
     // Segment auto-detect: FIRST context build only, and it never overrides a value already set —
     // it is purely a starting value, the Cover SP input stays editable. Seeding _coverSP here
@@ -350,7 +354,8 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     const root = this.element;
     if (!root) return;
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
-    const ablate    = this._ablate    ?? game.settings.get("cp2020-augmented", "damageAblation");
+    // ⏪ `damageAblation` MERGED into `damageArmorMode` 2026-08-29 (settings-trim): "full" MEANS wear.
+    const ablate    = this._ablate    ?? (game.settings.get("cp2020-augmented", "damageArmorMode") === "full");
     const btm = Number(this.target.system.stats?.bt?.modifier) || 0;
     const base = resolveAreaDamagesSync({
       target:      this.target,
@@ -422,9 +427,12 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     const coverSP   = this._coverSP;
     const btm       = Number(this.target.system.stats?.bt?.modifier) || 0;
 
+    // The per-application checkbox WINS whenever the window rendered one — the point-of-use control.
+    // ⏪ `damageAblation` MERGED into `damageArmorMode` 2026-08-29 (settings-trim): with no checkbox to
+    // read, the fallback default is "the mode is full", which now MEANS wear-on-penetration.
     const ablateEl = this.element?.querySelector("input[name='ablate']");
     const ablate   = ablateEl ? ablateEl.checked
-                              : (this._ablate ?? game.settings.get("cp2020-augmented", "damageAblation"));
+                              : (this._ablate ?? (game.settings.get("cp2020-augmented", "damageArmorMode") === "full"));
 
     const rawHits = resolveAreaDamagesSync({
       target:      this.target,
@@ -538,8 +546,9 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // routed hits carry no shock/stun (RAW), so they don't accumulate the cumulative-save penalty
     // (mirrors the relay-compute branch's `!routesToSdp` gate).
     if (this.payload.stunSaveOnHit && resolvedHits.some(h => h.penetrates && !routesToSdp(this.target, h.location))) {
-      const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-      if (taserEnabled) await updateTaserState(this.target, this.payload);
+      // ⏪ `taserCumPenaltyEnabled` RETIRED 2026-08-29 (settings-trim): firing the round that carries the
+      // shock rider is the consent, and a payload without one never reaches this line.
+      await updateTaserState(this.target, this.payload);
     }
 
     // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js.
