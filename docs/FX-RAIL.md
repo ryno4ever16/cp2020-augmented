@@ -2199,7 +2199,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `GROUND_FIRE.maxPerPayload` | 4 | the most flames one payload may place |
 | `GROUND_FIRE.maxPerPattern` | 5 | the most flames one confirmed shot pattern may scatter |
 | `GROUND_FIRE.maxLive` | ⏱ **12** (was **24**) | the most flames alive on a scene at once — oldest evicted first. Trimmed 2026-08-13 (§6); ⚠ the number is the build lane's proposal, re-tune by eye |
-| `shotgunSpreadEnabled` (world setting) | default `true` | the pattern master switch — read ONLY inside `spreadFlowModeOf` (§1.1a); off ⇒ shells take the single-target flow |
+| ~~`shotgunSpreadEnabled`~~ (⏪ retired 2026-08-29, settings-trim) | always on | `shotgunPatternEnabled()` now hard-returns true (loading a spread-configured round is the consent); `spreadFlowModeOf` (§1.1a) unchanged as the one flow-ownership site |
 | `MUZZLE_SMOKE.*` | see the block | one puff's size, phase, drift and cap |
 | `MUZZLE_MOTES.*` | see the block | speck geometry, all off the reference frame |
 | `PRESENTATION_CAP_MS` | 8000 | hard ceiling on how long the damage window may be held |
