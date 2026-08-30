@@ -180,8 +180,7 @@ function _payloadPenetration(payload, totalRolled, ap) {
  */
 export async function routeWeaponFiredToVehicle(payload, vehicleActor) {
   if (!vehicleActor || vehicleActor.type !== "cp2020-augmented.vehicle") return false;
-  const enabled = (() => { try { return game.settings.get(SCOPE, "vehicleDamageEnabled"); } catch { return true; } })();
-  if (!enabled) return false;
+  // ⏪ vehicleDamageEnabled gate RETIRED 2026-08-29 (settings-trim).
 
   // Resolve each ROUND/hit SEPARATELY against the vehicle's armor. Summing all hits and subtracting SP /
   // comparing Penetration once over-penetrates: a burst that can't beat SP with one round must not beat it
@@ -256,8 +255,7 @@ function _candidateGunners(actor) {
  */
 export async function openVehicleFireDialog(actor, mount = {}) {
   if (!actor || actor.type !== "cp2020-augmented.vehicle") return null;
-  const enabled = (() => { try { return game.settings.get(SCOPE, "vehicleDamageEnabled"); } catch { return true; } })();
-  if (!enabled) { ui.notifications?.warn?.(localize("Vehicle.DamageDisabled")); return null; }
+  // ⏪ vehicleDamageEnabled gate RETIRED 2026-08-29 (settings-trim): pressing the control IS the opt-in.
 
   // Resolve the full vehicleWeapon Item (the sheet passes {itemId,...}); fall back to mount values.
   const item = mount.itemId ? actor.items.get(mount.itemId) : null;

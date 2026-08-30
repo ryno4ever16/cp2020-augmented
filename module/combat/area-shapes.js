@@ -249,8 +249,11 @@ export async function moveArea(handle, dx, dy) {
 
 /**
  * Is `tok` shielded from an area effect originating at (ox,oy) by a wall the module knows nothing
- * about? Gated by areaEffectOcclusion. Graceful: if the collision backend is unavailable, nothing is
- * treated as occluded.
+ * about? Graceful: if the collision backend is unavailable, nothing is treated as occluded.
+ *
+ * ⏪ `areaEffectOcclusion` RETIRED 2026-08-29 (settings-trim): PLACING the walls is the consent, and a
+ * scene that carries none exempts nobody — the test simply finds no collision and answers false. The
+ * blocking itself is Core p.108 RAW, so the switch only ever offered a way to contradict the map.
  *
  * ⭐ THIS IS NOW THE **NAKED** HALF OF A TWO-PART SPLIT (user ruling 2026-08-25). A wall carrying
  * cover VALUES no longer reaches this test at all: `combat/cover.js` `areaCoverVerdict` asks its own
@@ -266,7 +269,6 @@ export async function moveArea(handle, dx, dy) {
  * cannot import damage-hooks (cycle). This file is the shared area toolbox both already import.
  */
 export function areaOcclusionTest(ox, oy, tok) {
-  try { if (!game.settings.get("cp2020-augmented", "areaEffectOcclusion")) return false; } catch (e) { /* default on */ }
   try {
     const origin = { x: ox, y: oy };
     const dest   = { x: tok.center?.x ?? tok.x, y: tok.center?.y ?? tok.y };

@@ -301,8 +301,7 @@ function _skillChoices(selected) {
  */
 export async function openControlRollDialog(actor, opts = {}) {
   if (!actor || actor.type !== "cp2020-augmented.vehicle") return null;
-  const enabled = (() => { try { return game.settings.get(SCOPE, "vehicleControlEnabled"); } catch { return true; } })();
-  if (!enabled) { ui.notifications?.warn?.(localize("Vehicle.ControlDisabled")); return null; }
+  // ⏪ vehicleControlEnabled gate RETIRED 2026-08-29 (settings-trim): pressing the control IS the opt-in.
   const ruleSystem = (() => { try { return effectiveVehicleRuleSystem(); } catch { return "Core"; } })();   // Core whenever Maximum Metal is off
   const isMM = ruleSystem === "MaximumMetal";
 

@@ -17,21 +17,18 @@ const SCOPE = "cp2020-augmented";
  */
 
 // Display order of the sections + the settings in each (registered keys only; absent ones are skipped).
+// ⏪ 2026-08-29 SETTINGS TRIM: 23 rows retired or merged in one pass (the ruling and per-key
+// rationale live at each registration tombstone in settings.js). The sections below carry only
+// what still registers.
 const SECTIONS = [
   { key: "SectionDamage", keys: [
-    "damageArmorMode", "damageAblation", "headHitDoubling", "limbLossEnabled",
-    "limbModel", "hitLocationCoreDisplay",
+    "damageArmorMode", "headHitDoubling", "limbLossEnabled", "limbModel",
   ] },
   { key: "SectionCombatAutomation", keys: [
-    "combatAutomationEnabled", "activeDodgeParryEnabled",
-    "aimTrackingEnabled", "waitForTurnEnabled", "specialMeleeEffectsEnabled", "multiActionPenaltyEnabled",
-    "multiActionAutoTrack", "suppressiveFireSaves", "restrictMovementOncePerTurn", "autoRangefinding",
-    "rerollGoneLimbLocation",
+    "combatAutomationEnabled", "multiActionPenaltyEnabled",
   ] },
   { key: "SectionWeaponEffects", keys: [
-    "shotgunSpreadEnabled", "explosivesEnabled", "explosivesDetailed", "areaEffectOcclusion",
-    "gasGrenadeCloudEnabled", "gasCloudAutoMove", "taserCumPenaltyEnabled",
-    "acidArmorDotEnabled", "acidDotStackMode", "fireDotEnabled", "fireDotStackMode",
+    "explosivesDetailed", "gasCloudAutoMove", "dotStackMode",
   ] },
   { key: "SectionOptionalRules", keys: ["fnff2Enabled"] },
   { key: "SectionMechAutomation", keys: [
@@ -43,11 +40,11 @@ const SECTIONS = [
     "ipRawTracking", "ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode",
     "ipShowPending",
   ] },
-  { key: "SectionShopping", keys: ["shoppingEnabled", "playersCanShop", "shopBuySource", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource"] },
+  { key: "SectionShopping", keys: ["playersCanShop", "shopBuySource", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource", "shopStallNotice"] },
   // ⏪ "npcGenEnabled" led this row until 2026-08-28 and is retired with it; the section keeps its one
   // remaining row, the optional token-art folder.
   { key: "SectionNpcGen", keys: ["npcGenTokenArtFolder"] },
-  { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
+  { key: "SectionVehicles", keys: ["mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled"] },
   { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly", "hideScrapedPacks"] },
   { key: "SectionDisplay", keys: ["combatFxEnabled", "faceTargetOnFire"] },
   // Per-user diagnostics (module/dev/*), last because they are for chasing a report, not for play.
@@ -55,18 +52,13 @@ const SECTIONS = [
 ];
 
 // master toggle → the sub-settings that only matter when it's on (greyed + disabled while it's off).
+// ⏪ The shoppingEnabled, explosivesEnabled, gasGrenadeCloudEnabled, acid/fire DOT and multi-action
+// master rows all left with the 2026-08-29 trim — their former sub-settings either retired with
+// them or (explosivesDetailed, gasCloudAutoMove, dotStackMode, the shop permissions) now stand on
+// their own with no master to grey them.
 const MASTERS = {
-  mmEnabled:                 ["vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"],
-  ipRawTracking:             ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"],
-  shoppingEnabled:           ["playersCanShop", "shopBuySource", "shopAllowHomebrew", "shopShowSource"],
-  // ⏪ npcGenEnabled → npcGenTokenArtFolder was here until 2026-08-28. With the master retired the
-  // folder field has no master to be greyed by, and leaving the row would have greyed it permanently
-  // against a switch nothing can turn on.
-  explosivesEnabled:         ["explosivesDetailed", "areaEffectOcclusion"],
-  gasGrenadeCloudEnabled:    ["gasCloudAutoMove"],
-  acidArmorDotEnabled:       ["acidDotStackMode"],
-  fireDotEnabled:            ["fireDotStackMode"],
-  multiActionPenaltyEnabled: ["multiActionAutoTrack"],
+  mmEnabled:     ["vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled"],
+  ipRawTracking: ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"],
 };
 
 /** Normalize the renderSettingsConfig hook's 2nd arg to a root HTMLElement (V2 element or V1 jQuery). */

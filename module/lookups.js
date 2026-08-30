@@ -301,12 +301,11 @@ export function spreadModeForAmmo({ spreadMode, caliber, modifier } = {}) {
   return SPREAD_MODE_BUCK;
 }
 
-/** Is the pattern mechanic switched on for this world? Defaults to ON when the setting is unreachable
- *  (a module boot order that asks before registration must not silently orphan every shell). */
-export function shotgunPatternEnabled() {
-  try { return game.settings.get("cp2020-augmented", "shotgunSpreadEnabled") !== false; }
-  catch (e) { return true; }
-}
+/** ⏪ RETIRED AS A SWITCH 2026-08-29 (settings-trim): OFF made a spread-configured shell behave like
+ *  a slug, which loading a slug already does — the AMMO choice is the consent, and the mechanic only
+ *  ever engages for rounds explicitly configured to spread. Kept as a function so `spreadFlowModeOf`
+ *  and every other call site is unchanged (its OFF-orphan history stays instructive below). */
+export function shotgunPatternEnabled() { return true; }
 
 /**
  * WHICH FLOW OWNS A FIRED PAYLOAD — the ONE site every caller asks, and the only one that may.

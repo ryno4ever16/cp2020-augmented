@@ -3,6 +3,7 @@ import { localize, localizeParam, resolveActorRef, cappedWoundState } from "../u
 import { renderChatCard } from "../compat.js";
 import { markCardResolved, isCardResolved } from "../card-lock.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
+import { dotStackMode } from "../settings.js";
 
 // The chat-card helpers now live in compat.js so the vehicle module can reuse them without
 // importing the combat module. Re-exported here for back-compat (damage-hooks.js imports
@@ -104,11 +105,8 @@ function _registerStabilizeSocket() {
  * reduces stun threshold by stunSaveMod. Returns the total penalty (always ≥ 0).
  */
 function _getTaserPenalty(actor) {
-  const enabled = (() => {
-    try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); }
-    catch { return true; }
-  })();
-  if (!enabled) return 0;
+  // ⏪ `taserCumPenaltyEnabled` RETIRED 2026-08-29 (settings-trim): firing the round that carries the
+  // shock rider is the consent, and a figure that was never shocked carries no state to read.
   const state = actor.getFlag?.("cp2020-augmented", "taserState");
   if (!state || state.count <= 1) return 0;
   const currentRound = game?.combat?.round ?? 0;
@@ -153,14 +151,17 @@ export async function mirrorDotStatus(actor, statusId, active) {
 }
 
 /**
- * Apply an acid DOT hit, respecting the acidDotStackMode setting.
+ * Apply an acid DOT hit, respecting the shared `dotStackMode` selector.
+ * ⏪ `acidDotStackMode` RETIRED 2026-08-29 (settings-trim) — MERGED with `fireDotStackMode` into the one
+ * `dotStackMode` key (same three values, same default): no book text distinguishes how an acid timer and
+ * a burn timer combine, so two selectors were two ways to answer one question.
  * Modes: "stack" extends turnsLeft at same location, "reset" overwrites, "separate" adds concurrent timer.
  * Legacy single-object dotState is transparently migrated to array format on read.
  * The flag is mirrored onto core's `corrode` on the way in (mirrorDotStatus); the per-turn tick in
  * damage-hooks.js takes it off again when the last marker expires.
  */
 export async function applyAcidDotState(target, location, turnsLeft, formula) {
-  const mode = (() => { try { return game.settings.get("cp2020-augmented", "acidDotStackMode"); } catch { return "stack"; } })();
+  const mode = dotStackMode();
   const newEntry = { location, turnsLeft: Number(turnsLeft), formula: String(formula || "1d6") };
 
   if (mode === "reset") {
@@ -188,7 +189,9 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
 }
 
 /**
- * Apply a FIRE (incendiary) DOT hit, respecting the fireDotStackMode setting.
+ * Apply a FIRE (incendiary) DOT hit, respecting the shared `dotStackMode` selector.
+ * ⏪ `fireDotStackMode` RETIRED 2026-08-29 (settings-trim) — MERGED into `dotStackMode` alongside the acid
+ * one; see {@link applyAcidDotState}.
  * Mirrors {@link applyAcidDotState} but writes the separate `fireDotState` flag — fire burns HP
  * each turn (handled by the combat tick in damage-hooks.js), whereas acid degrades armor SP.
  * Modes: "stack" extends turnsLeft at same location, "reset" overwrites, "separate" adds a
@@ -197,7 +200,7 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
  * damage-hooks.js takes it off again when the last marker expires.
  */
 export async function applyFireDotState(target, location, turnsLeft, formula, flat = false) {
-  const mode = (() => { try { return game.settings.get("cp2020-augmented", "fireDotStackMode"); } catch { return "stack"; } })();
+  const mode = dotStackMode();
   // `mult` is the tick's multiplier. By default it HALVES each surviving turn so the burn diminishes —
   // the Armor-Piercing Incendiary load's model (1d6, then 1d6/2), generalized from the CP2020 p.110
   // flamethrower ladder.
@@ -324,13 +327,15 @@ export async function applyDotFromPayload(target, location, src, penetrated = tr
     // Incendiary only ignites the target when the round gets through armor (RAW: "if the bullet
     // penetrates"). An unarmored target always counts as penetrated, so they always catch fire.
     if (!penetrated) return;
-    const on = (() => { try { return game.settings.get("cp2020-augmented", "fireDotEnabled"); } catch { return true; } })();
+    // ⏪ `fireDotEnabled` RETIRED 2026-08-29 (settings-trim): OFF bought the dead state — an incendiary
+    // round that lands and burns nothing. The round declaring `dotEnabled` (checked above) is the consent.
     // The round's own ladder rides through with its formula and its duration. A payload from before the
     // field existed passes undefined, which coerces to the halving that has always been the default.
-    if (on) await applyFireDotState(target, location, turns, formula, Boolean(src.dotFlat));
+    await applyFireDotState(target, location, turns, formula, Boolean(src.dotFlat));
   } else {
-    const on = (() => { try { return game.settings.get("cp2020-augmented", "acidArmorDotEnabled"); } catch { return true; } })();
-    if (on) await applyAcidDotState(target, location, turns, formula);
+    // ⏪ `acidArmorDotEnabled` RETIRED 2026-08-29 (settings-trim): the `dotEnabled` guard above is the
+    // consent, and no shipped ammo item sets it — a GM authors the round by hand.
+    await applyAcidDotState(target, location, turns, formula);
   }
 }
 

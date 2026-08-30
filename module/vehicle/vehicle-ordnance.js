@@ -24,7 +24,7 @@ const SCOPE = "cp2020-augmented";
 /** How many combat rounds a shell's cloud lingers (matches the grenade default). */
 const GAS_CLOUD_TURNS = 3;
 
-const _enabled = (key, dflt = true) => { try { return game.settings.get(SCOPE, key); } catch { return dflt; } };
+// (the _enabled settings helper that lived here retired with its last gate, 2026-08-29 settings-trim)
 
 /** Set a single token alight: personnel via the fire DOT, vehicles via the onFire flag. */
 async function _ignite(actor, dot = {}) {
@@ -33,7 +33,7 @@ async function _ignite(actor, dot = {}) {
     try { await actor.update({ "system.onFire": true }); } catch { /* non-fatal */ }
     return;
   }
-  if (!_enabled("fireDotEnabled")) return;
+  // ⏪ fireDotEnabled gate RETIRED 2026-08-29 (settings-trim): the loaded round is the consent.
   const { applyFireDotState } = await import("../combat/save-rolls.js");
   await applyFireDotState(actor, "Torso", Number(dot.turns) || 10, String(dot.formula || "3d6"));
 }
@@ -49,7 +49,7 @@ async function _ignite(actor, dot = {}) {
  * tools); on v13 it keeps the legacy flag set the per-turn tick's back-compat path reads.
  */
 async function _placeGasCloud(scene, origin, radiusM, weaponName) {
-  if (!_enabled("gasGrenadeCloudEnabled")) return null;
+  // ⏪ gasGrenadeCloudEnabled gate RETIRED 2026-08-29 (settings-trim): the loaded shell is the consent.
   const name = weaponName || localize("Vehicle.ChemicalShell");
   const descriptor = {
     kind: "circle", x: origin.x, y: origin.y, radiusM,
@@ -167,7 +167,7 @@ const _shellChoices = (shells) => shells.map((s, i) => ({
  */
 export async function openIndirectFireDialog(actor, mount = {}) {
   if (!actor || actor.type !== "cp2020-augmented.vehicle") return null;
-  if (!_enabled("vehicleDamageEnabled")) { ui.notifications?.warn?.(localize("Vehicle.DamageDisabled")); return null; }
+  // ⏪ vehicleDamageEnabled gate RETIRED 2026-08-29 (settings-trim): pressing the control IS the opt-in.
   const item = mount.itemId ? actor.items.get(mount.itemId) : null;
   const w = item?.system ?? {};
   const wName = item?.name ?? mount.name ?? "artillery";
@@ -235,7 +235,7 @@ export async function openIndirectFireDialog(actor, mount = {}) {
  */
 export async function openBombDialog(actor, mount = {}) {
   if (!actor || actor.type !== "cp2020-augmented.vehicle") return null;
-  if (!_enabled("vehicleDamageEnabled")) { ui.notifications?.warn?.(localize("Vehicle.DamageDisabled")); return null; }
+  // ⏪ vehicleDamageEnabled gate RETIRED 2026-08-29 (settings-trim): pressing the control IS the opt-in.
   const item = mount.itemId ? actor.items.get(mount.itemId) : null;
   const w = item?.system ?? {};
   const wName = item?.name ?? mount.name ?? "bomb";

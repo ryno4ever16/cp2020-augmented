@@ -271,8 +271,11 @@ export function deleteFieldUpdate(path) {
  *  here would re-open the same split from the other direction, so the detection stays exactly his.
  */
 function _hitLocationLookup(targetActor) {
-    // World override: force the canonical Core map even for an actor that carries its own.
-    const forceCore = (() => { try { return game.settings.get("cp2020-augmented", "hitLocationCoreDisplay"); } catch { return true; } })();
+    // ⏪ The `hitLocationCoreDisplay` world override was RETIRED 2026-08-29 (settings-trim): the
+    // per-actor branch below is inert on both sides today (see the header note), so the switch chose
+    // between identical outcomes. The Core map — the shipped default — is pinned; the per-actor
+    // branch stays in place for the day the base system's lookup becomes real.
+    const forceCore = true;
     if (forceCore) return defaultAreaLookup;
     return (targetActor?.hitLocLookup) ? targetActor.hitLocLookup : defaultAreaLookup;
 }
@@ -330,11 +333,10 @@ function _isGoneLimbZone(targetActor, zone) {
     return cyberGone || fleshGone;
 }
 
-/** World toggle for the missing-limb re-roll (default ON). */
-function _rerollGoneLimbEnabled() {
-    try { return game.settings.get("cp2020-augmented", "rerollGoneLimbLocation") === true; }
-    catch (e) { return false; }
-}
+/** ⏪ RETIRED AS A SWITCH 2026-08-29 (settings-trim): the book itself calls the off-state silly
+ *  (p.100 — "ignore it and re-roll"), so the re-roll runs unconditionally. Aimed shots and
+ *  GM-chosen locations still never re-roll (callers gate). Kept as a function, call sites unchanged. */
+function _rerollGoneLimbEnabled() { return true; }
 
 /** Pick a still-valid location for `targetActor` by re-rolling over the faces of `lookup` whose location
  *  is NOT a gone limb. ONE weighted roll (rejection sampling collapsed): because Head/Torso (and Groin)

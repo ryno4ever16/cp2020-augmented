@@ -41,8 +41,7 @@ function _meleePen(dice) {
  */
 export async function openAcpaMeleeDialog(actor) {
   if (!actor || actor.type !== "cp2020-augmented.vehicle" || !actor.system?.isACPA) { ui.notifications?.warn?.(localize("Vehicle.AcpaMeleeOnlyAcpa")); return null; }
-  if (!_enabled("vehicleDamageEnabled")) { ui.notifications?.warn?.(localize("Vehicle.DamageDisabled")); return null; }
-
+  // ⏪ vehicleDamageEnabled gate RETIRED 2026-08-29 (settings-trim): pressing the control IS the opt-in.
   const targets = [...(game.user?.targets ?? [])];
   const targetTok = targets.length === 1 ? targets[0] : null;
   if (!targetTok) { ui.notifications?.warn?.(localize("Vehicle.AcpaNeedTarget")); return null; }
