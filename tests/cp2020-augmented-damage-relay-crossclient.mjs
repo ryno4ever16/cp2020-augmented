@@ -6,8 +6,11 @@
  *   (a) FIXTURES (GM): active scene; an NPC target the player does NOT own, with a known SP (equipped
  *       armor) + BTM (BODY) state; a player-owned attacker; both tokens on the scene. A chat card
  *       carrying the module's `damagePayload` flag (Torso volley) is posted — exactly the card a real
- *       shot produces. Settings captured/restored (armor mode + ablation; the card always opens the dialog, not
- *       auto-apply; damageArmorMode FULL + damageAblation OFF for a deterministic preview).
+ *       shot produces. Settings captured/restored (armor mode; the card always opens the dialog, not
+ *       auto-apply; damageArmorMode SIMPLE for a deterministic preview — SP subtracted, armor never
+ *       worn). ⏪ the separate `damageAblation` boolean was retired 2026-08-29 (settings-trim) and
+ *       merged into the mode, where "full" now MEANS wear-on-penetration; "simple" is the same
+ *       arithmetic this leg always ran on.
  *   (b) PLAYER opens the REAL DamageDialog by clicking the card's Apply-Damage button (the same entry a
  *       player uses in play — renderChatMessageHTML injects `.cp2020-apply-damage-btn` because the player
  *       owns the attacker). The dialog's own previewed FLESH total (`.damage-total-value`) is read off the
@@ -113,9 +116,8 @@ try {
     const capture = (k) => { try { return game.settings.get("cp2020-augmented", k); } catch { return undefined; } };
     // The card always opens the DIALOG now — the world-wide auto-apply route was retired 2026-08-14,
     // so there is no setting left to pin for it and the relay under test is the only apply path.
-    const prev = { armorMode: capture("damageArmorMode"), ablation: capture("damageAblation") };
-    await game.settings.set("cp2020-augmented", "damageArmorMode", "full");
-    await game.settings.set("cp2020-augmented", "damageAblation", false);
+    const prev = { armorMode: capture("damageArmorMode") };
+    await game.settings.set("cp2020-augmented", "damageArmorMode", "simple");
 
     // Reuse/provision a non-GM player user (empty password), like the suppressive keeper.
     let player = game.users.find((u) => u.role === CONST.USER_ROLES.PLAYER && !u.isGM);
@@ -297,7 +299,6 @@ try {
     try {
       const r = d.prev ?? {};
       if (r.armorMode !== undefined) await game.settings.set("cp2020-augmented", "damageArmorMode", r.armorMode);
-      if (r.ablation !== undefined) await game.settings.set("cp2020-augmented", "damageAblation", r.ablation);
     } catch (e) {}
   }, S).catch(() => {});
 } catch (e) {

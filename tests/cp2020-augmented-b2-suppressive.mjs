@@ -2,7 +2,8 @@
  * B2 verification — suppressive-fire automation on the STOCK system (:30004, official 1.1.1 + module).
  *
  * On stock, the base `__suppressiveFire` posts a card but fires no hook, so the module's fire-zone /
- * evasion automation is inert (enabling `suppressiveFireSaves` did nothing). The seam shim now wraps
+ * evasion automation was inert (⏪ its world switch is retired 2026-08-29, settings-trim — the lane is
+ * unconditional now, and declaring the burst plus placing the lane is the opt-in). The seam shim wraps
  * `__suppressiveFire` to emit `cyberpunk2020.suppressiveFire` (context from the method, computed values
  * from the suppressive.hbs render). This test drives the REAL wrapped method — NOT a bare Hooks.callAll —
  * so it proves the SHIM, not just the listener:
@@ -82,9 +83,8 @@ try {
     const F0 = (d)=> d.flags?.["cp2020-augmented"] ?? {};
     for (const coll of [scene.templates, scene.regions]) if (coll) for (const d of [...coll]) if (F0(d).isSuppressiveZone) await d.delete().catch(()=>{});
 
-    // The firing client (player) checks this world setting BEFORE relaying → must be ON before they join.
-    let savesPrev; try { savesPrev = game.settings.get("cp2020-augmented", "suppressiveFireSaves"); } catch (e) {}
-    await game.settings.set("cp2020-augmented", "suppressiveFireSaves", true);
+    // ⏪ the pre-relay gate the firing client used to read is retired 2026-08-29 (settings-trim), so
+    //    nothing has to be armed on the world before the player joins.
 
     const player = game.users.find(u => u.role === 1);
     const pc  = await Actor.create({ name: "__PW__PC",  type: "character" });
@@ -102,7 +102,7 @@ try {
     const [npcTok] = await scene.createEmbeddedDocuments("Token", [mk(npc, 1400)]);
     return {
       playerName: player.name, pcId: pc.id, npcId: npc.id, weaponName: wpn.name,
-      pcTokenId: pcTok.id, npcTokenId: npcTok.id, savesPrev,
+      pcTokenId: pcTok.id, npcTokenId: npcTok.id,
       baseline: { isSuppressiveZone: COUNT_AREAS("isSuppressiveZone") },
     };
   }, COUNT_AREAS.toString());
@@ -117,10 +117,9 @@ try {
   const who = await pl.evaluate((d) => ({
     isGM: game.user.isGM,
     ownsPC: game.actors.get(d.pcId)?.isOwner,
-    savesOn: (() => { try { return game.settings.get("cp2020-augmented", "suppressiveFireSaves"); } catch { return false; } })(),
     tokenSeen: !!(canvas?.tokens?.placeables?.find(t => t.id === d.pcTokenId)),
   }), S);
-  log.push(`player: isGM=${who.isGM} ownsPC=${who.ownsPC} suppressiveFireSaves=${who.savesOn} pcTokenPlaceable=${who.tokenSeen}`);
+  log.push(`player: isGM=${who.isGM} ownsPC=${who.ownsPC} pcTokenPlaceable=${who.tokenSeen}`);
   if (who.isGM || !who.ownsPC) throw new Error("player context is wrong (isGM or not PC owner)");
 
   // ===== B2 step 1: player fires suppressive via the REAL wrapped method; capture the emitted payload =====
@@ -178,15 +177,13 @@ try {
   }
 
   // ---- cleanup ----
-  await gm.evaluate(async (savesPrev) => {
+  await gm.evaluate(async () => {
     const scene = game.scenes.active ?? canvas.scene;
     for (const t of scene.tokens.filter(t => t.name?.startsWith("__PW__"))) await t.delete().catch(()=>{});
     const F = (d)=> d.flags?.["cp2020-augmented"] ?? {};
     for (const coll of [scene.templates, scene.regions]) if (coll) for (const d of [...coll]) if (F(d).isSuppressiveZone) await d.delete().catch(()=>{});
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__"))) await a.delete().catch(()=>{});
-    // Restore the captured setting rather than hard-resetting to false.
-    try { if (savesPrev !== undefined) await game.settings.set("cp2020-augmented", "suppressiveFireSaves", savesPrev); } catch (e) {}
-  }, S.savesPrev).catch(() => {});
+  }).catch(() => {});
 } catch (e) {
   log.push("ERROR: " + e.message);
 } finally {

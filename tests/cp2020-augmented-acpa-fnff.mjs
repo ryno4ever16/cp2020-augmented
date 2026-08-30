@@ -19,7 +19,6 @@ const r = await p.evaluate(async () => {
   const ok = (k, v) => { out.checks[k] = v; };
   // cleanup prior run
   for (const a of game.actors.filter(a => a.name.startsWith("__PW__ACPA"))) await a.delete().catch(() => {});
-  try { await game.settings.set("cp2020-augmented", "vehicleDamageEnabled", true); } catch {}
 
   const acpa = await import("/modules/cp2020-augmented/module/vehicle/vehicle-acpa.js");
   const dmg = await import("/modules/cp2020-augmented/module/vehicle/vehicle-damage.js");
@@ -144,11 +143,10 @@ const r = await p.evaluate(async () => {
     if (sc.total !== 8) { Math.random = () => (Q.length ? Q.shift() : 0.05); Q = [D(8)]; sc = await new Roll("1d10").evaluate(); }
     ok("efg_dice_override", sc.total === 8);
 
-    // Ablation ON + FULL armor mode so the pilot-armor ablation step (which mirrors the personnel gate)
-    // is observable in leg E; restored in finally.
-    await setS("damageAblation", true);
+    // FULL armor mode so the pilot-armor wear-on-penetration step (which mirrors the personnel gate)
+    // is observable in leg E; restored in finally. ⏪ the separate `damageAblation` boolean was
+    // retired 2026-08-29 (settings-trim) — "full" now MEANS wear-on-penetration on its own.
     await setS("damageArmorMode", "full");
-    await setS("vehicleDamageEnabled", true);
 
     const LOCS = ["Head", "Torso", "rArm", "lArm", "rLeg", "lLeg"];
     const armorItem = (name, torsoSP) => ({ name, type: "armor",

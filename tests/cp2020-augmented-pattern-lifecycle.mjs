@@ -92,8 +92,7 @@ const res = await page.evaluate(async () => {
   const cardHasButton = (messageId, selector) => !!cardEl(messageId)?.querySelector(selector);
   const cardText = (messageId) => (cardEl(messageId)?.textContent ?? "").replace(/\s+/g, " ").trim();
 
-  const KEYS = ["shotgunSpreadEnabled", "combatAutomationEnabled", "combatFxEnabled", "damageArmorMode",
-                "damageAblation", "limbLossEnabled", "rerollGoneLimbLocation", "areaEffectOcclusion"];
+  const KEYS = ["combatAutomationEnabled", "combatFxEnabled", "damageArmorMode", "limbLossEnabled"];
   const was = {};
   for (const k of KEYS) { try { was[k] = game.settings.get(SCOPE, k); } catch { was[k] = null; } }
   const set = async (k, v) => { try { await game.settings.set(SCOPE, k, v); } catch (e) { /* unregistered */ } };
@@ -101,14 +100,15 @@ const res = await page.evaluate(async () => {
   let shooter = null, victim = null, shooterTok = null, victimTok = null, combat = null;
 
   try {
-    await set("shotgunSpreadEnabled", true);
+    // ⏪ the pattern switch, the wear-on-penetration boolean, the absent-limb re-roll switch and the
+    //    occlusion switch all retired 2026-08-29 (settings-trim). "none" already excludes armor (so
+    //    nothing can wear), the re-roll runs unconditionally and never fires on a fixture with every
+    //    limb, and the occlusion exemption is unconditional — this section places no wall, so it is
+    //    inert here either way.
     await set("combatAutomationEnabled", true);
     await set("combatFxEnabled", false);
     await set("damageArmorMode", "none");
-    await set("damageAblation", false);
     await set("limbLossEnabled", false);
-    await set("rerollGoneLimbLocation", false);
-    await set("areaEffectOcclusion", false);
 
     // stale fixtures first — tokens before actors (deleting an actor leaves an unlinked token standing)
     for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__LIFE"))) {

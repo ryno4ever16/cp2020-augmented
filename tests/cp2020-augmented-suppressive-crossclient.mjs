@@ -121,9 +121,8 @@ try {
     for (const a of game.actors.filter((a) => a.name?.startsWith("__PW__XC"))) await a.delete().catch(() => {});
     for (const t of scene.tokens.filter((t) => t.name?.startsWith("__PW__XC"))) await t.delete().catch(() => {});
 
-    // Feature gate ON before the player joins (the SHOOTING client reads it before arming).
-    let savesPrev; try { savesPrev = game.settings.get("cp2020-augmented", "suppressiveFireSaves"); } catch (e) {}
-    await game.settings.set("cp2020-augmented", "suppressiveFireSaves", true);
+    // ⏪ the pre-arm gate the shooting client used to read is retired 2026-08-29 (settings-trim):
+    //    the lane is unconditional, so nothing has to be armed before the player joins.
 
     // A non-GM player user — reuse an existing role-1 user or create one (empty password), so this runs on
     // both cores regardless of the world's roster.
@@ -152,7 +151,7 @@ try {
     return {
       sceneId: scene.id, playerName: player.name, playerId: player.id, createdPlayer,
       shooterId: shooter.id, victimId: victim.id, weaponName: wpn.name,
-      shooterTokenId: shooterTok.id, victimTokenId: victimTok.id, gs, sx, sy, savesPrev,
+      shooterTokenId: shooterTok.id, victimTokenId: victimTok.id, gs, sx, sy,
     };
   });
   log.push(`setup: player=${S.playerName} (created=${S.createdPlayer}) shooter=${S.shooterId} shooterTok=${S.shooterTokenId} victimTok=${S.victimTokenId}`);
@@ -196,18 +195,20 @@ try {
   const who = await pl.evaluate((d) => ({
     isGM: game.user.isGM,
     ownsShooter: game.actors.get(d.shooterId)?.isOwner === true,
-    savesOn: (() => { try { return game.settings.get("cp2020-augmented", "suppressiveFireSaves"); } catch { return false; } })(),
     shimInstalled: CONFIG.Item.documentClass.prototype.__suppressiveFire?.__cpSeamShim === true,
     shooterTokSeen: !!canvas?.tokens?.get(d.shooterTokenId),
     behaviorRegistered: typeof CONFIG.RegionBehavior?.dataModels?.["cp2020-augmented.suppressiveFire"] === "function",
   }), S);
-  log.push(`player: isGM=${who.isGM} ownsShooter=${who.ownsShooter} savesOn=${who.savesOn} shim=${who.shimInstalled} tokSeen=${who.shooterTokSeen} behaviorReg=${who.behaviorRegistered}`);
+  log.push(`player: isGM=${who.isGM} ownsShooter=${who.ownsShooter} shim=${who.shimInstalled} tokSeen=${who.shooterTokSeen} behaviorReg=${who.behaviorRegistered}`);
   // shimInstalled is informational, not asserted: on STOCK Tilt (ship target) the module's seam-shim wraps
   // __suppressiveFire; on the FORK system the base emits cyberpunk2020.suppressiveFire natively so the shim
   // correctly stands down (shim=false is CORRECT there). The true cross-core invariant is that firing arms
   // the preview — proven by (b) below — regardless of which side emits the hook.
   check("player session is a non-GM owner of the shooter", !who.isGM && who.ownsShooter, JSON.stringify(who));
-  check("player session: suppressive setting ON + behavior type registered", who.savesOn && who.behaviorRegistered, JSON.stringify(who));
+  // ⏪ the "setting ON" half retired 2026-08-29 with its switch (settings-trim): the lane is
+  //    unconditional, so what has to be true on the player session is that the lane behavior TYPE is
+  //    registered there — without it the relayed plant has nothing to carry.
+  check("player session: the lane behavior type is registered on this client", who.behaviorRegistered === true, JSON.stringify(who));
   if (who.isGM || !who.ownsShooter) throw new Error("player context wrong (isGM or not shooter owner)");
 
   // ───────────────────────── (b) PLAYER FIRES → preview arms on player page ─────────────────────────
@@ -397,7 +398,6 @@ try {
     for (const t of scene.tokens.filter((t) => t.name?.startsWith("__PW__XC"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
     for (const a of game.actors.filter((a) => a.name?.startsWith("__PW__XC"))) await a.delete().catch(() => {});
     if (d.createdPlayer) { const u = game.users.get(d.playerId); if (u) await u.delete().catch(() => {}); }
-    try { if (d.savesPrev !== undefined) await game.settings.set("cp2020-augmented", "suppressiveFireSaves", d.savesPrev); } catch (e) {}
   }, S).catch(() => {});
 } catch (e) {
   log.push("ERROR: " + (e?.stack ?? e?.message ?? e));

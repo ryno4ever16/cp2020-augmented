@@ -3887,18 +3887,13 @@ const res = await page.evaluate(async () => {
     [2, 6, 12, 20].every(d => fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(d)) === 983)
     && fx.presentationTailMs("shotgun") === fx.FX_CLASSES.shotgun.dashMs + fx.HIT_CONFIRM.clipMs,
     [2, 6, 12, 20].map(d => `${d}sq:${fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(d))}`).join(" "));
-  // ⚠ THE CARTRIDGE QUESTION IS UNCHANGED BY THE VETO where it is asked of the PATTERN rather than of
-  // the volley — that flow is a different question and a different switch, and the veto must not have
-  // moved it. Driven with the pattern's world setting really off.
-  {
-    const wasOn = game.settings.get(SCOPE, "shotgunSpreadEnabled");
-    try {
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", false);
-      ok("volley veto: the pattern flow is untouched by it — two switches, two questions",
-        fx.patternFlowOwns({ caliber: "00" }) === false && fx.volleyOwns({ caliber: "00" }) === false,
-        "pattern off, volley off");
-    } finally { await game.settings.set(SCOPE, "shotgunSpreadEnabled", wasOn); }
-  }
+  // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) - the veto's "pattern flow is
+  //    untouched, two switches two questions" reading was driven with the pattern key really off, and
+  //    that key is gone. What survives is the ON side, asserted directly: the veto stands the volley
+  //    down for a shell while the pattern flow still claims it.
+  ok("volley veto: the veto stands the VOLLEY down while the pattern flow still claims the shell",
+    fx.volleyOwns({ caliber: "00" }) === false && fx.patternFlowOwns({ caliber: "00" }) === true,
+    `volley ${fx.volleyOwns({ caliber: "00" })} / pattern ${fx.patternFlowOwns({ caliber: "00" })}`);
   // ⭐ DRIVEN: what buckshot ACTUALLY draws now — the fan, its own hit mark, and a small arrival mark at
   // every pellet endpoint. This is the revert shape the trial's own legs promised.
   globalThis.Sequencer?.EffectManager?.endAllEffects?.();
@@ -5299,37 +5294,10 @@ try {
       fx.patternFlowOwns({ caliber: "00", spreadMode: "single" }) === true,
       "every seeded shell ammo carries spreadMode:single");
 
-    /* ── g4b. THE WORLD SWITCH IS PART OF THE SAME ANSWER ──────────────────────
-     * ⏪ This reverses what this file used to assert. The flow question deliberately ignored the
-     * pattern's world setting, on the reasoning that neither damage gate consulted it either — and
-     * that was the defect, not the design: with the pattern switched OFF the single-target gate stood
-     * down for the cartridge and the pattern hook stood down for the setting, so a shell was claimed
-     * by NEITHER flow, opened no apply window and threw no pattern. The switch now lives in the one
-     * shared site all three callers ask, so "off" means every shell takes the ordinary route exactly
-     * as the slug already does. The setting is toggled here and restored in the same breath. */
-    const spreadWas = game.settings.get(SCOPE, "shotgunSpreadEnabled");
-    let offOwns = null;
-    try {
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", false);
-      offOwns = {
-        buck: fx.patternFlowOwns({ caliber: "00" }),
-        alias: fx.patternFlowOwns({ caliber: "12ga" }),
-        flechette: fx.patternFlowOwns({ caliber: "00", spreadMode: "flechette" }),
-        slugStill: fx.patternFlowOwns({ caliber: "00", modifier: "slug" }),
-        rifleStill: fx.patternFlowOwns({ caliber: "5.56" }),
-      };
-    } finally {
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", spreadWas);
-    }
-    ok("flow gate: with the pattern SWITCHED OFF a shell is slug-like — the single-target flow owns it",
-      offOwns.buck === false && offOwns.alias === false && offOwns.flechette === false,
-      JSON.stringify(offOwns));
-    ok("flow gate: the loads that were already single stay single with it off (negative)",
-      offOwns.slugStill === false && offOwns.rifleStill === false, JSON.stringify(offOwns));
-    ok("flow gate: and switching it back restores the pattern's ownership, to the value",
-      game.settings.get(SCOPE, "shotgunSpreadEnabled") === spreadWas
-      && fx.patternFlowOwns({ caliber: "00" }) === (spreadWas === true),
-      `setting=${game.settings.get(SCOPE, "shotgunSpreadEnabled")}`);
+    /* ── g4b. ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) ─────────────
+     * The pattern's world switch is gone, so "with the pattern SWITCHED OFF a shell is slug-like" and
+     * its restore-to-value companion have nothing left to drive. The ON side is asserted in g4 above,
+     * where the CARTRIDGE is the whole answer. */
 
     /* ── h. the flash tint goes THROUGH the darkness gate, never around it ──── */
     const tint = fx.AMMO_FX.api.flashColor;
@@ -5547,32 +5515,11 @@ try {
       `${spawned.filter(isFire).length} fire / ${spawned.filter(isScorch).length} scorch`);
     await endAll();
 
-    // ⭐ AND THE OTHER SIDE OF THE SAME SWITCH, DRIVEN. With the pattern mechanic off there is no
-    // confirm to scatter an incendiary shell's fires down a path, so the fan-out must set them itself —
-    // the identical payload, the opposite answer, and the difference is one world setting. This is the
-    // presentation half of the ownership fix: the rail follows the mechanics without knowing the
-    // setting exists. Restored in a `finally`, so a failing assertion cannot leave the world switched.
-    const spreadWasLive = game.settings.get(SCOPE, "shotgunSpreadEnabled");
-    let offBurst = null, offFires = 0, offScorch = 0;
-    try {
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", false);
-      clearSpawns();
-      offBurst = await fx.fxWeaponFired(payload({
-        modifier: "api", caliber: "00", shotsFired: 3, shotsHit: 2,
-        areaDamages: { Torso: [{ damage: 5 }, { damage: 4 }] },
-      }));
-      await sleep(1600);
-      offFires = spawned.filter(isFire).length;
-      offScorch = spawned.filter(isScorch).length;
-    } finally {
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", spreadWasLive);
-    }
-    ok("live: with the pattern OFF the same incendiary shell's fires are drawn by the RAIL again",
-      offBurst?.groundFire !== null && offFires > 0 && offFires <= fx.GROUND_FIRE.maxPerPayload && offScorch === 0,
-      `${offFires} fire / ${offScorch} ground mark, was 0/0 with the pattern on`);
-    ok("live: and the world switch is back where this leg found it",
-      game.settings.get(SCOPE, "shotgunSpreadEnabled") === spreadWasLive, String(spreadWasLive));
-    await endAll();
+    // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) - "with the pattern OFF the
+    //    same incendiary shell's fires are drawn by the RAIL again", plus its restore-to-value
+    //    companion, were both driven by the pattern key, which is gone. The ON side stands directly
+    //    above (a pattern payload draws no ground fire because the pattern flow owns it), and the
+    //    rail-draws-them side is still covered by every non-shell incendiary leg in this section.
 
     // ⭐ THE SCENE CAP, driven rather than reasoned about: these burn for ⏱ 25 seconds, so across a
     // firefight they accumulate in a way a 3-second element never could. Enough bursts to exceed the
@@ -8368,14 +8315,12 @@ try {
         ...over });
 
     const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
-    const occWas = game.settings.get(SCOPE, "areaEffectOcclusion");
-    const spreadWas = game.settings.get(SCOPE, "shotgunSpreadEnabled");
+    // ⏪ the occlusion + pattern keys retired 2026-08-29 (settings-trim): both lanes are unconditional
+    //    now, so only the rail switch is pinned and handed back.
     const realSequence = globalThis.Sequence;
     const played = [];
     try {
       await game.settings.set(SCOPE, "combatFxEnabled", true);
-      await game.settings.set(SCOPE, "areaEffectOcclusion", true);
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", true);
 
       /* ── b. WHOSE PLAN IS IT — the flow gate ───────────────────────────────────────────────── */
       ok("corridor audio: the pattern flow owns this payload, so this plan is the one that answers",
@@ -8406,17 +8351,14 @@ try {
         && plan.victims[0].kind === "structure",
         String(plan?.victims[0].kind));
 
-      /* ── d. THE OCCLUSION EXEMPTION IS WHAT EXCLUDED THE THIRD FIGURE ──────────────────────── */
-      // Proven by flipping the exemption rather than by argument: with it off, the same geometry and
-      // the same wall put the walled figure straight back into the set.
-      await game.settings.set(SCOPE, "areaEffectOcclusion", false);
-      const unshielded = fx.patternAudioPlanFor(payload(), shooterPl);
-      await game.settings.set(SCOPE, "areaEffectOcclusion", true);
-      ok("corridor audio: the walled figure is excluded by the EXEMPTION, not by the geometry",
-        !!unshielded && unshielded.victims.length === 2
-        && unshielded.victims.some(v => v.tokenId === far.doc.id)
-        && !unshielded.victims.some(v => v.tokenId === wide.doc.id),
-        `${unshielded?.victims.length} with the exemption off vs ${plan?.victims.length} with it on`);
+      /* ── d. ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) ────────────
+       * The exemption used to be PROVEN by flipping the occlusion key off and watching the walled
+       * figure return to the set. That key is gone, so the discrimination is read the other way: the
+       * walled figure is out of the set while the unwalled figure at the same corridor reach is in. */
+      ok("corridor audio: the walled figure is excluded while the unwalled one at the same reach is in",
+        !!plan && plan.victims.some(v => v.tokenId === near.doc.id)
+        && !plan.victims.some(v => v.tokenId === far.doc.id),
+        `victims ${JSON.stringify(plan?.victims.map(v => v.tokenId) ?? null)} - near ${near.doc.id}, walled ${far.doc.id}`);
 
       /* ── e. THE NEGATIVES ──────────────────────────────────────────────────────────────────── */
       ok("corridor audio: no corridor declared, no plan — and the target-token plan resumes (negative)",
@@ -8604,19 +8546,15 @@ try {
       try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none live */ }
       await sleep(200);
       await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
-      await game.settings.set(SCOPE, "areaEffectOcclusion", occWas);
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", spreadWas);
       await wipe();
       for (const m of game.messages.filter(m => m.speaker?.actor === actor.id)) { try { await m.delete(); } catch (e) { /* gone */ } }
     }
-    ok("corridor audio cleanup: the fixtures, the wall and the three settings are back",
+    ok("corridor audio cleanup: the fixtures, the wall and the rail switch are back",
       game.actors.filter(a => a.name?.startsWith("__PW__PAT")).length === 0
       && [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__PAT")).length === 0
       && [...(scene?.walls ?? [])].filter(w => w.getFlag(SCOPE, "__pwPat")).length === 0
-      && game.settings.get(SCOPE, "combatFxEnabled") === fxWas
-      && game.settings.get(SCOPE, "areaEffectOcclusion") === occWas
-      && game.settings.get(SCOPE, "shotgunSpreadEnabled") === spreadWas,
-      JSON.stringify({ fx: fxWas, occlusion: occWas, pattern: spreadWas }));
+      && game.settings.get(SCOPE, "combatFxEnabled") === fxWas,
+      JSON.stringify({ fx: fxWas }));
     return out;
   });
   pattern.checks.push(...r.checks);
@@ -8657,7 +8595,7 @@ try {
     await wipe();
 
     const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
-    const spreadWas = game.settings.get(SCOPE, "shotgunSpreadEnabled");
+    // ⏪ the pattern key retired 2026-08-29 (settings-trim): the lane is unconditional now.
     const realSeq = globalThis.Sequence;
     // The same recorder shape §9 uses — every builder call this rail makes, kept as VALUES.
     const seqPlays = [];
@@ -8837,7 +8775,6 @@ try {
       }
 
       /* ── d. A BURNING PATTERN LOAD LIGHTS ITS CORRIDOR ON THE ARRIVAL CLOCK (C) ────────────── */
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", true);
       const patPayload = (over = {}) => globalThis.__goldenPayload("shotgunSpread",
         { attackerId: shooterActor.id, attackerTokenId: shooterTok.id, weaponId: ids.shell,
           targetTokenId: null, targetActorId: null }, { modifier: "api", dotEnabled: true, dotType: "fire", ...over });
@@ -8973,7 +8910,6 @@ try {
       try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none */ }
       await sleep(200);
       await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
-      await game.settings.set(SCOPE, "shotgunSpreadEnabled", spreadWas);
       for (const m of game.messages.filter(m => m.speaker?.actor === shooterActor?.id || m.speaker?.actor === targetActor?.id)) {
         try { await m.delete(); } catch (e) { /* gone */ }
       }
@@ -8982,12 +8918,11 @@ try {
       }
       await wipe();
     }
-    ok("2026-08-19 section cleanup: fixtures gone and both settings restored",
+    ok("2026-08-19 section cleanup: fixtures gone and the rail switch restored",
       game.actors.filter(a => a.name?.startsWith("__PW__T19")).length === 0
       && [...(scene?.tokens ?? [])].filter(tk => tk.name?.startsWith("__PW__T19")).length === 0
-      && game.settings.get(SCOPE, "combatFxEnabled") === fxWas
-      && game.settings.get(SCOPE, "shotgunSpreadEnabled") === spreadWas,
-      JSON.stringify({ fx: fxWas, pattern: spreadWas }));
+      && game.settings.get(SCOPE, "combatFxEnabled") === fxWas,
+      JSON.stringify({ fx: fxWas }));
     return out;
   });
   tonight.checks.push(...t.checks);

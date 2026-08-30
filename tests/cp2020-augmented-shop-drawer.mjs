@@ -123,12 +123,8 @@ try {
   await joinAs(gm, /gamemaster/i, [GM_PW]);
   await gm.evaluate(TOOLKIT);
 
-  // Shopping must be on for the window to open at all; restored at the end.
-  const shopWas = await gm.evaluate(async () => {
-    let was = null;
-    try { was = game.settings.get("cp2020-augmented", "shoppingEnabled"); if (was !== true) await game.settings.set("cp2020-augmented", "shoppingEnabled", true); } catch {}
-    return was;
-  });
+  // ⏪ the shop's presence gate retired 2026-08-29 (settings-trim): the window is always available,
+  //    so nothing is armed for it and nothing is handed back.
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════
   //  S1 · PACK MAPPING RESCUE — per-pack cell contributions off the REAL catalog index
@@ -162,7 +158,11 @@ try {
     const pinned = [
       ["supplement-pistols", "Weapons/Pistols", 68], ["supplement-submachineguns", "Weapons/SMGs", 21],
       ["supplement-rifles", "Weapons/Rifles", 43], ["supplement-shotguns", "Weapons/Shotguns", 19],
-      ["supplement-heavy", "Weapons/Heavy", 68], ["supplement-melee", "Weapons/Melee", 19],
+      ["supplement-heavy", "Weapons/Heavy", 68],
+      // ⏪ 19 → 20 (2026-08-29, found by this sweep): NOT a settings-trim change and not a regression.
+      //    Commit ed1e3cd split the two-blade entry into its two printed blades, so the pack source and
+      //    the compiled pack both carry one more row than this pinned count was written against.
+      ["supplement-melee", "Weapons/Melee", 20],
       ["supplement-exotics", "Weapons/Exotic", 27], ["supplement-chipware", "Cyberware/Chipware", 205],
       ["supplement-armor", "Armor/", 85], ["supplement-gear", "Gear/Other", 505],
       ["supplement-programs", "Programs/", 221],
@@ -1566,16 +1566,15 @@ try {
   }
 
   // ── teardown ────────────────────────────────────────────────────────────────────────────
-  await gm.evaluate(async ({ shopId, shopWas }) => {
+  await gm.evaluate(async ({ shopId }) => {
     const W = window.__cpShop;
     try { await W.close(); } catch {}
     const SH = await import("/modules/cp2020-augmented/module/shop/shops.js");
     for (const s of SH.listShops().filter(s => /^__PW__/.test(s.name))) { try { await SH.deleteShop(s.id); } catch {} }
-    try { if (shopWas !== null && shopWas !== true) await game.settings.set("cp2020-augmented", "shoppingEnabled", shopWas); } catch {}
     for (const a of game.actors.filter(a => /^__PW__/.test(a.name))) await a.delete().catch(() => {});
     try { localStorage.removeItem("cp2020-augmented.shopDrawer"); } catch {}
     void shopId;
-  }, { shopId, shopWas });
+  }, { shopId });
 
   chk("0 console errors", errors.length === 0, errors.slice(0, 6).join(" | "));
   pass = P.every(x => x.ok);

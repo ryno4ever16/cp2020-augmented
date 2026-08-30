@@ -452,15 +452,18 @@ try {
     return { open: true, payloads: globalThis.__supTap.slice() };
   }, { maxMs });
 
-  // ⚠ The zone automation is switched OFF for this section and restored after. With it on, the shooter's
-  // client enters the canvas placement preview and waits for a gesture a headless run cannot make; the
-  // base suppressive flow is what these legs measure, and that is untouched by the setting.
-  const zonesWere = await page.evaluate(async () => {
-    const was = game.settings.get("cp2020-augmented", "suppressiveFireSaves");
-    if (was) await game.settings.set("cp2020-augmented", "suppressiveFireSaves", false);
+  // ⏪ The lane's world switch retired 2026-08-29 (settings-trim): the placement preview now arms on
+  // every declared burst, and it waits for a canvas gesture a headless run cannot make. What these legs
+  // measure is the BASE declaration flow, so the preview is DISMISSED the moment it arms - the same
+  // outcome a shooter who declines placement produces, and the exported cancel is the shipped way to say
+  // so. The tap still records the payload, which is raised before the preview is reached.
+  await page.evaluate(async () => {
+    const SP = await import("/modules/cp2020-augmented/module/combat/suppressive-placement.js");
     globalThis.__supTap = [];
-    globalThis.__supHook = Hooks.on("cyberpunk2020.suppressiveFire", (p) => globalThis.__supTap.push(p));
-    return was;
+    globalThis.__supHook = Hooks.on("cyberpunk2020.suppressiveFire", (p) => {
+      globalThis.__supTap.push(p);
+      setTimeout(() => { try { SP.cancelSuppressivePreview(); } catch (e) { /* nothing armed */ } }, 250);
+    });
   });
 
   await refill();
@@ -535,10 +538,13 @@ try {
   const afterGood = await shotsLeftNow();
   ok("E11 and the magazine loses exactly the declared rounds", beforeGood - afterGood === 10,
     `${beforeGood} → ${afterGood}`);
-  await page.evaluate(async (was) => {
+  await page.evaluate(async () => {
     try { Hooks.off("cyberpunk2020.suppressiveFire", globalThis.__supHook); } catch (e) { /* not hooked */ }
-    if (was) await game.settings.set("cp2020-augmented", "suppressiveFireSaves", was);
-  }, zonesWere);
+    try {
+      const SP = await import("/modules/cp2020-augmented/module/combat/suppressive-placement.js");
+      SP.cancelSuppressivePreview();
+    } catch (e) { /* nothing armed */ }
+  });
   await endEffects();
 
   /* ══ 6. THE MAGAZINE CAN CHANGE WHILE THE WINDOW IS OPEN — the ceiling has to move with it ═══ */

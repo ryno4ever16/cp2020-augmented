@@ -524,9 +524,9 @@ try {
       const heavy = game.packs.get("cyberpunk2020.heavy");
       if (!heavy) return { fatal: "the base heavy pack is not registered" };
 
-      // The two masters this leg needs open, and the two that would make it non-deterministic.
-      await pin("explosivesEnabled", true);
-      await pin("gasGrenadeCloudEnabled", true);
+      // ⏪ the blast + cloud enablement keys retired 2026-08-29 (settings-trim): both lanes are
+      //    unconditional now. What is left to pin are the two that would make this leg
+      //    non-deterministic.
       await pin("combatFxEnabled", false);      // no draw clock between the trigger and the placement
       await pin("explosivesDetailed", false);
       CONFIG.Dice.randomUniform = () => 0.25;

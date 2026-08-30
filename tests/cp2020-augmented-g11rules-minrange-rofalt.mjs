@@ -53,7 +53,7 @@ try {
     const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
     const waitFor = async (fn, ms = 2500) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (fn()) return true; } catch {} await new Promise(r => setTimeout(r, 40)); } return false; };
     const created = [];
-    let scene = null, dlgA = null, dlgB = null, prevMM, prevVD, prevRS;
+    let scene = null, dlgA = null, dlgB = null, prevMM, prevRS;
     try {
       // ---- source-shape: JS threads the fields ----
       const wsrc = await (await fetch(`${M}/vehicle/vehicle-weapons.js`, { cache: "no-store" })).text();
@@ -79,10 +79,9 @@ try {
       ok("all 7 new i18n keys present", need.every(k => k in (enj.CYBERPUNK?.Vehicle ?? {})), need.filter(k => !(k in (enj.CYBERPUNK?.Vehicle ?? {}))).join(",") || "all");
 
       prevMM = game.settings.get(SCOPE, "mmEnabled");
-      prevVD = game.settings.get(SCOPE, "vehicleDamageEnabled");
+      // ⏪ the vehicle-damage gate retired 2026-08-29 (settings-trim): the lane is unconditional.
       prevRS = game.settings.get(SCOPE, "vehicleRuleSystem");
       await game.settings.set(SCOPE, "mmEnabled", true);
-      await game.settings.set(SCOPE, "vehicleDamageEnabled", true);
       await game.settings.set(SCOPE, "vehicleRuleSystem", "MaximumMetal");
 
       // ================= Rule 2 — rofAlt fire-rate picker =================
@@ -152,7 +151,6 @@ try {
       try { const proxy = game.actors?.find(a => a.getFlag?.(SCOPE, "missileProxy")); if (proxy) await proxy.delete(); } catch {}
       for (const d of created.reverse()) { try { await d.delete(); } catch {} }
       try { if (prevMM !== undefined) await game.settings.set(SCOPE, "mmEnabled", prevMM); } catch {}
-      try { if (prevVD !== undefined) await game.settings.set(SCOPE, "vehicleDamageEnabled", prevVD); } catch {}
       try { if (prevRS !== undefined) await game.settings.set(SCOPE, "vehicleRuleSystem", prevRS); } catch {}
     }
     return out;

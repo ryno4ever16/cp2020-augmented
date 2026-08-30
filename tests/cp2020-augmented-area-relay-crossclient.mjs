@@ -4,7 +4,8 @@
  * flow between a PLAYER session and a GM session on the SAME world, asserting the outcome on EACH side:
  *
  *   (a) FIXTURES (GM): active scene; a player-owned attacker token + an NPC target token (the cloud/blast
- *       centre), both well inside scene bounds. Settings gasGrenadeCloudEnabled + explosivesEnabled ON
+ *       centre), both well inside scene bounds. The cloud + blast lanes are unconditional (⏪ their
+ *       enablement keys retired 2026-08-29, settings-trim)
  *       (captured/restored).
  *   (b) PLAYER FIRES: the REAL `cyberpunk2020.weaponFired` hook with a Gas payload (attacker/target ids,
  *       blastRadius, dotTurns, stunSaveMod, weaponName). The player is NON-active-GM, so its gas hook only
@@ -104,10 +105,9 @@ try {
     for (const t of scene.tokens.filter((t) => t.name?.startsWith("__PW__GAS"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
     for (const r of (scene.regions ?? []).filter((r) => r.name?.startsWith?.("__PW__GAS") || r.behaviors?.some((b) => b.type === "cp2020-augmented.gasCloud" && /__PW__GAS/.test(String(b.system?.weaponName ?? ""))))) await scene.deleteEmbeddedDocuments("Region", [r.id]).catch(() => {});
 
-    const capture = (k) => { try { return game.settings.get("cp2020-augmented", k); } catch { return undefined; } };
-    const prev = { gas: capture("gasGrenadeCloudEnabled"), expl: capture("explosivesEnabled") };
-    await game.settings.set("cp2020-augmented", "gasGrenadeCloudEnabled", true);
-    await game.settings.set("cp2020-augmented", "explosivesEnabled", true);
+    // ⏪ the cloud + blast enablement keys retired 2026-08-29 (settings-trim): both lanes are
+    //    unconditional now, so there is no snapshot/restore pair left to carry.
+    const prev = {};
 
     let player = game.users.find((u) => u.role === CONST.USER_ROLES.PLAYER && !u.isGM);
     let createdPlayer = false;
@@ -151,10 +151,9 @@ try {
     isActiveGM: game.users.activeGM?.id === game.user.id,
     ownsAttacker: game.actors.get(d.attackerId)?.isOwner === true,
     npcTokSeen: !!canvas?.tokens?.get(d.npcTokenId),
-    gasOn: (() => { try { return game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled"); } catch { return false; } })(),
     behaviorRegistered: typeof CONFIG.RegionBehavior?.dataModels?.["cp2020-augmented.gasCloud"] === "function",
   }), S);
-  log.push(`player: isGM=${who.isGM} isActiveGM=${who.isActiveGM} ownsAttacker=${who.ownsAttacker} npcTokSeen=${who.npcTokSeen} gasOn=${who.gasOn}`);
+  log.push(`player: isGM=${who.isGM} isActiveGM=${who.isActiveGM} ownsAttacker=${who.ownsAttacker} npcTokSeen=${who.npcTokSeen}`);
   check("player session is a non-GM (so the gas hook RELAYS, not places) who owns the attacker", !who.isGM && !who.isActiveGM && who.ownsAttacker, JSON.stringify(who));
   if (who.isGM) throw new Error("player context is a GM — the relay wouldn't be exercised");
 
@@ -322,11 +321,6 @@ try {
     for (const a of game.actors.filter((a) => a.name?.startsWith("__PW__GAS"))) await a.delete().catch(() => {});
     for (const m of game.messages.filter((m) => /__PW__GAS/.test(m.content ?? ""))) await m.delete().catch(() => {});
     if (d.createdPlayer) { const u = game.users.get(d.playerId); if (u) await u.delete().catch(() => {}); }
-    try {
-      const r = d.prev ?? {};
-      if (r.gas !== undefined) await game.settings.set("cp2020-augmented", "gasGrenadeCloudEnabled", r.gas);
-      if (r.expl !== undefined) await game.settings.set("cp2020-augmented", "explosivesEnabled", r.expl);
-    } catch (e) {}
   }, S).catch(() => {});
 } catch (e) {
   log.push("ERROR: " + (e?.stack ?? e?.message ?? e));

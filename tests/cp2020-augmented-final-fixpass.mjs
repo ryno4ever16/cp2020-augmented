@@ -454,7 +454,7 @@ const legG = await p.evaluate(async () => {
     const prevMM = (() => { try { return game.settings.get("cp2020-augmented", "mmEnabled"); } catch { return false; } })();
     const prevRule = (() => { try { return game.settings.get("cp2020-augmented", "vehicleRuleSystem"); } catch { return "Core"; } })();
     out.notes.restoreMM = prevMM; out.notes.restoreRule = prevRule;
-    try { await game.settings.set("cp2020-augmented", "vehicleDamageEnabled", true); } catch {}
+    // ⏪ the vehicle-damage gate retired 2026-08-29 (settings-trim): the lane is unconditional.
     try { await game.settings.set("cp2020-augmented", "mmEnabled", true); } catch {}
     try { await game.settings.set("cp2020-augmented", "vehicleRuleSystem", "MaximumMetal"); } catch {}
     sc = game.scenes.find(s => s.name === "__PW__FPgScene");

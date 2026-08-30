@@ -51,7 +51,7 @@ try {
     const out = { checks: [] };
     const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
     const created = [];
-    let scene = null, prevMM, prevVD, prevRS, prevAD;
+    let scene = null, prevMM, prevRS, prevAD;
     try {
       // ---- source-shape ----
       const dsrc = await (await fetch(`${M}/data/vehicle-item-data.js`, { cache: "no-store" })).text();
@@ -74,11 +74,10 @@ try {
       // ---- behavioural: scatter cone strips MORE armour than a single cone (deterministic erosion) ----
       const { resolveAreaShot } = await import(`${M}/vehicle/vehicle-area.js`);
       prevMM = game.settings.get(SCOPE, "mmEnabled");
-      prevVD = game.settings.get(SCOPE, "vehicleDamageEnabled");
+      // ⏪ the vehicle-damage gate retired 2026-08-29 (settings-trim): the lane is unconditional.
       prevRS = game.settings.get(SCOPE, "vehicleRuleSystem");
       prevAD = game.settings.get(SCOPE, "vehicleArmorDamageEnabled");
       await game.settings.set(SCOPE, "mmEnabled", true);
-      await game.settings.set(SCOPE, "vehicleDamageEnabled", true);
       await game.settings.set(SCOPE, "vehicleRuleSystem", "MaximumMetal");
       await game.settings.set(SCOPE, "vehicleArmorDamageEnabled", true);
 
@@ -111,7 +110,6 @@ try {
       try { if (scene) await scene.delete(); } catch {}
       for (const d of created.reverse()) { try { await d.delete(); } catch {} }
       try { if (prevMM !== undefined) await game.settings.set(SCOPE, "mmEnabled", prevMM); } catch {}
-      try { if (prevVD !== undefined) await game.settings.set(SCOPE, "vehicleDamageEnabled", prevVD); } catch {}
       try { if (prevRS !== undefined) await game.settings.set(SCOPE, "vehicleRuleSystem", prevRS); } catch {}
       try { if (prevAD !== undefined) await game.settings.set(SCOPE, "vehicleArmorDamageEnabled", prevAD); } catch {}
     }

@@ -304,13 +304,12 @@ check("no attacker token: nothing is debited (structure still 20)", untouched ==
 const areaPrev = await gm.page.evaluate(async ({ behaviorUuid }) => {
   const SCOPE = "cp2020-augmented";
   const keep = {};
-  for (const k of ["headHitDoubling", "limbModel", "damageArmorMode", "areaEffectOcclusion"]) {
+  for (const k of ["headHitDoubling", "limbModel", "damageArmorMode"]) {
     try { keep[k] = game.settings.get(SCOPE, k); } catch (e) { /* absent */ }
   }
   try { await game.settings.set(SCOPE, "headHitDoubling", false); } catch (e) {}
   try { await game.settings.set(SCOPE, "limbModel", "core"); } catch (e) {}
   try { await game.settings.set(SCOPE, "damageArmorMode", "full"); } catch (e) {}
-  try { await game.settings.set(SCOPE, "areaEffectOcclusion", true); } catch (e) {}
   const b = await fromUuid(behaviorUuid);
   await b.update({ system: { pool: 30, destroyed: false } });
   return keep;

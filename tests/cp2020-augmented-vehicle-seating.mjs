@@ -962,8 +962,7 @@ const cloud = await page.evaluate(async ({ sceneId }) => {
   const scene = game.scenes.get(sceneId);
   const shim = await import(`/modules/cp2020-augmented/module/combat/area-shapes.js`);
   const ord = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-ordnance.js`);
-  const priorSetting = game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled");
-  if (!priorSetting) await game.settings.set("cp2020-augmented", "gasGrenadeCloudEnabled", true);
+  // ⏪ the cloud gate retired 2026-08-29 (settings-trim): the lane is unconditional.
   const useRegions = shim.usesRegions();
   const before = { regions: scene.regions.size, templates: scene.templates?.size ?? 0 };
   await ord.resolveWarheadBurst({
@@ -979,7 +978,6 @@ const cloud = await page.evaluate(async ({ sceneId }) => {
     const b = region ? [...region.behaviors].find(x => x.type === "cp2020-augmented.gasCloud") : null;
     behavior = b ? { type: b.type, turnsLeft: b.system.turnsLeft, weaponName: b.system.weaponName } : null;
   }
-  if (!priorSetting) await game.settings.set("cp2020-augmented", "gasGrenadeCloudEnabled", priorSetting);
   return {
     useRegions, before, after, legacyFlagged: areas.length,
     behavior, regionId: region?.id ?? null,

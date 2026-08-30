@@ -6,8 +6,10 @@
  * (_cpOpenMartialActionDialog onConfirm) applies the effect on-declare to a single target, GM-relayed.
  *
  * Behavioural: drive the (now live) applyMartialHitEffects and assert the exact flags the per-turn
- * loop reads (heldBy / grappledBy / chokeState), the escape clear, and the specialMeleeEffectsEnabled
- * gate. Source-shape: the onConfirm wiring + the martialEffect relay case.
+ * loop reads (heldBy / grappledBy / chokeState) and the escape clear. Source-shape: the onConfirm
+ * wiring + the martialEffect relay case.
+ * ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) — the module copy of the
+ * special-melee gate is gone; declaring the action is the consent, so the effects always land.
  *
  * Also GEOMETRY: the dialog that action opens has to fit. Two dropdowns whose longest options are
  * a martial-art name and a cyber-terminus label used to size the two-column field row wider than the
@@ -55,7 +57,7 @@ try {
     const SCOPE = "cp2020-augmented";
     const out = { checks: [] };
     const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
-    let atk = null, tgt = null, prevMelee;
+    let atk = null, tgt = null;
     try {
       const flag = (a, k) => a.getFlag(SCOPE, k);
 
@@ -70,8 +72,6 @@ try {
 
       // behavioural: drive the now-live effect writer
       const MA = await import(`${M}/martial/martial.js`);
-      prevMelee = game.settings.get(SCOPE, "specialMeleeEffectsEnabled");
-      await game.settings.set(SCOPE, "specialMeleeEffectsEnabled", true);
 
       // Pre-sweep a prior run's leftovers (non-__PW__ names → not caught by a shared sweep).
       for (const x of game.actors.filter(x => x.name === "GRIG Attacker" || x.name === "GRIG Target")) await x.delete().catch(() => {});
@@ -90,10 +90,8 @@ try {
         !flag(tgt, "heldBy") && !flag(tgt, "grappledBy") && !flag(tgt, "chokeState"),
         `${flag(tgt,"heldBy")}/${flag(tgt,"grappledBy")}/${flag(tgt,"chokeState")}`);
 
-      // gate: off → no-op
-      await game.settings.set(SCOPE, "specialMeleeEffectsEnabled", false);
-      await MA.applyMartialHitEffects("Hold", tgt, atk);
-      ok("A6 gate off → Hold is a no-op", !flag(tgt, "heldBy"), flag(tgt, "heldBy"));
+      // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) — the gate-off no-op
+      //    for the hold write is gone with the module's specialMeleeEffectsEnabled copy.
 
       // ── coord(4): a martial strike (item.__weaponRoll → base __martialBonk) now emits the use-event
       //    payload WITH its OWN attackerId — the seam-shim wraps __martialBonk (FIRE_METHODS), so the
@@ -103,9 +101,8 @@ try {
       const shimSrc = await (await fetch(`${M}/seam-shim.js`, { cache: "no-store" })).text();
       const hasMartialBonk = /FIRE_METHODS\s*=\s*\[[^\]]*"__martialBonk"/.test(shimSrc);
       ok("coord4 seam-shim wraps __martialBonk (fresh fire-ctx → no stale ranged attackerId)", hasMartialBonk, hasMartialBonk);
-      let prevMAP, prevMAT;
-      try { prevMAP = game.settings.get(SCOPE, "multiActionPenaltyEnabled"); await game.settings.set(SCOPE, "multiActionPenaltyEnabled", true); } catch {}
-      try { prevMAT = game.settings.get(SCOPE, "multiActionAutoTrack"); await game.settings.set(SCOPE, "multiActionAutoTrack", true); } catch {}
+      // ⏪ the counter's two enablement keys retired 2026-08-29 (settings-trim): tracking is
+      //    unconditional, so there is nothing to switch on before the emit.
       const ctOf = (a) => Number(a.getFlag(SCOPE, "actionCount") ?? 0);
       // The action counter is COMBAT-SCOPED now (walkthrough fix #1): it only accrues inside a started
       // combat the striker is a combatant in. Stand up a minimal combat around the emit (the old
@@ -125,14 +122,11 @@ try {
       ok("coord4 the counter credits only the emitting actor (no cross-actor identity leak)", ctOf(tgt) === 0, ctOf(tgt));
       try { await atk.unsetFlag(SCOPE, "actionCount"); await atk.unsetFlag(SCOPE, "actionCountRound"); } catch {}
       try { if (coordCombat) await coordCombat.delete(); } catch {}
-      try { if (prevMAP !== undefined) await game.settings.set(SCOPE, "multiActionPenaltyEnabled", prevMAP); } catch {}
-      try { if (prevMAT !== undefined) await game.settings.set(SCOPE, "multiActionAutoTrack", prevMAT); } catch {}
     } catch (e) {
       out.error = e?.stack || e?.message || String(e);
     } finally {
       try { if (tgt) await tgt.delete(); } catch {}
       try { if (atk) await atk.delete(); } catch {}
-      try { if (prevMelee !== undefined) await game.settings.set(SCOPE, "specialMeleeEffectsEnabled", prevMelee); } catch {}
     }
     return out;
   });

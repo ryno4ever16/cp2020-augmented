@@ -23,11 +23,11 @@ const r = await p.evaluate(async () => {
   const U  = await import("/modules/cp2020-augmented/module/utils.js");
   const CL = await import("/modules/cp2020-augmented/module/mech/cyberlimb.js");
   const SCOPE = "cp2020-augmented";
+  // ⏪ the re-roll's own world switch retired 2026-08-29 (settings-trim): the rule always runs, so
+  //    there is nothing to arm before the legs and nothing to hand back after them.
   const prior = {
-    reroll: game.settings.get(SCOPE,"rerollGoneLimbLocation"),
     limb:   game.settings.get(SCOPE,"limbLossEnabled"),
   };
-  await game.settings.set(SCOPE,"rerollGoneLimbLocation",true);
   await game.settings.set(SCOPE,"limbLossEnabled",false);
 
   for (const a of game.actors.filter(a => a.name.startsWith("__PW__RGL"))) await a.delete().catch(()=>{});
@@ -52,11 +52,9 @@ const r = await p.evaluate(async () => {
   const passthru = await U.rerollGoneLimbAreaDamages(fleshActor, { Torso:[{damage:3}] });
   check("helper: a non-gone location passes through unchanged", passthru.Torso?.[0]?.damage === 3 && !passthru.rArm, passthru);
 
-  // off-toggle → no-op (rArm stays)
-  await game.settings.set(SCOPE,"rerollGoneLimbLocation",false);
-  const offMap = await U.rerollGoneLimbAreaDamages(fleshActor, { rArm:[{damage:5}] });
-  check("helper: toggle OFF → no re-roll (rArm preserved)", !!offMap.rArm, offMap);
-  await game.settings.set(SCOPE,"rerollGoneLimbLocation",true);
+  // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) - the "toggle OFF leaves the
+  //    hit on the gone limb" reading went with the key. The remaining no-op path (a caller with no
+  //    actor to read a limb record off) is the leg below.
 
   // null actor → no-op
   const nullMap = await U.rerollGoneLimbAreaDamages(null, { rArm:[{damage:5}] });
@@ -112,7 +110,6 @@ const r = await p.evaluate(async () => {
   // cleanup + restore
   await tokDoc.delete().catch(()=>{});
   for (const a of [fleshActor, allGone, target, attacker]) await a.delete().catch(()=>{});
-  await game.settings.set(SCOPE,"rerollGoneLimbLocation",prior.reroll);
   await game.settings.set(SCOPE,"limbLossEnabled",prior.limb);
   return out;
 });

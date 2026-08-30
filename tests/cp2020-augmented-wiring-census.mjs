@@ -145,7 +145,10 @@ const MANIFEST = [
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".item-roll", "", "ORPHAN: no template in the module OR the base system paints `.item-roll`; both bind a handler for it", null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".chipware-container .chipware[data-item-id]", "", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".fire-weapon", "", null, null],
-  ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".item-unequip, .cp-container-uninstall, .cp-group-remove, .cp-chassis-delete", "", null, null],
+  // ⏪ ROW UPDATED 2026-08-29 to the shipped registration: :689 → :701, and the guarded selector
+  //    gained `.cp-cyber-switch` (the cyberware slot control the item-edit dispatcher excludes, so the
+  //    sheet never opens behind it).
+  ["module/actor/actor-sheet.js:701", "_cpActivateBasicActorActions", "character-sheet", "click", ".item-unequip, .cp-container-uninstall, .cp-group-remove, .cp-chassis-delete, .cp-cyber-switch", "", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".item-unequip, .item-delete", "", null, null],
   ["module/actor/actor-sheet.js:783", "_cpActivateBasicActorActions", "character-sheet", "contextmenu", ".rc-item-delete", "", null, null],
   ["module/actor/actor-sheet.js:1176", "_cpActivateActorFormControls", "character-sheet", "click", ".skill-level", "", null, null],
@@ -221,6 +224,14 @@ const MANIFEST = [
   ["module/npcgen/npcgen-app.js:415", "_onRender", "goon-factory", "change", ".cp-goon-grade, .cp-goon-role, .cp-goon-outfit, .cp-goon-disposition, .cp-goon-count, .cp-goon-dest", "", null, null],
   ["module/npcgen/npcgen-app.js:426", "_onRender", "goon-factory", "input", ".cp-goon-row", "", null, null],
   ["module/npcgen/npcgen-app.js:426", "_onRender", "goon-factory", "input", ".cp-goon-dials input[type='range']", "", null, null],
+  // ⭐ ROWS ADDED 2026-08-29: the three number-field guards the goon window binds on render. They were
+  //    shipped by the keystroke-refusal and formula-check units and never censused, which is what the
+  //    staleness guard was reporting. The keydown/change pair guards EVERY number field in the window;
+  //    the input pair is the at-the-field dice-formula check and the note it paints.
+  ["module/npcgen/npcgen-app.js:459", "_onRender", "goon-factory", "keydown", "input[type=\"number\"]", "", "a keystroke guard on the field, not a control: it only speaks when a non-digit is typed, which a render-time census cannot produce", null],
+  ["module/npcgen/npcgen-app.js:474", "_onRender", "goon-factory", "change", "input[type=\"number\"]", "", "the clamp runs on a committed edit, so it needs a typed-then-blurred value rather than a rendered node", null],
+  ["module/npcgen/npcgen-app.js:484", "_onRender", "goon-factory", "input", ".cp-goon-luck, .cp-goon-rep", "", "the two dice-formula fields live on the ADVANCED panel, which the fixture does not open", null],
+  ["module/npcgen/npcgen-app.js:484", "_onRender", "goon-factory", "input", ".cp-goon-formula-note", "", "the note the formula check paints is on the ADVANCED panel and is hidden until a formula fails to parse", null],
   ["module/npcgen/npcgen-app.js:718", "injectNpcGenButton", "actor-directory", "click", ".cp2020ae-npcgen-btn", "", null, null],
   ["module/npcgen/npcgen-app.js:622", "_onAdvanced", "goon-factory", "click", "[data-action=\"goonAdvanced\"]", "", null, null],
   ["module/npcgen/npcgen-app.js:629", "_onGenerate", "goon-factory", "click", "[data-action=\"goonGenerate\"]", "", null, null],
@@ -299,7 +310,7 @@ const MANIFEST = [
   ["module/item/item-sheet.js:897", "_cpActivateMechConsumableControls", "item-sheet:consumable", "click", ".cp-drug-end", "", "the wear-off control renders only while the drug is active on a holder", null],
   ["module/item/item-sheet.js:897", "_cpActivateMechConsumableControls", "item-sheet:consumable", "click", ".cp-chip-choice-reset", "", "renders only for a chipware item holding a recorded choice", null],
   ["module/item/item-sheet.js:934", "_cpActivateVehicleDeployControls", "item-sheet:vehicle", "click", ".cp-vehicle-open", "actorId", "the open control renders only once the vehicle item has a deployed actor", null],
-  ["module/item/item-sheet.js:934", "_cpActivateVehicleDeployControls", "item-sheet:vehicle", "click", ".cp-vehicle-deploy", "", "the deploy control is gated on the vehicle feature setting", null],
+  ["module/item/item-sheet.js:934", "_cpActivateVehicleDeployControls", "item-sheet:vehicle", "click", ".cp-vehicle-deploy", "", "the deploy row renders only on an EDITABLE vehicle item sheet (⏪ its world feature gate retired 2026-08-29, settings-trim)", null],
   ["module/item/item-sheet.js:979", "_cpActivateVehicleFaceSelect", "item-sheet:any", "change", "select.cp-veh-face-select", "faceCurrent", "renders on a VEHICLE item sheet only (the handler returns early for any other item type) and only when the face strip asks for it — templates/actor/parts/vehicle-face.hbs gates the select on faceControl.show", null],
   ["module/item/item-sheet.js:1077", "_cpActivateTabs", "item-sheet:any", "click", ".sheet-tabs", "", null, null],
   ["module/item/item-sheet.js:1077", "_cpActivateTabs", "item-sheet:any", "click", "[data-tab]", "tab", null, null],
@@ -391,7 +402,10 @@ const MANIFEST = [
   ["module/combat/damage-hooks.js:314", "onGlobalClick", "combat-tracker", "click", ".cp-parry-btn", "", "as above, and only while the declared-defense feature is on", null],
   ["module/combat/damage-hooks.js:314", "onGlobalClick", "combat-tracker", "click", ".cp-add-action-btn", "", "as above, and only while multi-action tracking is on", null],
   ["module/combat/damage-hooks.js:314", "onGlobalClick", "combat-tracker", "click", ".cp-manual-tick-btn", "", "as above, and only while manual round-ticking is on", null],
-  ["module/combat/damage-hooks.js:314", "onGlobalClick", "chat-card", "click", ".cp-confirm-explosion-scatter", "templateId", "renders on the same explosion card as its second exit", null],
+  // ⏪ ROW DROPPED 2026-08-29: `.cp-confirm-explosion-scatter` — the scatter-confirm control on the
+  //    blast card is RETIRED from module/ entirely (grep-proven: zero hits across module/ and
+  //    templates/). It had no source registration left to census, which is what the staleness guard
+  //    was reporting. Closes the standing census-docket item for this row.
   ["module/combat/damage-hooks.js:314", "onGlobalClick", "chat-card", "click", "[data-message-id]", "", "the card wrapper each of the above resolves through — present only once one of those cards is posted", null],
   ["module/combat/damage-hooks.js:798", "_injectApplyDamageControl", "chat-card", "click", ".cp2020-apply-damage-btn", "", "injected only onto a card carrying an areaDamages payload, for a GM or the attacker's owner", null],
   ["module/vehicle/vehicle-weapons.js:487", "openVehicleFireDialog", "dialog:vehicle-fire", "change", "#cp-vf-gunner", "", null, null],
@@ -1028,7 +1042,7 @@ try {
     const rootOf = (app) => (app?.element instanceof HTMLElement ? app.element : app?.element?.[0] ?? null);
     const out = { surfaces: {}, results: [], notes: [], fixtureErr: null };
     const made = { actors: [], shopIds: [], apps: [] };
-    let shopWas = null, ipWas = null, pcId = null;   // ⏪ npcWas retired with npcGenEnabled 2026-08-28
+    let ipWas = null, pcId = null;   // ⏪ npcWas retired with npcGenEnabled 2026-08-28; shopWas with shoppingEnabled 2026-08-29
 
     try {
       // ── FIXTURES ───────────────────────────────────────────────────────────────────────────
@@ -1146,12 +1160,8 @@ try {
       const SCOPE = "cp2020-augmented";
       const CAT = await import("/modules/cp2020-augmented/module/shop/catalog.js");
       const SH = await import("/modules/cp2020-augmented/module/shop/shops.js");
-      // The window refuses to open at all while shopping is switched off, which would read as ~50
-      // dead controls. Force it on for the census and restore the world's own value afterwards.
-      try {
-        shopWas = game.settings.get(SCOPE, "shoppingEnabled");
-        if (shopWas !== true) await game.settings.set(SCOPE, "shoppingEnabled", true);
-      } catch { /* setting absent — openShopWindow will report it */ }
+      // ⏪ the switch that could refuse to open this window (and read as ~50 dead controls) retired
+      //    2026-08-29 (settings-trim): the shop is always available, so nothing is forced or restored.
       // Raw IP tracking is switched on HERE, before any sheet renders — the per-skill IP cluster
       // and its level-up arrow are gated on it, and enabling it after the sheet had already
       // painted was reporting the module's most-regressed control as dead.
@@ -1354,7 +1364,7 @@ try {
       out.fixtureErr = e.message + "\n" + (e.stack ?? "");
     } finally {
       // Restore settings and clear fixtures in a finally block, not on the happy path — a keeper
-      // that leaves `shoppingEnabled` rewritten or `__PW__` actors behind reds unrelated suites.
+      // that leaves a world setting rewritten or `__PW__` actors behind reds unrelated suites.
       for (const app of made.apps) { try { await app.close({ force: true }); } catch {} }
       try { for (const w of [...foundry.applications.instances.values()].filter(w => w?.constructor?.name === "CatalogBrowser")) await w.close({ force: true }); } catch {}
       try {
@@ -1366,9 +1376,6 @@ try {
       try { const IP = await import("/modules/cp2020-augmented/module/ip/ip.js"); await IP.removeActorFromQueue(pcId); } catch {}
       for (const a of made.actors) { try { await a.delete(); } catch {} }
       for (const a of game.actors.filter(a => a.name.startsWith("__PW__CENSUS"))) await a.delete().catch(() => {});
-      if (shopWas !== null && shopWas !== true) {
-        try { await game.settings.set("cp2020-augmented", "shoppingEnabled", shopWas); } catch {}
-      }
       if (ipWas !== null && ipWas !== true) {
         try { await game.settings.set("cp2020-augmented", "ipRawTracking", ipWas); } catch {}
       }

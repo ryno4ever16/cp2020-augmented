@@ -62,7 +62,7 @@ try {
     const created = [];
     let scene = null;
     const prev = {};
-    const SETTINGS = ["mmEnabled", "vehicleDamageEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled"];
+    const SETTINGS = ["mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled"];
     try {
       const { resolveAreaShot } = await import(`${M}/vehicle/vehicle-area.js`);
       const AS = await import(`${M}/combat/area-shapes.js`);
@@ -78,7 +78,6 @@ try {
 
       for (const k of SETTINGS) prev[k] = game.settings.get(SCOPE, k);
       await game.settings.set(SCOPE, "mmEnabled", true);
-      await game.settings.set(SCOPE, "vehicleDamageEnabled", true);
       await game.settings.set(SCOPE, "vehicleRuleSystem", "MaximumMetal");
       await game.settings.set(SCOPE, "vehicleArmorDamageEnabled", true);
 

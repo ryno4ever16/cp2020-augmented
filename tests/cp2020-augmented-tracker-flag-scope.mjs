@@ -30,15 +30,13 @@ await joinGM(p);
 const r = await p.evaluate(async () => {
   const SCOPE = "cp2020-augmented";
   const sleep = (ms) => new Promise(res => setTimeout(res, ms));
-  const out = { err: null, scope: {}, aim: {}, dodge: {}, parry: {}, addAction: {}, linked: {}, read: {} };
+  const out = { err: null, scope: {}, aim: {}, dodge: {}, parry: {}, addAction: {}, linked: {}, read: {}, multi: {} };
 
-  const restore = {};
   let prevSceneId = null;
   const madeActors = [];
   try {
-    for (const k of ["aimTrackingEnabled", "activeDodgeParryEnabled", "multiActionPenaltyEnabled", "multiActionAutoTrack"]) {
-      try { restore[k] = game.settings.get(SCOPE, k); } catch { restore[k] = undefined; }
-    }
+    // ⏪ the aim / declared-defence / multi-action enablement keys retired 2026-08-29 (settings-trim):
+    //    all four behaviours are unconditional now, so this suite snapshots and restores nothing.
 
     // ── fixtures ───────────────────────────────────────────────────────────────────────────────
     for (const c of [...game.combats]) if (c.combatants.some(cb => cb.name?.startsWith?.("__PW__Scope"))) await c.delete().catch(() => {});
@@ -67,6 +65,12 @@ const r = await p.evaluate(async () => {
     const attacker = await mk("__PW__ScopeSwinger");
     const [knife] = await attacker.createEmbeddedDocuments("Item", [{
       name: "__PW__ScopeKnife", type: "weapon",
+      system: { equipped: true, weaponType: "Melee", attackType: "Melee", damage: "1d6", accuracy: 0 } }]);
+    // A second weapon on the BASE, so every figure of it reads the item back as ITS OWN. The
+    // multi-action prefill keys off the weapon's actor, so this is what lets (D2) below open a window
+    // that belongs to one unlinked figure rather than to the world actor.
+    await base.createEmbeddedDocuments("Item", [{
+      name: "__PW__ScopeCounterKnife", type: "weapon",
       system: { equipped: true, weaponType: "Melee", attackType: "Melee", damage: "1d6", accuracy: 0 } }]);
 
     const [tokU1] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__ScopeU1", actorId: base.id, actorLink: false, x: 3 * G, y: 2 * G, width: 1, height: 1 }]);
@@ -141,9 +145,6 @@ const r = await p.evaluate(async () => {
     };
 
     // ── (A) take-aim control ───────────────────────────────────────────────────────────────────
-    await game.settings.set(SCOPE, "aimTrackingEnabled", true);
-    await game.settings.set(SCOPE, "multiActionPenaltyEnabled", false);  // isolate the flag under test
-    await game.settings.set(SCOPE, "multiActionAutoTrack", false);
     await clearAll();
     await turnTo(cU1);
 
@@ -160,7 +161,6 @@ const r = await p.evaluate(async () => {
     await clearAll();
 
     // ── (B) dodge control ──────────────────────────────────────────────────────────────────────
-    await game.settings.set(SCOPE, "activeDodgeParryEnabled", true);
     await turnTo(cU1);
     const dodgeBtn = rowBtn(cU1, ".cp-dodge-btn");
     out.dodge.rendered      = !!dodgeBtn;
@@ -199,6 +199,16 @@ const r = await p.evaluate(async () => {
       await sleep(200);
       return res;
     };
+    // ⚠ THE COUNTER IS CLEARED FIRST, and that is a consequence of the trim: declaring the stance
+    //    also SPENDS an action, and since 2026-08-29 the multi-action prefill is unconditional and seeds
+    //    the SAME `extraMod` field. Left standing, the count would put its own term in the field beside
+    //    the stance's and this leg would read two folds as one. The counter's own fold is driven
+    //    deliberately in (D2). The stance flag itself is untouched by the clear.
+    for (const d of [base, u1, u2, l1]) {
+      await d.unsetFlag(SCOPE, "actionCount").catch(() => {});
+      await d.unsetFlag(SCOPE, "actionCountRound").catch(() => {});
+    }
+    await sleep(300);
     out.read.declaredFigure = await openAndRead(knife, [tokU1.id]);   // expected -2, 1 note
     out.read.siblingFigure  = await openAndRead(knife, [tokU2.id]);   // expected untouched, 0 notes
     for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
@@ -243,8 +253,6 @@ const r = await p.evaluate(async () => {
     await clearAll();
 
     // ── (D) add-action control ─────────────────────────────────────────────────────────────────
-    await game.settings.set(SCOPE, "multiActionPenaltyEnabled", true);
-    await game.settings.set(SCOPE, "multiActionAutoTrack", true);
     await turnTo(cU1);
     const addBtn = rowBtn(cU1, ".cp-add-action-btn");
     out.addAction.rendered      = !!addBtn;
@@ -255,13 +263,111 @@ const r = await p.evaluate(async () => {
     out.addAction.tokenActor = raw(u1, "actionCount");   // expected 1
     out.addAction.worldActor = raw(base, "actionCount"); // expected null
     out.addAction.sibling    = raw(u2, "actionCount");   // expected null
+
+    // ── (D2) THE COUNT IS SPOKEN ALOUD IN THE ROLL WINDOW ───────────────────────────
+    // NEW 2026-08-29 with the trim. The count used to fold silently into `extraMod` and stop there - a
+    // number that moved with nothing on screen saying why. It now lands the way the declared-defence
+    // term does: the value seeds the same editable field AND a labeled line names the figure, which
+    // action of the round is being declared, and the number that was seeded. Read by value off the REAL
+    // window, on the FIGURE that holds the count (the window is opened with that figure's own copy of
+    // the base weapon, which is what the prefill keys off):
+    //   (a) the line renders under its own marker class and quotes the declaring count,
+    //   (b) the field carries the book's term for that count,
+    //   (c) typing over the field wins - the seed is not a lock,
+    //   (d) and with the switch OFF none of it happens - no line, and the field left unseeded.
+    // One action already stands on U1 from the control above, so this window is action TWO and the
+    // p.98 ladder puts -3 in the field.
+    //
+    // ↪ THE SWITCH IS PINNED, not inherited (2026-08-29, the restore). `multiActionPenaltyEnabled`
+    //    was cut with the trim and put back the same day, defaulting ON; the penalty helper answers 0
+    //    while it is off, so an inherited world value would silently decide every leg below. It is
+    //    snapshot here and handed back in this section's own finally - which is also what lets the
+    //    (D2b) negative move it honestly.
+    const multiWas = (() => { try { return game.settings.get(SCOPE, "multiActionPenaltyEnabled"); } catch { return undefined; } })();
+    try {
+      await game.settings.set(SCOPE, "multiActionPenaltyEnabled", true);
+      await sleep(250);
+      {
+        const res = { found: false, val: null, noteCount: 0, noteText: "", figureName: null, declaredCount: null, weaponActorIsFigure: null, editable: null, afterEdit: null, err: null };
+        let dlg = null;
+        try {
+          const figureKnife = u1.items.find(i => i.name === "__PW__ScopeCounterKnife") ?? null;
+          res.weaponActorIsFigure = figureKnife?.actor === u1;
+          res.figureName = u1.name;
+          for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
+          await sleep(120);
+          canvas.tokens.get(tokU2.id)?.setTarget(true, { releaseOthers: false, groupSelection: true });
+          await sleep(200);
+          res.declaredCount = raw(u1, "actionCount");
+          dlg = attacker.sheet._cpOpenAttackModifiers(figureKnife);
+          await sleep(900);
+          const root = dlg?.element ?? null;
+          const inp = root?.querySelector?.("input[name='extraMod']") ?? null;
+          res.found = !!inp;
+          res.val = inp ? String(inp.value ?? "") : null;
+          const notes = root?.querySelectorAll?.(".cp-multi-action-note .cp-multi-action-note-line") ?? [];
+          res.noteCount = notes.length;
+          res.noteText = notes[0]?.textContent?.trim() ?? "";
+          if (inp) {
+            res.editable = inp.readOnly === false && inp.disabled === false;
+            inp.value = "-1";
+            inp.dispatchEvent(new Event("input", { bubbles: true }));
+            inp.dispatchEvent(new Event("change", { bubbles: true }));
+            await sleep(300);
+            res.afterEdit = String(root?.querySelector?.("input[name='extraMod']")?.value ?? "");
+          }
+        } catch (e) { res.err = String(e?.message ?? e); }
+        try { await dlg?.close?.({ animate: false }); } catch (_e) { /* already gone */ }
+        for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
+        await sleep(200);
+        out.multi = res;
+      }
+
+      // ── (D2b) THE SWITCH OFF: the same gesture, and the window says nothing ───────────────
+      // The same figure, the same standing count, the same weapon and the same target - only the switch
+      // moves. The helper returns 0 with it off, so the hook bails before it reaches either the field or
+      // the template: NO line, and `extraMod` left on the value it rendered with. The prior value is READ
+      // BACK from the window rather than assumed empty, so the leg states "unchanged" rather than a guess
+      // about what the field starts at.
+      {
+        const res = { found: false, valAfter: null, noteCount: 0, declaredCount: null, err: null };
+        let dlg = null;
+        try {
+          await game.settings.set(SCOPE, "multiActionPenaltyEnabled", false);
+          await sleep(250);
+          const figureKnife = u1.items.find(i => i.name === "__PW__ScopeCounterKnife") ?? null;
+          for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
+          await sleep(120);
+          canvas.tokens.get(tokU2.id)?.setTarget(true, { releaseOthers: false, groupSelection: true });
+          await sleep(200);
+          res.declaredCount = raw(u1, "actionCount");
+          dlg = attacker.sheet._cpOpenAttackModifiers(figureKnife);
+          await sleep(900);
+          const root = dlg?.element ?? null;
+          const inp = root?.querySelector?.("input[name='extraMod']") ?? null;
+          res.found = !!inp;
+          // The contrast partner is (D2)'s own reading on the identical gesture: -3 with the switch on,
+          // unseeded with it off. That is what makes "no seed" a value rather than an absence.
+          res.valAfter = inp ? String(inp.value ?? "") : null;
+          res.noteCount = (root?.querySelectorAll?.(".cp-multi-action-note") ?? []).length;
+        } catch (e) { res.err = String(e?.message ?? e); }
+        try { await dlg?.close?.({ animate: false }); } catch (_e) { /* already gone */ }
+        for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
+        await sleep(200);
+        out.multiOff = res;
+      }
+    } finally {
+      // Hand the switch back on every exit path, including a thrown leg.
+      try { if (multiWas !== undefined) await game.settings.set(SCOPE, "multiActionPenaltyEnabled", multiWas); } catch (_e) { /* unregistered */ }
+      await sleep(200);
+    }
+    out.multiRestored = (() => { try { return game.settings.get(SCOPE, "multiActionPenaltyEnabled") === multiWas; } catch { return null; } })();
+
     await clearAll();
 
     // ── (E) LINKED parity: the same controls, the same document as before the change ───────────
     // For a linked combatant `combatant.actor` IS the world actor, so the resolved write target must
     // be byte-identical to what the id lookup produced. Asserted as document IDENTITY, not by id.
-    await game.settings.set(SCOPE, "multiActionPenaltyEnabled", false);
-    await game.settings.set(SCOPE, "multiActionAutoTrack", false);
     await turnTo(cL1);
     const lDodge = rowBtn(cL1, ".cp-dodge-btn");
     out.linked.rendered       = !!lDodge;
@@ -294,9 +400,6 @@ const r = await p.evaluate(async () => {
     for (const s of [...game.scenes]) if (s.name?.startsWith?.("__PW__Scope")) await s.delete().catch(() => {});
     for (const c of [...game.combats]) if (c.combatants.some(cb => cb.name?.startsWith?.("__PW__Scope"))) await c.delete().catch(() => {});
     if (prevSceneId) await game.scenes.get(prevSceneId)?.activate().catch(() => {});
-    for (const [k, v] of Object.entries(restore)) {
-      if (v !== undefined) await game.settings.set(SCOPE, k, v).catch(() => {});
-    }
   }
   return out;
 });
@@ -356,6 +459,31 @@ const checks = [
   ["add-action counter lands on the token's actor (value 1)", r.addAction.tokenActor === 1],
   ["add-action counter does NOT land on the world actor", r.addAction.worldActor === null],
   ["add-action counter does NOT reach the sibling figure", r.addAction.sibling === null],
+
+  // (D2) the count at the point of use - the trim's one new gesture leg
+  ["prefilled modifier row: the window is opened with the FIGURE's own copy of the weapon",
+    r.multi?.weaponActorIsFigure === true],
+  ["prefilled modifier row: one action stands on that figure, so this window declares action two",
+    r.multi?.declaredCount === 1, r.multi?.declaredCount],
+  ["prefilled modifier row: the labeled line renders under its own marker class, exactly once",
+    r.multi?.found === true && r.multi?.noteCount === 1, r.multi?.err ?? r.multi?.noteCount],
+  ["prefilled modifier row: the line names the figure it quotes, by that document's own name",
+    !!r.multi?.figureName && (r.multi?.noteText ?? "").includes(r.multi.figureName), r.multi?.noteText],
+  ["prefilled modifier row: and it quotes the count being declared beside the seeded term",
+    /\baction\s+2\b/i.test(r.multi?.noteText ?? "") && /-3/.test(r.multi?.noteText ?? ""), r.multi?.noteText],
+  ["prefilled modifier row: the field carries the book's term for that count (-3)",
+    r.multi?.val === "-3", r.multi?.val],
+  ["prefilled modifier row: typing over the field wins - the seed is not a lock",
+    r.multi?.editable === true && r.multi?.afterEdit === "-1", `editable=${r.multi?.editable} after=${r.multi?.afterEdit}`],
+  // (D2b) the switch's OFF state - restored 2026-08-29, so it has one again
+  ["prefilled modifier row NEGATIVE: the switch off, the same standing count still on the figure",
+    r.multiOff?.declaredCount === 1, r.multiOff?.declaredCount],
+  ["prefilled modifier row NEGATIVE: the window opens and renders NO labeled line",
+    r.multiOff?.found === true && r.multiOff?.noteCount === 0, r.multiOff?.err ?? r.multiOff?.noteCount],
+  ["prefilled modifier row NEGATIVE: and the modifier field is left on its unseeded value",
+    r.multiOff?.valAfter === "" || r.multiOff?.valAfter === "0", r.multiOff?.valAfter],
+  ["prefilled modifier row: the switch was handed back to the value the section found",
+    r.multiRestored === true, String(r.multiRestored)],
 
   // (E) linked parity
   ["linked row: the stamped actor id still resolves to the same document the control writes",

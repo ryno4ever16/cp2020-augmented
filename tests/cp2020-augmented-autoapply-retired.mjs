@@ -72,8 +72,8 @@ const res = await page.evaluate(async () => {
   };
   const worldDoc = () => game.settings?.storage?.get?.("world")?.find?.(s => s.key === QUALIFIED) ?? null;
 
-  const KEYS = ["limbLossEnabled", "limbModel", "damageArmorMode", "damageAblation", "headHitDoubling",
-                "rerollGoneLimbLocation", "combatFxEnabled", "combatAutomationEnabled"];
+  const KEYS = ["limbLossEnabled", "limbModel", "damageArmorMode", "headHitDoubling",
+                "combatFxEnabled", "combatAutomationEnabled"];
   const was = {};
   for (const k of KEYS) { try { was[k] = game.settings.get(SCOPE, k); } catch { was[k] = null; } }
   const set = async (k, v) => { try { await game.settings.set(SCOPE, k, v); } catch (e) { /* unregistered */ } };
@@ -86,8 +86,10 @@ const res = await page.evaluate(async () => {
        game.settings.settings.has(QUALIFIED) === false, `has=${game.settings.settings.has(QUALIFIED)}`);
     const readFailed = (() => { try { game.settings.get(SCOPE, KEY); return false; } catch (e) { return true; } })();
     ok("§1 and reading it throws rather than answering a value", readFailed === true, `threw=${readFailed}`);
+    // ⏪ the old positive control named `damageAblation`, retired 2026-08-29 (settings-trim) and
+    //    merged into the armor-mode selector. The selector is the surviving neighbour.
     ok("§1 positive control: a neighbouring damage setting IS still registered",
-       game.settings.settings.has(`${SCOPE}.damageAblation`) === true, "damageAblation");
+       game.settings.settings.has(`${SCOPE}.damageArmorMode`) === true, "damageArmorMode");
 
     /* ── §2  no preset references it ──────────────────────────────────────────────────────────── */
     const keys = presets.presetKeys();
@@ -120,11 +122,11 @@ const res = await page.evaluate(async () => {
     await sleep(1200);
     const sheetRoot = sheet.element;
     const retiredCtl = sheetRoot?.querySelector(`[name="${QUALIFIED}"]`) ?? null;
-    const liveCtl = sheetRoot?.querySelector(`[name="${SCOPE}.damageAblation"]`) ?? null;
+    const liveCtl = sheetRoot?.querySelector(`[name="${SCOPE}.damageArmorMode"]`) ?? null;
     ok("§3 the settings page renders no control for the retired key (negative)",
        retiredCtl === null, `found=${!!retiredCtl}`);
     ok("§3 positive control: the section it sat in still renders its other controls",
-       liveCtl !== null, `damageAblation control=${!!liveCtl}`);
+       liveCtl !== null, `damageArmorMode control=${!!liveCtl}`);
     await sheet.close().catch(() => {});
     await sleep(300);
 
@@ -136,15 +138,15 @@ const res = await page.evaluate(async () => {
        game.i18n.has("CYBERPUNK.PresetFeatureAutoApply") === false,
        String(game.i18n.has("CYBERPUNK.PresetFeatureAutoApply")));
     ok("§4 positive control: a neighbouring setting's name key still resolves",
-       game.i18n.has("SETTINGS.DamageAblation") === true, "SETTINGS.DamageAblation");
+       game.i18n.has("SETTINGS.DamageArmorMode") === true, "SETTINGS.DamageArmorMode");
 
     /* ── fixtures for the behaviour legs ──────────────────────────────────────────────────────── */
     await set("limbLossEnabled", true);
     await set("limbModel", "core");
     await set("damageArmorMode", "none");
-    await set("damageAblation", false);
     await set("headHitDoubling", true);
-    await set("rerollGoneLimbLocation", false);
+    // ⏪ the absent-limb re-roll switch retired 2026-08-29 (settings-trim) — it always runs now, and
+    //    these legs name their own locations rather than rolling one, so nothing here depends on it.
     await set("combatAutomationEnabled", true);
     await set("combatFxEnabled", false);
 

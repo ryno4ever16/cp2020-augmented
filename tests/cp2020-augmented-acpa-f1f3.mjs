@@ -29,9 +29,8 @@ const r = await p.evaluate(async () => {
   // its mutations behind).
   const _priorSettings = {};
   try {
-    for (const k of ["mmEnabled", "vehicleDamageEnabled", "vehicleRuleSystem"]) _priorSettings[k] = game.settings.get("cp2020-augmented", k);
+    for (const k of ["mmEnabled", "vehicleRuleSystem"]) _priorSettings[k] = game.settings.get("cp2020-augmented", k);
     await game.settings.set("cp2020-augmented", "mmEnabled", true);
-    await game.settings.set("cp2020-augmented", "vehicleDamageEnabled", true);
     await game.settings.set("cp2020-augmented", "vehicleRuleSystem", "MaximumMetal");
   } catch {}
 

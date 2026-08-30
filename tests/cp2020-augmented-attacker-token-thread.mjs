@@ -50,8 +50,9 @@ const r = await p.evaluate(async () => {
   let prevSceneId = null;
   const madeActors = [];
   try {
-    for (const k of ["aimTrackingEnabled", "multiActionPenaltyEnabled", "multiActionAutoTrack", "combatFxEnabled",
-                     "gasGrenadeCloudEnabled", "explosivesEnabled"]) {
+    // ⏪ the aim / multi-action / cloud / blast enablement keys retired 2026-08-29 (settings-trim):
+    //    every one of those lanes is unconditional now, so only the rail switch is snapshot here.
+    for (const k of ["combatFxEnabled"]) {
       try { restore[k] = game.settings.get(SCOPE, k); } catch { restore[k] = undefined; }
     }
     // The presentation rail is stood down for the whole suite: nothing here measures it, and the
@@ -194,9 +195,9 @@ const r = await p.evaluate(async () => {
     }
 
     // ── (2) the aim is spent by the figure that fired ──────────────────────────────────────────
-    await game.settings.set(SCOPE, "aimTrackingEnabled", true);
-    await game.settings.set(SCOPE, "multiActionPenaltyEnabled", false);   // isolate the flag under test
-    await game.settings.set(SCOPE, "multiActionAutoTrack", false);
+    // ⏪ the aim + multi-action switches retired 2026-08-29 (settings-trim). The counter now moves on
+    //    every shot, so this section can no longer be isolated by switching it off - it reads only the
+    //    aim flags, and section (3) re-clears the counter before it asserts on it.
     await clearAll();
     // A stray aim STANDING ON THE BASE, on purpose: it is what an id lookup finds and clears, so its
     // survival is the two-sided proof that the clear went somewhere else.
@@ -219,8 +220,6 @@ const r = await p.evaluate(async () => {
     await clearAll();
 
     // ── (3) the action counter belongs to the figure that acted ────────────────────────────────
-    await game.settings.set(SCOPE, "multiActionPenaltyEnabled", true);
-    await game.settings.set(SCOPE, "multiActionAutoTrack", true);
     await clearAll();
     await fire({ actorId: base.id, tokenId: tokU1.id });
     await fire({ actorId: base.id, tokenId: tokU1.id });
@@ -381,8 +380,6 @@ const r = await p.evaluate(async () => {
     // at whichever figure of that base the canvas listed first rather than at the one that fired.
     // Every leg below reads the SPEAKER OFF THE CREATED MESSAGE, by value.
     await clearAll();
-    await game.settings.set(SCOPE, "gasGrenadeCloudEnabled", true);
-    await game.settings.set(SCOPE, "explosivesEnabled", true);
     canvas.tokens.releaseAll();
     for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
     await sleep(300);

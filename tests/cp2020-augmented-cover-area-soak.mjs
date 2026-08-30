@@ -112,12 +112,12 @@ const res = await page.evaluate(async () => {
   await sleep(300);
 
   try {
-    await saveSet("areaEffectOcclusion", true);
+    // ⏪ the occlusion + blast enablement keys retired 2026-08-29 (settings-trim): both lanes are
+    //    unconditional now, so neither is pinned here any more.
     await saveSet("headHitDoubling", false);
     await saveSet("limbModel", "core");
     await saveSet("explosivesDetailed", false);
     await saveSet("damageArmorMode", "full");
-    await saveSet("explosivesEnabled", true);
 
     /* ═══════════════ §1 the split predicate, by value ═══════════════ */
     // One straight line east, INSIDE the scene rectangle. Off-rect coordinates are not a neutral
@@ -169,14 +169,12 @@ const res = await page.evaluate(async () => {
     await wNaked.update({ [`flags.${SCOPE}.coverPool`]: 30, move: 20 });
     await sleep(250);
 
-    // (e) the world switch is the master for the WHOLE interaction
-    await game.settings.set(SCOPE, "areaEffectOcclusion", false);
-    v = cov.areaCoverVerdict(ORX, ORY, probe.tok, scene);
-    ok("§1 switch off → no soak and no exemption, everything is plainly in",
-      v.state === cov.AREA_COVER_IN && v.sp === 0, `${v.state} sp=${v.sp}`);
-    await game.settings.set(SCOPE, "areaEffectOcclusion", true);
-    ok("§1 switch back on → the soak verdict returns",
-      cov.areaCoverVerdict(ORX, ORY, probe.tok, scene).state === cov.AREA_COVER_SOAKED);
+    // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) - the "master off means
+    //    everything is plainly in" pair went with the occlusion key. The soak verdict is re-read here
+    //    instead, so the section still closes on the value the rows above produced.
+    ok("§1 the soak verdict stands for the crossed row",
+      cov.areaCoverVerdict(ORX, ORY, probe.tok, scene).state === cov.AREA_COVER_SOAKED,
+      cov.areaCoverVerdict(ORX, ORY, probe.tok, scene).state);
 
     // (f) the point-to-point row finder, and the origin trim
     const rowsAlong = cov.valuedCoverAlong(scene, { x: ORX, y: ORY }, { x: px, y: py });
@@ -495,6 +493,18 @@ const res = await page.evaluate(async () => {
 
     /* ═══════════════ §7 presentation parity ═══════════════ */
     await saveSet("combatFxEnabled", true);
+    // ⛔ REPOINTED TO THE STRUCTURE KIND 2026-08-29. The plain-character clip is WITHDRAWN
+    //    (module/fx/effects.js `HIT_SOUND.flesh: { base: null }`, commit 7328447), so `hitSoundSrc`
+    //    answers null for that kind and the sweep filters every plain figure before it can be counted
+    //    — which reads as "no plan" and takes the MECHANISM under test down with it. The structure
+    //    kind still rings, so the figure is flagged structural for this section only and handed back
+    //    immediately after. The withdrawal is TEMPORARY by its own record (effects.js keeps the revert
+    //    line; docs/FX-RAIL.md §6 carries the ruling), so ↪ RE-POINT THIS BACK to a plain figure when
+    //    the clip returns.
+    //    The flag is the shipped structural predicate's own explicit door (`isFullBorg`, mech/borg.js:121
+    //    → `bearsStructuralSdp`, effects.js:6014), so this states the kind rather than simulating it.
+    await mark.actor.setFlag(SCOPE, "fullBorg", true);
+    await sleep(250);
     const audioPayload = basePayload();
     const wFxSoak = await mkWall([SX + 2 * gs, SY - 3 * gs, SX + 2 * gs, SY + 3 * gs],
       { coverSp: 3, coverPool: 9, coverPoolMax: 9, coverMaterial: "__PWSOAK__FxWall" });
@@ -510,6 +520,13 @@ const res = await page.evaluate(async () => {
     ok("§7 the same figure behind an UNVALUED wall is presented as untouched",
       !(planNaked?.victims ?? []).some(vv => vv.tokenId === mark.tokenDoc.id),
       JSON.stringify(planNaked?.victims?.map(vv => vv.tokenId) ?? []));
+    // Hand the figure back before §8: a structural flag changes where damage is booked, and the
+    // sections below read the wound track.
+    await mark.actor.unsetFlag(SCOPE, "fullBorg").catch(() => {});
+    await sleep(250);
+    ok("§7 the section handed the figure back — the structural flag is off before the damage legs",
+      mark.actor.getFlag(SCOPE, "fullBorg") === undefined,
+      String(mark.actor.getFlag(SCOPE, "fullBorg")));
     await scene.deleteEmbeddedDocuments("Wall", [wFxSoak.id]);
     await sleep(200);
 

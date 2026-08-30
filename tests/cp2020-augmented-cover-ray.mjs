@@ -288,10 +288,9 @@ const phase3 = await page.evaluate(async ({ SCOPE, ids }) => {
   const aTok = scene.tokens.get(ids.aTokId);
   const tTok = scene.tokens.get(ids.tTokId);
 
-  // The naked half is gated by the area-occlusion switch (`areaOcclusionTest` reads it itself), so it
-  // is pinned ON for this phase and handed back at the end.
-  try { out.settingWas = game.settings.get(SCOPE, "areaEffectOcclusion"); } catch (e) { out.settingWas = null; }
-  if (out.settingWas !== null) await game.settings.set(SCOPE, "areaEffectOcclusion", true);
+  // ⏪ the occlusion switch `areaOcclusionTest` used to read is retired 2026-08-29 (settings-trim):
+  //    the naked-wall half runs unconditionally, so nothing is pinned or handed back for this phase.
+  out.settingWas = null;
 
   let naked = null;
   try {
@@ -331,15 +330,8 @@ const phase3 = await page.evaluate(async ({ SCOPE, ids }) => {
     await naked.update({ c: [12 * G, 9 * G, 12 * G, 12 * G] });
     await new Promise(r => setTimeout(r, 300));
 
-    // NEGATIVE: with the switch off the table has said walls do not interact with shots, and this half
-    // honours that — same reading the area half makes.
-    if (out.settingWas !== null) {
-      await game.settings.set(SCOPE, "areaEffectOcclusion", false);
-      ok("NEGATIVE: with area occlusion switched off the naked wall stops nothing",
-         cov.aimedCoverVerdict(aTok, tTok).state === cov.AREA_COVER_IN,
-         cov.aimedCoverVerdict(aTok, tTok).state);
-      await game.settings.set(SCOPE, "areaEffectOcclusion", true);
-    }
+    // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) - the "occlusion off means
+    //    the naked wall stops nothing" reading went with the key.
     out.nakedWallId = naked.id;
   } catch (e) {
     ok("phase 3 ran to completion", false, String(e?.message ?? e));
@@ -409,10 +401,6 @@ const clearWin = await page.evaluate(() => {
 });
 check("NEGATIVE: with the wall gone the window carries no blocked notice", clearWin.notice === 0, String(clearWin.notice));
 check("NEGATIVE: and the same shot's damage arrives intact", Number(clearWin.total) > 0, `total=${clearWin.total}`);
-await page.evaluate(async ({ SCOPE, was }) => {
-  if (was !== null) await game.settings.set(SCOPE, "areaEffectOcclusion", was);
-}, { SCOPE, was: phase3.settingWas });
-
 /* ═══════════════════════════════ cleanup + rig hygiene ═══════════════════════════════ */
 // The whole surface this spec built goes with the scene; the previously active one is handed back
 // so the rig is left exactly as it was found.

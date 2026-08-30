@@ -47,7 +47,7 @@ try {
     const SCOPE = "cp2020-augmented";
     const out = { checks: [] };
     const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
-    let veh = null, prevArmor, prevDmg;
+    let veh = null, prevArmor;
     try {
       // ── source-shape: the fix is in the served code ──
       const dmgSrc = await (await fetch(`${M}/vehicle/vehicle-damage.js`, { cache: "no-store" })).text();
@@ -60,9 +60,8 @@ try {
       // ── behavioural: drive the resolver with armor-damage on ──
       const VD = await import(`${M}/vehicle/vehicle-damage.js`);
       prevArmor = game.settings.get(SCOPE, "vehicleArmorDamageEnabled");
-      prevDmg = game.settings.get(SCOPE, "vehicleDamageEnabled");
+      // ⏪ the vehicle-damage gate retired 2026-08-29 (settings-trim): the lane is unconditional.
       await game.settings.set(SCOPE, "vehicleArmorDamageEnabled", true);
-      await game.settings.set(SCOPE, "vehicleDamageEnabled", true);
 
       veh = await Actor.create({ name: "GRIG Erosion Target", type: "cp2020-augmented.vehicle",
         system: { sp: { front: 100, side: 100, rear: 100, top: 100, bottom: 100 }, bodyValue: 5 } });
@@ -87,7 +86,6 @@ try {
     } finally {
       try { if (veh) await veh.delete(); } catch {}
       try { if (prevArmor !== undefined) await game.settings.set(SCOPE, "vehicleArmorDamageEnabled", prevArmor); } catch {}
-      try { if (prevDmg !== undefined) await game.settings.set(SCOPE, "vehicleDamageEnabled", prevDmg); } catch {}
     }
     return out;
   });

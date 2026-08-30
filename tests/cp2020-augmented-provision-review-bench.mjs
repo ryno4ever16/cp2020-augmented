@@ -409,8 +409,9 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
    * used to arm it here so the element showed without the reviewer touching settings; there is
    * nothing left to arm. ───────────────────────────────────────────────────────────────────────── */
   const gore = null;
-  let spreadOn = null;
-  try { spreadOn = game.settings.get(SCOPE, "shotgunSpreadEnabled"); } catch (e) { spreadOn = `ERR ${e.message}`; }
+  // ⏪ the pattern switch retired 2026-08-29 (settings-trim): the lane is unconditional, so the
+  //    bench reports the fixed answer rather than reading a key that no longer exists.
+  const spreadOn = true;
 
   /* ── 7b. THE ACTIVATED INITIATIVE BOOST (Review·Shooter parity for the movement echo trail) ─────
    * The trail element (module/fx/afterimage.js) is reachable only from a figure carrying an

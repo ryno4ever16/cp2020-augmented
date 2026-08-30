@@ -19,7 +19,6 @@ const r = await p.evaluate(async () => {
   const ok = (k, v) => { out.checks[k] = v; };
   const sleep = (ms) => new Promise(res => setTimeout(res, ms));
   for (const a of game.actors.filter(a => a.name.startsWith("__PW__MeleeCap"))) await a.delete().catch(() => {});
-  try { await game.settings.set("cp2020-augmented", "vehicleDamageEnabled", true); } catch {}
 
   const M = await import("/modules/cp2020-augmented/module/martial/martial.js");
   const AC = await import("/modules/cp2020-augmented/module/vehicle/vehicle-acpa-combat.js");
