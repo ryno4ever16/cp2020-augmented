@@ -89,6 +89,10 @@
 /* IP tracker frame: fixed toolbar + pipeline strip, the QUEUE as the one grower, the balances
    ledger bounded under it, footer pinned. (The window-content chain is what lets either list
    scroll instead of pushing the footer off the bottom.) */
+/* Resize floors (the windows are user-resizable and Foundry does not clamp a resize): below these
+   the tracker's toolbar wraps over the pipeline and the add dialog's field rows collapse. */
+.application.cp-ip-tracker { min-width: 420px; min-height: 340px; }
+.application.cp-ip-manual-add { min-width: 320px; min-height: 220px; }
 .cp-ip-tracker .window-content { display: flex; flex-direction: column; min-height: 0; }
 .cp-ip-tracker .cp-ip-tracker-window { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .cp-ip-tracker .cp-ip-toolbar { flex: 0 0 auto; align-items: center; gap: 8px; padding: 4px 0; }

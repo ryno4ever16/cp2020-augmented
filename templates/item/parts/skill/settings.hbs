@@ -4,10 +4,16 @@
     {{>(template "fields/boolean") label="Chipped" edit="system.isChipped"}}
 </div>
 
-{{!-- The base schema's `system.ip` is NOT surfaced here: the module banks per-skill IP in
-      flags.cp2020-augmented.ip (and the fungible pool on the actor), and no code anywhere spends
-      system.ip — an editable box for it only invited numbers that could never fund a raise. The field
-      itself is left alone in the schema; it is simply no longer offered. --}}
+{{!-- The vanilla sheet's Improvement Points field, restored (1.2.3, user request) — but wired to
+      the MODULE's bank rather than the base schema's `system.ip`: the module banks per-skill IP in
+      flags.cp2020-augmented.ip, and only the flag funds a raise. The vanilla field's box is the
+      gesture people know (click the skill, type IP); pointing it at system.ip again would only
+      invite numbers nothing spends, so that field stays unsurfaced. Owner-editable, exactly like
+      vanilla — no GM gate, no lock check (user ruling 2026-09-01: mirror vanilla). --}}
+<div class="field-list">
+    {{>(template "fields/number") label="ImprovementPoints" edit="flags.cp2020-augmented.ip"}}
+</div>
+
 <div class="field-list">
     {{>(template "fields/number") label="DifficultyMod" edit="system.diffMod"}}
 </div>

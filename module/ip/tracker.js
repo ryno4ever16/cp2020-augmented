@@ -30,9 +30,10 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
   static DEFAULT_OPTIONS = {
     id: "cp-ip-tracker",
     classes: ["cyberpunk", "cp-ip-tracker"],
-    window: { title: "CYBERPUNK.IpTrackerTitle" },
+    // ApplicationV2 reads `resizable` from window.*; the old top-level `resizable: true` was dead
+    // config, which is why the tracker shipped without resize handles.
+    window: { title: "CYBERPUNK.IpTrackerTitle", resizable: true },
     position: { width: 560, height: 600 },
-    resizable: true,
     actions: {
       ipApply:  IpTracker._onApply,
       ipClear:  IpTracker._onClear,
@@ -303,7 +304,11 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
       actorOptions: actors.map(a => ({ value: a.id, label: a.name })),
     });
     _manualDlg = new foundry.applications.api.DialogV2({
-      window: { title: localize("IpManualTitle") },
+      // A bare DialogV2 sizes itself to its shortest field and ships without resize handles — the
+      // reported opens-too-small/can't-resize defect — so give it a workable width and real handles.
+      window: { title: localize("IpManualTitle"), resizable: true },
+      position: { width: 420 },
+      classes: ["cyberpunk", "cp-ip-manual-add"],
       content,
       buttons: [
         {
