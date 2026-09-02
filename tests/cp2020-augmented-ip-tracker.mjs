@@ -690,6 +690,86 @@ try {
   });
   failures += report("6 — The IP presence switch is retired; the feature is simply present", S6.checks);
 
+  /* ------------------------------------------------------------------ */
+  /*  Section 7 — the restored item-sheet IP field + resize geometry     */
+  /*  (1.2.3: the vanilla sheet's Improvement Points box returns, wired  */
+  /*  to the module's flag bank; owner-editable, mirroring vanilla.)     */
+  /* ------------------------------------------------------------------ */
+  const S7 = await page.evaluate(async () => {
+    const M = "/modules/cp2020-augmented/module";
+    const SCOPE = "cp2020-augmented";
+    const checks = [];
+    const push = (name, cond, got) => checks.push({ name, pass: !!cond, got });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const waitFor = async (fn, ms = 5000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { const v = fn(); if (v) return v; } catch {} await sleep(40); } return null; };
+
+    let actor = null, prev = {};
+    try {
+      const T = await import(`${M}/ip/tracker.js`);
+      const IP = await import(`${M}/ip/ip.js`);
+      for (const k of ["ipRawTracking", "ipThrottle"]) prev[k] = game.settings.get(SCOPE, k);
+      await game.settings.set(SCOPE, "ipRawTracking", true);
+      await game.settings.set(SCOPE, "ipThrottle", "off");
+
+      // A window opened from config that asks for resize handles must actually grow them.
+      const tracker = T.openIpTracker();
+      await waitFor(() => tracker.rendered && tracker.element);
+      push("tracker config asks the frame for resize handles", tracker.options.window?.resizable === true, JSON.stringify(tracker.options.window?.resizable));
+      const tHandle = tracker.element.querySelector(".window-resize-handle, .window-resizable-handle, [data-action='resize']");
+      push("tracker frame carries a resize handle element", !!tHandle, tHandle?.className);
+      const tCS = getComputedStyle(tracker.element);
+      push("tracker resize floor holds (min-width 420px)", tCS.minWidth === "420px", tCS.minWidth);
+      push("tracker resize floor holds (min-height 340px)", tCS.minHeight === "340px", tCS.minHeight);
+
+      // The manual-award dialog, opened the way the GM opens it (the toolbar control).
+      tracker.element.querySelector('button[data-action="ipManual"]')?.click();
+      const dlg = await waitFor(() => {
+        for (const app of foundry.applications.instances.values()) {
+          if (app?.options?.classes?.includes?.("cp-ip-manual-add") && app.rendered) return app;
+        }
+        return null;
+      });
+      push("the toolbar control opens the award dialog", !!dlg, dlg?.constructor?.name);
+      push("dialog config asks for resize handles", dlg?.options?.window?.resizable === true, JSON.stringify(dlg?.options?.window?.resizable));
+      push("dialog opens at a workable width (420px asked)", Number(dlg?.position?.width) === 420, dlg?.position?.width);
+      const dCS = dlg ? getComputedStyle(dlg.element) : null;
+      push("dialog resize floor holds (min-width 320px)", dCS?.minWidth === "320px", dCS?.minWidth);
+      await dlg?.close();
+      await tracker.close();
+
+      // The skill's own sheet carries the restored Improvement Points box, wired to the flag bank.
+      actor = await Actor.create({ name: "IP Field Probe", type: "character" });
+      const [skill] = await actor.createEmbeddedDocuments("Item", [{ name: "Probe Craft", type: "skill", system: { level: 2, stat: "ref" } }]);
+      await skill.setFlag(SCOPE, "ip", 3);
+      await skill.sheet.render(true);
+      await waitFor(() => skill.sheet.rendered && skill.sheet.element);
+      const box = await waitFor(() => skill.sheet.element.querySelector('input[name="flags.cp2020-augmented.ip"]'));
+      push("the skill sheet paints the Improvement Points box", !!box, box?.name);
+      push("it shows the current bank", box?.value === "3", box?.value);
+      const lbl = box?.closest(".field")?.querySelector("label");
+      push("its label is localized (no raw key leaked)", !!lbl && !(lbl.textContent || "").includes("CYBERPUNK."), lbl?.textContent?.trim());
+      push("it is owner-editable, mirroring vanilla (no readonly)", !!box && !box.hasAttribute("readonly"), box?.hasAttribute("readonly"));
+      push("the base schema's own ip field stays unsurfaced", !skill.sheet.element.querySelector('input[name="system.ip"]'), null);
+
+      // Typing lands on the flag bank through the sheet's own submit machinery, exactly.
+      box.value = "12";
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+      const bank = await waitFor(() => Number(skill.getFlag(SCOPE, "ip")) === 12 ? 12 : null);
+      push("the typed figure lands as the skill's bank, exactly", bank === 12, skill.getFlag(SCOPE, "ip"));
+      // The actor sheet's display payload reads the same store back.
+      const disp = IP.ipDisplayForActor(actor);
+      push("the display payload reads the new bank back", disp.bySkill[skill.id]?.banked === 12, disp.bySkill[skill.id]?.banked);
+      await skill.sheet.close();
+    } catch (e) {
+      push("section 7 ran to completion", false, String(e?.message ?? e));
+    } finally {
+      try { await actor?.delete(); } catch {}
+      for (const [k, v] of Object.entries(prev)) { try { await game.settings.set(SCOPE, k, v); } catch {} }
+    }
+    return { checks };
+  });
+  failures += report("7 — the restored item-sheet IP field + resize geometry", S7.checks);
+
   const clean = pageErrors.length === 0;
   console.log(`\n  [${clean ? "PASS" : "FAIL"}] ${"0 console errors".padEnd(62)} got=${pageErrors.length}`);
   if (!clean) { console.log("    " + pageErrors.slice(0, 8).join("\n    ")); failures++; }
