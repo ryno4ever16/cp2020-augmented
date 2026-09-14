@@ -2845,8 +2845,13 @@ export function ammoRedefinesProjectile(ammoKey) {
  */
 export function ammoFxKeyOf(payload) {
   const id = String(payload?.modifier ?? "").trim();
-  if (id) return id;
-  return ammoFxFingerprintKey(payload);
+  const key = id ? id : ammoFxFingerprintKey(payload);
+  // ⭐ THE WEAPON'S OWN AP FLAG (RYNO 2026-09-14). The damage math resolves a weapon flagged AP with a
+  // STANDARD load to one AP round (DamageApplicator resolveApProfile); the picture follows the same
+  // rule, so the checkbox alone draws the AP tracer and impact. A specific load in the chamber keeps its
+  // own key exactly as it keeps its own mechanics — the flag never overrides a round that named itself.
+  if (key === "standard" && payload?.ap === true) return "ap";
+  return key;
 }
 
 /**

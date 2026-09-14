@@ -4636,6 +4636,18 @@ try {
       fx.ammoFxKeyOf({ modifier: "ap" }) === "ap"
       && fx.ammoFxKeyOf({ modifier: "dualPurpose" }) === "dualPurpose",
       `${fx.ammoFxKeyOf({ modifier: "ap" })} / ${fx.ammoFxKeyOf({ modifier: "dualPurpose" })}`);
+    // The weapon's own AP flag with a standard load IS an AP round (resolveApProfile) — and draws as one.
+    // A specific load keeps its own key; the flag never overrides a round that named itself.
+    ok("overlay resolution: weapon AP flag + standard load resolves to the ap row",
+      fx.ammoFxKeyOf({ modifier: "standard", ap: true }) === "ap"
+      && fx.ammoFxKeyOf({ ap: true }) === "ap",
+      `${fx.ammoFxKeyOf({ modifier: "standard", ap: true })} / ${fx.ammoFxKeyOf({ ap: true })}`);
+    ok("overlay resolution: weapon AP flag defers to a named load; no flag stays standard",
+      fx.ammoFxKeyOf({ modifier: "hollowPoint", ap: true }) === "hollowPoint"
+      && fx.ammoFxKeyOf({ modifier: "dualPurpose", ap: true }) === "dualPurpose"
+      && fx.ammoFxKeyOf({ modifier: "standard", ap: false }) === "standard"
+      && fx.ammoFxKeyOf({ ap: false }) === "standard",
+      `${fx.ammoFxKeyOf({ modifier: "hollowPoint", ap: true })} / ${fx.ammoFxKeyOf({ modifier: "dualPurpose", ap: true })} / ${fx.ammoFxKeyOf({ modifier: "standard", ap: false })}`);
 
     /* ── a2. …AND THE ID IS REALLY ON A REAL SHOT'S FIELDS ───────────────────────
      * ⭐ WHY THIS LEG EXISTS. Every leg above and below hands the resolver a payload this file built
