@@ -2,7 +2,7 @@
   "id": "cp2020-augmented",
   "title": "Cyberpunk 2020: Augmented Edition",
   "description": "A companion expansion for the Cyberpunk 2020 system: combat and damage automation, destructible cover, grenades and area effects, expanded vehicle support and ACPA (Maximum Metal), animated weapons fire, an NPC generator, shopping, Improvement Point tracking, and a 1,700-item supplement catalog, all layered on top of the base system without modifying it. Cyberpunk 2020: Augmented Edition is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "compatibility": {
     "minimum": 13,
     "verified": 14,

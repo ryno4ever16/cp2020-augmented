@@ -57,7 +57,7 @@ https://raw.githubusercontent.com/ryno4ever16/cp2020-augmented/main/module.json
 
 ## Status
 
-**Current release: 1.2.3.** The module is in active use and updated as bugs are reported and rules gaps are found. Every release has notes on the [releases page](https://github.com/ryno4ever16/cp2020-augmented/releases), and updates arrive through Foundry's normal update check.
+**Current release: 1.2.4.** The module is in active use and updated as bugs are reported and rules gaps are found. Every release has notes on the [releases page](https://github.com/ryno4ever16/cp2020-augmented/releases), and updates arrive through Foundry's normal update check.
 
 Found a bug? Open an [issue](https://github.com/ryno4ever16/cp2020-augmented/issues) with the module version, the system version, and what you did. One quick check first: if it still happens with the module disabled, it belongs to the base system, not here.
 
