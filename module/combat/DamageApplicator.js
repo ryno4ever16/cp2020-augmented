@@ -55,6 +55,36 @@ export const ARMOR_MODES = {
  * a roll, a location and its own fields on top, so a reading taken through it cannot isolate what
  * this function alone computed. The golden-master capture consumes the direct export.
  */
+/**
+ * The weapon's AP flag, resolved to the book's AP ROUND applied exactly once.
+ *
+ * ⛔ TWO DOORS, ONE EFFECT (RYNO ruling 2026-09-14). The base system's weapon sheet carries an "AP"
+ * checkbox (`system.ap`) and the module's ammo items carry the Armor-Piercing modifier (armorMultSoft
+ * 0.5 / armorMultHard 0.5 / penDamageMult 0.5). Until this fix the two STACKED: the ammo multiplier
+ * floored SP ×0.5 first, then `resolveHitMath` halved the result again for the flag — SP quartered —
+ * and the flag alone was half a round (SP halved, penetrating damage untouched). The rules make AP a
+ * property of the ROUND; a weapon described as firing AP rounds means that same single effect.
+ *
+ * So the flag now means "this weapon is loaded with AP rounds when nothing more specific is chambered":
+ *  - flag set, load STANDARD (every multiplier 1) → the full AP profile 0.5 / 0.5 / 0.5, once;
+ *  - flag set, load NON-STANDARD (any multiplier ≠ 1, e.g. AP / API / hollow-point / rubber) → the
+ *    chambered round defines the profile and the flag contributes nothing (no double dip, and a
+ *    hollow-point fired from an "AP" weapon is still a hollow-point);
+ *  - flag clear → unchanged.
+ * `resolveHitMath` keeps its `ap` halving for any caller that still passes it, but the two resolvers
+ * below never do — they pass the normalised profile and `ap: false`. The breakdown records
+ * `apHalved` from `apFromWeapon` so the card still says "AP — SP halved" when the flag was the source.
+ *
+ * Pure. Exported for the keeper (tests/cp2020-augmented-ap-profile.mjs).
+ */
+export function resolveApProfile({ ap, armorMultSoft = 1, armorMultHard = 1, penDamageMult = 1 }) {
+  const soft = Number(armorMultSoft) || 1, hard = Number(armorMultHard) || 1, pen = Number(penDamageMult) || 1;
+  if (!ap) return { armorMultSoft: soft, armorMultHard: hard, penDamageMult: pen, apFromWeapon: false };
+  const loadIsStandard = soft === 1 && hard === 1 && pen === 1;
+  if (!loadIsStandard) return { armorMultSoft: soft, armorMultHard: hard, penDamageMult: pen, apFromWeapon: false };
+  return { armorMultSoft: 0.5, armorMultHard: 0.5, penDamageMult: 0.5, apFromWeapon: true };
+}
+
 export function resolveHitMath({ currentSP, rawDamage, ap, armorMode, coverSP = 0, penDamageMult = 1 }) {
   let effectiveSP = currentSP;
   if (coverSP > 0 && armorMode !== ARMOR_MODES.NONE) {
@@ -447,7 +477,7 @@ function hitBreakdown({ target, spKey, damageType, armorMode, rawDamage, armorBa
     coverName: String(cover?.displayLabel || cover?.label || ""),
     coverSP: roundCoverSP,
     effectiveSP: spFull,
-    apHalved: !!ap && armorMode !== ARMOR_MODES.NONE && spUsed !== spFull,
+    apHalved: !!ap && armorMode !== ARMOR_MODES.NONE,   // `ap` here = the weapon flag supplied the AP round (resolveApProfile)
     spUsed,
     afterSPRaw: rawDamage - spUsed,
     penMult: Number(penDamageMult) || 1,
@@ -457,6 +487,10 @@ function hitBreakdown({ target, spKey, damageType, armorMode, rawDamage, armorBa
 }
 
 export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, cover = null, damageType = "", token = null, targetTokenId = null, dryRun = false, fxSilent = false, severityBatch = null }) {
+  // Weapon AP flag → one AP round, applied once (see resolveApProfile). The vehicle route below still
+  // receives the raw flag: vehicle-scale SP erosion has its own AP semantics and is untouched here.
+  const apProfile = resolveApProfile({ ap, armorMultSoft, armorMultHard, penDamageMult });
+  const apFromWeapon = apProfile.apFromWeapon;
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
@@ -520,8 +554,8 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     // edged flag = armorMultSoft: 0.5, armorMultHard: 1.0.
     // mono flag (mono-edge, CP2020 p.112) = armorMultSoft: ⅓, armorMultHard: ⅔ — it wins over edged.
     // Combined: take the minimum (most aggressive) of the weapon-category and ammo mults per type.
-    const effectiveSoftMult = mono ? Math.min(1 / 3, armorMultSoft) : (edged ? Math.min(0.5, armorMultSoft) : armorMultSoft);
-    const effectiveHardMult = mono ? Math.min(2 / 3, armorMultHard) : armorMultHard;
+    const effectiveSoftMult = mono ? Math.min(1 / 3, apProfile.armorMultSoft) : (edged ? Math.min(0.5, apProfile.armorMultSoft) : apProfile.armorMultSoft);
+    const effectiveHardMult = mono ? Math.min(2 / 3, apProfile.armorMultHard) : apProfile.armorMultHard;
     if ((effectiveSoftMult !== 1.0 || effectiveHardMult !== 1.0) && currentSP > 0 && armorMode !== ARMOR_MODES.NONE) {
       const contributors = getArmorContributors(target, spKey);
       const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
@@ -534,7 +568,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
 
     const roundCoverSP = coverLedger.spForRound();
     const { spFull, spUsed, damageAfterSP, penetrates } = resolveHitMath({
-      currentSP, rawDamage, ap, armorMode, coverSP: roundCoverSP, penDamageMult,
+      currentSP, rawDamage, ap: false, armorMode, coverSP: roundCoverSP, penDamageMult: apProfile.penDamageMult,
     });
     // Booked AFTER the math: the round that empties the pool was still shot THROUGH the object,
     // so it gets the object's SP; only the rounds behind it face bare armor.
@@ -549,7 +583,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     const breakdown = hitBreakdown({
       target, spKey, damageType, armorMode, rawDamage,
       armorBase, armorMult, armorSP: currentSP, cover, roundCoverSP,
-      spFull, spUsed, ap, penDamageMult, damageAfterSP, penetrates,
+      spFull, spUsed, ap: apFromWeapon, penDamageMult: apProfile.penDamageMult, damageAfterSP, penetrates,
     });
 
     results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: routesToSdp(target, location), coverSP: roundCoverSP, coverChew, breakdown });
@@ -607,6 +641,8 @@ export async function resolveAreaDamages({ target, areaDamages, ap, edged = fals
  * writes happen in DamageDialog._onApply's apply loop.
  */
 export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate = false, coverSP = 0, cover = null, damageType = "" }) {
+  const apProfile = resolveApProfile({ ap, armorMultSoft, armorMultHard, penDamageMult });   // one AP round, once
+  const apFromWeapon = apProfile.apFromWeapon;
   const results = [];
   const liveSP  = {};        // cached UN-multiplied per-location base SP (mirrors applyAreaDamages)
   const ablations = {};      // per-location count of simulated staged-penetration ablations
@@ -632,8 +668,8 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
 
       const armorBase   = currentSP;   // pre-multiplier combined armor — the layering fold's own result
       let   armorMult   = 1;
-      const effSoftSync = mono ? Math.min(1 / 3, armorMultSoft) : (edged ? Math.min(0.5, armorMultSoft) : armorMultSoft);
-      const effHardSync = mono ? Math.min(2 / 3, armorMultHard) : armorMultHard;
+      const effSoftSync = mono ? Math.min(1 / 3, apProfile.armorMultSoft) : (edged ? Math.min(0.5, apProfile.armorMultSoft) : apProfile.armorMultSoft);
+      const effHardSync = mono ? Math.min(2 / 3, apProfile.armorMultHard) : apProfile.armorMultHard;
       if ((effSoftSync !== 1.0 || effHardSync !== 1.0) && currentSP > 0 && armorMode !== ARMOR_MODES.NONE) {
         const contributors = getArmorContributors(target, spKey);
         const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
@@ -645,7 +681,7 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
 
       const roundCoverSP = coverLedger.spForRound();
       const { spFull, spUsed, damageAfterSP, penetrates } = resolveHitMath({
-        currentSP, rawDamage, ap, armorMode, coverSP: roundCoverSP, penDamageMult,
+        currentSP, rawDamage, ap: false, armorMode, coverSP: roundCoverSP, penDamageMult: apProfile.penDamageMult,
       });
       // Booked AFTER the math — mirrors applyAreaDamages: the round that empties the pool was
       // still shot through the object, the rounds behind it face bare armor.
@@ -659,7 +695,7 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
       const breakdown = hitBreakdown({
         target, spKey, damageType, armorMode, rawDamage,
         armorBase, armorMult, armorSP: currentSP, cover, roundCoverSP,
-        spFull, spUsed, ap, penDamageMult, damageAfterSP, penetrates,
+        spFull, spUsed, ap: apFromWeapon, penDamageMult: apProfile.penDamageMult, damageAfterSP, penetrates,
       });
 
       results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates, sdp: routesToSdp(target, location), coverSP: roundCoverSP, coverChew, breakdown });
