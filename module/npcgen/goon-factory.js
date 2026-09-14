@@ -800,17 +800,25 @@ export async function materializeGoon(row, { folder, nameByKey }) {
     // "random" sentinel, which is not in the schema's role enum and must never reach a document.
     // `roleRolled` records that the batch was set to Random, so a GM reading the flag later can tell
     // a drawn Cop from a picked one.
-    flags: { [SCOPE]: { goonFactory: {
-      grade: bp.grade, role: bp.role, roleRolled: !!bp.roleRolled,
-      outfitId: cfg.outfitId, basedOn: cfg.basedOn,
-      custom: !!cfg.custom, seed: bp.seed, rootSeed: bp.plan?.rootSeed ?? null,
-      index: bp.plan?.index ?? 0, statShape: cfg.statShape,
-      version: game.modules.get(SCOPE)?.version ?? "",
-    } } },
+    // ⛔ THE PLANNED STANDING VALUE IS A FLAG, NOT A `system.` PATH. The base DataModel declares no
+    // `reputation` field and STRIPS the write, so `system.reputation` left every generated figure
+    // reading 0 at both consumers (module/actor/reputation.js `getReputation`, which the contest term
+    // and the recognition threshold both go through, and the combat-tab input that binds to the same
+    // flag). The store is `flags.cp2020-augmented.reputation` — same scope as the provenance block
+    // below, one level up from it, exactly the path the reader owns.
+    flags: { [SCOPE]: {
+      reputation: Number(bp.reputation) || 0,
+      goonFactory: {
+        grade: bp.grade, role: bp.role, roleRolled: !!bp.roleRolled,
+        outfitId: cfg.outfitId, basedOn: cfg.basedOn,
+        custom: !!cfg.custom, seed: bp.seed, rootSeed: bp.plan?.rootSeed ?? null,
+        index: bp.plan?.index ?? 0, statShape: cfg.statShape,
+        version: game.modules.get(SCOPE)?.version ?? "",
+      },
+    } },
     system: {
       role: { value: bp.role },
       stats: statsPayload(bp.stats),
-      reputation: bp.reputation,
       ...(gmNotes ? { notes: gmNotes } : {}),
     },
   });

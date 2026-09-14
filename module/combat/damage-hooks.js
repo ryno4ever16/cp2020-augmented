@@ -1716,7 +1716,24 @@ async function _runOverTimeTick(combat) {
           spReduction = 3;
         }
         if (spReduction > 0) {
-          await ablateLocationByAmount(actor, location, spReduction);
+          // ⛔ THE TYPE ARGUMENT IS LOAD-BEARING, exactly as it is on the heat tick below
+          // (`ablateLocationOnce(actor, location, "fire")`). Omitted, it defaults to `""` in
+          // DamageApplicator, and the layer walk's filter `typedLayerSP(item, sp, "") <= 0` reads a
+          // FULLY-TYPED garment (mechTypedSP.sp === 0 with a type set) as contributing nothing — so
+          // the whole layer was skipped and a matching garment never eroded.
+          //
+          // The literal is this branch's own type. `applyDotFromPayload` (save-rolls.js) routes
+          // every non-"fire" dotType into the marker this tick reads, and the ammo model's own
+          // `dotType` initial is "acid", so "acid" IS what the marker means — the marker itself
+          // records only location/turnsLeft/formula, which is why the type is stated here rather
+          // than carried.
+          //
+          // ⭐ THE ONE OPEN EDGE, and it is the model's answer, not a new rule: a garment typed
+          // against a DIFFERENT single type (a fire coat, mechTypedSP {fire, 0}) still reads 0 under
+          // this tick and is left untouched — it stopped nothing here, which is the same treatment
+          // the heat tick gives a corrosive-typed garment. A DUAL-VALUE typed layer (sp > 0, e.g.
+          // the radiation suit) falls back to its conventional SP and erodes normally.
+          await ablateLocationByAmount(actor, location, spReduction, "acid");
           actor.sheet?.render(false);
         }
         const newTurnsLeft = turnsLeft - 1;

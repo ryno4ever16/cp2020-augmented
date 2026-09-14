@@ -23,7 +23,7 @@ import { getAutoLayerOrder, getArmorHardness, LAYER_LAW } from "../combat/armor-
 import { layerEvPenalty } from "../combat/book-legality.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
-import { ipDisplayForActor, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
+import { ipDisplayForActor, levelUpSkill, toggleSkillLock, canEditSkillLevels } from "../ip/ip.js";
 import { shoppingEnabled, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
 import { actorExposure, actorHistory, actorRSP, radMarkersFor, actorHasRadiation, clearExposure, cureRadiation, resetRadiation, postLongTermCard } from "../radiation/radiation.js";
 import { openApplyDoseDialog } from "../radiation/radiation-tools.js";
@@ -1783,6 +1783,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const value = Number.parseInt(input.value, 10);
     const safeValue = Number.isFinite(value) ? value : 0;
 
+    // ⛔ THE LOCK IS ENFORCED AT THE WRITE, not only in the markup. `templates/actor/parts/skill.hbs`
+    // renders `readonly` while the lock is engaged, and that attribute was the ONLY expression of it —
+    // so any entry path that reaches this handler without it (a macro, a paste/autofill, a different
+    // sheet surface, a re-render race) wrote straight through a locked row. `canEditSkillLevels`
+    // (module/ip/ip.js) answers under whichever tier `ipSkillLockMode` selects — owner, GM or mutual —
+    // and had no callers at all until this one. Presentation is unchanged: the attribute stays, and is
+    // now the hint rather than the enforcement.
+    if (!canEditSkillLevels(this.actor)) {
+      ui.notifications?.warn?.(localizeParam("IpSkillLockRefused", { name: this.actor.name }));
+      // Put the row back to the stored value so the refused number does not sit there looking saved.
+      input.value = String(isChipped ? (skill.system.chipLevel ?? 0) : (skill.system.level ?? 0));
+      return;
+    }
+
     const targetKey = isChipped ? "system.chipLevel" : "system.level";
     await skill.update({ [targetKey]: safeValue }, { render: false });
 
@@ -1935,15 +1949,22 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    * (Stage A2); covered by tests/v14/actor-custom-controls.spec.js.
    */
   /**
-   * Build the GM-only radiation panel context (R3b): the running exposure, lifetime history, the actor's
-   * RSP, and a compact aggregate of the active radiation stat loss ("BT −2, REF −1"). Populated only for a
-   * GM AND only when the actor actually carries radiation (a marker, current exposure, or lifetime history)
-   * — otherwise `radiation.show` is false and combat.hbs skips the whole panel, keeping the sheet
-   * byte-identical for players and for anyone who has never been irradiated. There is no world toggle: the
-   * panel simply appears once a GM has dosed this actor. Mirrors _cpPrepareStatusVisibility.
+   * Build the radiation panel context (R3b): the running exposure, lifetime history, the actor's RSP, and
+   * a compact aggregate of the active radiation stat loss ("BT −2, REF −1"). Populated only when the actor
+   * actually carries radiation (a marker, current exposure, or lifetime history) — otherwise
+   * `radiation.show` is false and combat.hbs skips the whole panel, keeping the sheet byte-identical for
+   * anyone who has never been irradiated. There is no world toggle: the panel simply appears once a GM has
+   * dosed this actor. Mirrors _cpPrepareStatusVisibility.
+   *
+   * ⭐ VISIBILITY WIDENED TO THE OWNER, READ-ONLY (user ruling, 2026-08-29). The panel used to be GM-only,
+   * so the player carrying the dose could not see the number that was killing their character. The
+   * OWNING player now reads it; `canEdit` stays GM-only and the template disables every control for
+   * anyone else, so the read is all a player gains. Every action re-checks GM inside the radiation API,
+   * and the controls binding below refuses to arm for a non-GM — three doors, one answer.
    */
   _cpPrepareRadiation(sheetData) {
-    if (!game.user.isGM || !actorHasRadiation(this.actor)) { sheetData.radiation = { show: false }; return; }
+    const canSee = game.user.isGM || this.actor?.isOwner === true;
+    if (!canSee || !actorHasRadiation(this.actor)) { sheetData.radiation = { show: false }; return; }
     const actor = this.actor;
 
     // Aggregate every active marker's stat mods into one signed-per-stat summary for the readout.
@@ -1962,6 +1983,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
     sheetData.radiation = {
       show: true,
+      canEdit: game.user.isGM === true,
       exposure: actorExposure(actor),
       history: actorHistory(actor),
       rsp: actorRSP(actor),
@@ -1970,14 +1992,18 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   }
 
   /**
-   * Wire the GM-only radiation panel buttons (R3b) — native bind-once on the persistent root (the
-   * _cpActivate* idiom). The buttons only exist in the DOM for a GM (combat.hbs guards on radiation.show),
-   * and every action re-checks GM/owner in the radiation API, so this is defence-in-depth. Apply opens the
-   * dose dialog for THIS actor; long-term posts the reference card; clear/cure mutate + let the flag write
-   * re-render the sheet (the readout refreshes off the updated flags).
+   * Wire the radiation panel buttons (R3b) — native bind-once on the persistent root (the _cpActivate*
+   * idiom). Apply opens the dose dialog for THIS actor; long-term posts the reference card; clear/cure
+   * mutate + let the flag write re-render the sheet (the readout refreshes off the updated flags).
+   *
+   * ⛔ THE BINDING ITSELF IS GM-ONLY. Since the panel became owner-VISIBLE (read-only, see
+   * _cpPrepareRadiation), a non-GM owner renders the same controls carrying the template's `disabled`
+   * attribute; refusing to arm the listener at all is the second door behind it, and every action
+   * re-checks GM inside the radiation API as the third.
    */
   _cpActivateRadiationControls(root) {
     if (!root?.addEventListener) return;
+    if (game.user?.isGM !== true) return;
     const editable = this.isEditable ?? this.options?.editable ?? false;
     if (!editable) return;
     if (root.dataset.cpRadiationControlsBound === "1") return;

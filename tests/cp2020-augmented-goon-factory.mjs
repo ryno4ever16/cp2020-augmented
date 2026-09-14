@@ -542,6 +542,49 @@ const r = await p.evaluate(async () => {
     check("a second generation CONTINUES the numbering (4,5), it does not restart",
       JSON.stringify(secondNumbers) === JSON.stringify([4,5]), secondNumbers);
 
+    // ── THE PLANNED STANDING VALUE REACHES THE STORE THE READERS USE ──────────────────────────────
+    // The factory used to write the planned number to `system.reputation`, a path the base DataModel
+    // does not declare and therefore strips — so every generated figure read 0 at both consumers
+    // (the standing-social contest term and the recognition threshold). The store those readers own
+    // is the module flag `flags.cp2020-augmented.reputation` (module/actor/reputation.js), which the
+    // combat-tab input also binds to. This leg drives the real plan → materialize path with a
+    // constant formula so the planned number is deterministic, then reads the flag back and proves
+    // the number reaches the posted card's term.
+    {
+      const REP = await import("/modules/cp2020-augmented/module/actor/reputation.js");
+      const repPlan = await GF.planGoonSquad({
+        role: "solo", grade: "B", count: 1, seed: "__PW__rep", destinationFolder: locker,
+        overrides: { repFormula: "7" },
+      });
+      check("the plan carries the constant standing value", repPlan[0]?.bp?.reputation === 7, repPlan[0]?.bp?.reputation);
+      const repMade = await GF.materializeGoonSquad(repPlan, { mode: "existing", folderId: locker.id });
+      for (const m of repMade) madeActorIds.push(m.id);
+      const repActor = game.actors.get(repMade[0].id);
+      check("the created figure's flag reads the planned standing value back",
+        Number(repActor?.getFlag(SCOPE, "reputation")) === 7, repActor?.getFlag(SCOPE, "reputation"));
+      // NEGATIVE: the schema path is not where the value lives — a write there is discarded, which is
+      // exactly why the flag is the store.
+      check("the discarded schema path stays empty on the created figure",
+        repActor?.system?.reputation === undefined, repActor?.system?.reputation);
+
+      // The consumer's own output: the standing-social card's term must be the planned number, and the
+      // rolled total must decompose into die + COOL + that term.
+      const beforeIds = new Set(game.messages.contents.map(m => m.id));
+      const targetsBefore = [...(game.user.targets ?? [])];
+      game.user.targets?.clear?.();
+      await REP.rollFacedown(repActor);
+      await sleep(400);
+      const card = game.messages.contents.find(m => !beforeIds.has(m.id));
+      const cardText = String(card?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+      const cool = Number(repActor?.system?.stats?.cool?.total) || 0;
+      const rolledTotal = Number(card?.rolls?.[0]?.total ?? NaN);
+      check("the standing-social card carries the planned term", /Reputation 7\b/.test(cardText), cardText.slice(0, 220));
+      check("the card's total decomposes into die + COOL + the standing term",
+        Number.isFinite(rolledTotal) && (rolledTotal - cool - 7) >= 1, { rolledTotal, cool });
+      await card?.delete().catch(() => {});
+      for (const t of targetsBefore) t.setTarget(true, { releaseOthers: false, groupSelection: true });
+    }
+
     // ── §2.4 THE GUARANTEE FOLLOWS THE PULLED WEAPON ──────────────────────────────────────────────
     const row0 = planRows[0];
     const wantSkill = BP.weaponGoverningSkill(row0.weapon);

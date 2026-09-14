@@ -241,6 +241,132 @@ const r = await p.evaluate(async () => {
       }
     }
 
+    // ══ THE TICK RESOLVES THE COMBAT'S SCENE, NOT THE VIEWED ONE ═════════════════════════════════
+    // The pass used to open on `canvas.scene`, so a referee looking at any other scene lost that
+    // round's accrual outright — nothing deferred, nothing replayed. Both directions are asserted:
+    // the combat's own scene wins while another is viewed, and a MANUAL call carrying no combat still
+    // falls back to the viewed scene.
+    {
+      const SCENE_BOX = { x: 12000, y: 12000, w: 800, h: 800 };
+      const sceneInside = { x: SCENE_BOX.x + SCENE_BOX.w / 2, y: SCENE_BOX.y + SCENE_BOX.h / 2 };
+      const viewedBefore = canvas?.scene ?? null;
+      let otherScene = null, sceneCombat = null;
+      try {
+        await makeRegion({ behavior: true, formula: "100", box: SCENE_BOX });
+        const aScene = await Actor.create({ name: "__PW__RadDelta", type: "character" }); madeActors.push(aScene.id);
+        const [tScene] = await scene.createEmbeddedDocuments("Token", [{
+          name: aScene.name, actorId: aScene.id, actorLink: true,
+          x: sceneInside.x - 50, y: sceneInside.y - 50, width: 1, height: 1,
+        }]);
+        // The region layer must have registered the figure as inside before the round is advanced.
+        for (let i = 0; i < 40 && !(tScene._regions ?? []).length; i++) await sleep(200);
+        check("the far zone registers its figure before the view moves away",
+          (tScene._regions ?? []).length > 0, tScene._regions);
+        // Deliberately NOT activated: the per-round hook listens to `updateCombat` for any combat, and
+        // an activated combat is world state this section would have to unwind.
+        sceneCombat = await Combat.create({ scene: scene.id });
+        await sceneCombat.createEmbeddedDocuments("Combatant", [{ tokenId: tScene.id, actorId: aScene.id }]);
+        await sceneCombat.startCombat();
+        await sleep(600);
+
+        // Look somewhere else entirely. `view()` only — activating is a world write and is the rig's
+        // job, never a spec's.
+        otherScene = await Scene.create({ name: "__PW__RadOtherScene", width: 2000, height: 2000 });
+        await otherScene.view();
+        await sleep(800);
+        check("the run is looking at a DIFFERENT scene from the combat's",
+          canvas?.scene?.id === otherScene.id && sceneCombat.scene?.id === scene.id,
+          { viewed: canvas?.scene?.name, combatScene: sceneCombat.scene?.name });
+
+        await sceneCombat.update({ round: (Number(sceneCombat.round) || 1) + 1, turn: 0 });
+        for (let i = 0; i < 60 && !Number.isFinite(Number(aScene.getFlag(SCOPE, "radExposure"))); i++) await sleep(250);
+        check("SCENE RESOLUTION: the round doses the figure on the COMBAT's scene while another is viewed",
+          Number(aScene.getFlag(SCOPE, "radExposure")) === 100,
+          { radExposure: aScene.getFlag(SCOPE, "radExposure"), viewed: canvas?.scene?.name });
+
+        // The other direction: a manual call with no combat still reads the VIEWED scene, which here
+        // carries no zone at all — so nobody on it accrues and the figure on the other scene is not
+        // re-dosed by a pass that was never told about it.
+        const beforeManual = Number(aScene.getFlag(SCOPE, "radExposure")) || 0;
+        await RZ.runRadZoneTick();
+        await sleep(600);
+        check("FALLBACK: a manual pass with no combat reads the viewed scene (no zones there, no accrual)",
+          (Number(aScene.getFlag(SCOPE, "radExposure")) || 0) === beforeManual,
+          { before: beforeManual, after: aScene.getFlag(SCOPE, "radExposure") });
+      } finally {
+        try { if (sceneCombat) await sceneCombat.delete(); } catch (e) { /* gone */ }
+        try { if (viewedBefore) await viewedBefore.view(); } catch (e) { /* no canvas */ }
+        await sleep(600);
+        try { if (otherScene) await otherScene.delete(); } catch (e) { /* gone */ }
+        for (const m of [...game.messages].filter(m => /__PW__RadDelta/.test(m.content ?? ""))) {
+          try { await m.delete(); } catch (e) { /* gone */ }
+        }
+      }
+    }
+
+    // ══ THE ROUND ANNOUNCES THE DOSE IT LANDED (user ruling, 2026-08-29) ══════════════════════════
+    // Routine accrual used to be silent — the zone spoke only when somebody crossed a band — so a
+    // field that was steadily irradiating the party read as inert. Every figure below takes a dose
+    // BELOW the first effects band, so pre-ruling there was no card at all.
+    {
+      const HID_BOX  = { x: 14000, y: 14000, w: 800, h: 800 };
+      const OPEN_BOX = { x: 16000, y: 16000, w: 800, h: 800 };
+      const BAND_BOX = { x: 18000, y: 18000, w: 800, h: 800 };
+      const mid = (box) => ({ x: box.x + box.w / 2 - 50, y: box.y + box.h / 2 - 50 });
+      const cardsNaming = (name) => [...game.messages].filter(m =>
+        (m.content ?? "").includes(name) && /Irradiated this turn/i.test(m.content ?? ""));
+      try {
+        await makeRegion({ behavior: true, formula: "10", box: HID_BOX });
+        await makeRegion({ behavior: true, formula: "10", box: OPEN_BOX });
+        await makeRegion({ behavior: true, formula: "60", box: BAND_BOX });
+
+        const mkInside = async (name, box, hidden) => {
+          const a = await Actor.create({ name, type: "character" }); madeActors.push(a.id);
+          const at = mid(box);
+          await scene.createEmbeddedDocuments("Token", [{ name, actorId: a.id, actorLink: true,
+            x: at.x, y: at.y, width: 1, height: 1, hidden }]);
+          return a;
+        };
+        const aHidden = await mkInside("__PW__RadEpsilon", HID_BOX, true);
+        const aOpen   = await mkInside("__PW__RadZeta",    OPEN_BOX, false);
+        const aBand   = await mkInside("__PW__RadEta",     BAND_BOX, false);
+        await sleep(900);
+
+        await RZ.runRadZoneTick();
+        for (let i = 0; i < 60 && cardsNaming("__PW__RadZeta").length < 1; i++) await sleep(250);
+
+        check("ANNOUNCE: a dose that crosses NO effects band still posts the round card",
+          cardsNaming("__PW__RadZeta").length === 1 && Number(aOpen.getFlag(SCOPE, "radExposure")) === 10,
+          { cards: cardsNaming("__PW__RadZeta").length, radExposure: aOpen.getFlag(SCOPE, "radExposure") });
+
+        const openCard = cardsNaming("__PW__RadZeta")[0];
+        check("ANNOUNCE: the card for an unhidden figure is public",
+          (openCard?.whisper ?? []).length === 0, openCard?.whisper);
+        const openText = (openCard?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+        check("ANNOUNCE: a plain accrual carries no effects clause",
+          !/Radiation effects landed on/i.test(openText), openText.slice(0, 200));
+        check("ANNOUNCE: the card leaks no raw i18n key and no unfilled parameter",
+          !/CYBERPUNK\./.test(openCard?.content ?? "") && !/\{effectsClause\}|\{names\}/.test(openCard?.content ?? ""),
+          openText.slice(0, 200));
+
+        const gmIds = (globalThis.ChatMessage?.getWhisperRecipients?.("GM") ?? []).map(u => u.id).sort();
+        const hidCard = cardsNaming("__PW__RadEpsilon")[0];
+        check("ANNOUNCE: the card naming a HIDDEN figure is whispered to exactly the GM ids",
+          gmIds.length > 0 && JSON.stringify([...(hidCard?.whisper ?? [])].sort()) === JSON.stringify(gmIds),
+          { whisper: hidCard?.whisper, gmIds });
+
+        const bandCard = cardsNaming("__PW__RadEta")[0];
+        const bandText = (bandCard?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+        check("ANNOUNCE: a figure that DID cross a band is named in the effects clause too",
+          /Radiation effects landed on/i.test(bandText) && Number(aBand.getFlag(SCOPE, "radExposure")) === 60,
+          { text: bandText.slice(0, 220), radExposure: aBand.getFlag(SCOPE, "radExposure") });
+      } finally {
+        for (const m of [...game.messages].filter(m => /__PW__Rad(Epsilon|Zeta|Eta)/.test(m.content ?? ""))) {
+          try { await m.delete(); } catch (e) { /* gone */ }
+        }
+      }
+    }
+
     // ── Migration: a legacy flag-tagged region gains the behavior + loses the flag (no double dose) ──
     // On its OWN box: this region gains a rad-zone behavior when it migrates, and a behavior becoming
     // active raises TOKEN_ENTER for everyone already inside it (one of the four documented entry
@@ -274,8 +400,17 @@ const r = await p.evaluate(async () => {
 });
 
 for (const line of r.checks) console.log(line);
-const errOk = errors.length === 0;
-console.log(`${errOk?"  PASS":"  FAIL"}  0 console errors${errOk?"":"  got="+JSON.stringify(errors.slice(0,6))}`);
+// ⛔ ONE NARROW EXCLUSION, ROOT-CAUSED RATHER THAN WAIVED. Looking at a scene other than the one a
+// combat is running on makes core's own combat tracker throw
+// `Cannot use 'in' operator to search for 'turn' in undefined` from `CombatTracker._onRender`
+// (foundry.mjs). Reproduced on this rig with a standalone probe using ONLY core APIs — Combat.create /
+// startCombat / Scene.create / Scene#view, no module code in the path, and with the combat both
+// activated and not. The scene-resolution section below cannot be driven without that gesture, so the
+// exact message is excluded here and nothing else is.
+const CORE_TRACKER_RENDER_FAULT = /Cannot use 'in' operator to search for 'turn' in undefined/;
+const productErrors = errors.filter(e => !CORE_TRACKER_RENDER_FAULT.test(e));
+const errOk = productErrors.length === 0;
+console.log(`${errOk?"  PASS":"  FAIL"}  0 console errors${errOk?"":"  got="+JSON.stringify(productErrors.slice(0,6))}`);
 const failed = r.fails.length + (errOk ? 0 : 1);
 console.log(`\n${r.checks.length + 1} checks, ${failed} failed`);
 await b.close();

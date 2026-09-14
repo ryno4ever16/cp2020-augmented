@@ -161,6 +161,53 @@ const r = await p.evaluate(async () => {
     await dlgApp?.close?.();
     await sleep(200);
 
+    // (5b-2) THE OWNER READS IT, READ-ONLY (user ruling, 2026-08-29). The panel used to be GM-only, so
+    // the player carrying the dose could not see the number. A non-GM viewer is simulated the same way
+    // the tool-registration negative above does it — by shadowing `isGM` — and the sheet is re-rendered
+    // through the real render path, so the context flag AND the rendered controls are both read.
+    out.ownerView = {};
+    try {
+      Object.defineProperty(game.user, "isGM", { value: false, configurable: true });
+      out.ownerView.isOwnerWithoutGm = ps.isOwner === true;
+      await ps.sheet.render(true);
+      await sleep(600);
+      const oRoot = ps.sheet.element;
+      oRoot?.querySelector?.('.sheet-tabs [data-tab="combat"], a[data-tab="combat"], .item[data-tab="combat"]')?.click?.();
+      await sleep(300);
+      const oPanel = oRoot?.querySelector?.(".cp-radiation-panel");
+      const oButtons = oPanel ? [...oPanel.querySelectorAll(".radiation-actions button")] : [];
+      out.ownerView.present = !!oPanel;
+      out.ownerView.readouts = oPanel ? [...oPanel.querySelectorAll(".cp-rad-readout")].map(e => e.textContent.trim()) : [];
+      out.ownerView.buttonCount = oButtons.length;
+      out.ownerView.allDisabled = oButtons.length > 0 && oButtons.every(bn => bn.disabled === true);
+      // The context flag that gates the template, read straight off the builder.
+      const ctx = {};
+      ps.sheet._cpPrepareRadiation(ctx);
+      out.ownerView.context = { show: ctx.radiation?.show, canEdit: ctx.radiation?.canEdit };
+
+      // NEGATIVE: a viewer who is neither GM nor owner gets no panel at all. Read at the GATE rather
+      // than in the DOM — a sheet whose document the viewer may no longer see is not re-rendered by
+      // the framework at all, so the stale markup of the previous render would answer instead.
+      await ps.update({ ownership: { default: 0, [game.user.id]: 0 } });
+      await sleep(300);
+      out.ownerView.isOwnerAfterStrip = ps.isOwner === true;
+      const nonOwnerCtx = {};
+      ps.sheet._cpPrepareRadiation(nonOwnerCtx);
+      out.ownerView.nonOwnerShow = nonOwnerCtx.radiation?.show;
+    } finally {
+      delete game.user.isGM;
+      await ps.update({ ownership: { default: 0, [game.user.id]: 3 } }).catch(() => {});
+      await sleep(200);
+    }
+    // The GM's own controls come back live after the shadow is removed.
+    await ps.sheet.render(true);
+    await sleep(500);
+    const gmRoot = ps.sheet.element;
+    gmRoot?.querySelector?.('.sheet-tabs [data-tab="combat"], a[data-tab="combat"], .item[data-tab="combat"]')?.click?.();
+    await sleep(300);
+    const gmButtons = [...(gmRoot?.querySelectorAll?.(".cp-radiation-panel .radiation-actions button") ?? [])];
+    out.ownerView.gmButtonsEnabled = gmButtons.length > 0 && gmButtons.every(bn => bn.disabled === false);
+
     // (5c) NEGATIVE (the new gate): strip all radiation state → the panel must disappear (no world toggle).
     await ps.unsetFlag(SCOPE, "radState");
     await ps.unsetFlag(SCOPE, "radExposure");
@@ -235,6 +282,18 @@ ok("panel has apply/longterm/clear/cure", r.panel?.hasApplyBtn && r.panel?.hasLo
 ok("panel no raw CYBERPUNK. key", r.panel?.noRawKey, r.panel);
 ok("panel Apply button opens dialog (gesture)", r.applyGesture?.opened && r.applyGesture?.hasRadsField, r.applyGesture);
 ok("panel hidden when actor has no radiation", r.panelHiddenNoRad, r.panelHiddenNoRad);
+
+// (5b-2) owner-visible, read-only
+ok("the simulated non-GM viewer still owns the actor", r.ownerView?.isOwnerWithoutGm === true, r.ownerView);
+ok("OWNER VIEW: the panel renders for a non-GM owner", r.ownerView?.present === true, r.ownerView);
+ok("OWNER VIEW: the readouts carry the values (42 / 130 / 6)",
+  ["42", "130", "6"].every(v => (r.ownerView?.readouts ?? []).includes(v)), r.ownerView?.readouts);
+ok("OWNER VIEW: every control is disabled for a non-GM", r.ownerView?.allDisabled === true, r.ownerView);
+eq("OWNER VIEW: the gating context reads show:true canEdit:false", r.ownerView?.context, { show: true, canEdit: false });
+ok("NEGATIVE: a viewer who is neither GM nor owner gets no panel",
+  r.ownerView?.isOwnerAfterStrip === false && r.ownerView?.nonOwnerShow === false, r.ownerView);
+ok("the GM's own controls are live again once the shadow is removed",
+  r.ownerView?.gmButtonsEnabled === true, r.ownerView);
 
 // console
 ok("0 console errors", errors.length === 0, errors.slice(0, 6));

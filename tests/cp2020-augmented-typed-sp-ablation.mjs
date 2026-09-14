@@ -66,6 +66,57 @@ const r = await p.evaluate(async () => {
   out.byAmountBullet = torsoSP(sal2);                           // 15 — unchanged
 
   for (const a of [sal, plain, sal2]) await a.delete().catch(() => {});
+
+  // ── (6) THE OVER-TIME TICK PASSES ITS TYPE ARGUMENT ───────────────────────────────────────────
+  // The pure legs above prove the predicate; this one proves the CALL SITE. The corrosive per-turn
+  // tick (module/combat/damage-hooks.js) used to call ablateLocationByAmount with three arguments,
+  // so the damage-type defaulted to "" and the layer walk skipped every fully-typed garment — the
+  // marker counted down while the armor never eroded. Driven through a real combat round advance.
+  const acidGarment = () => ({ name: "__PW__AcidCoat", type: "armor",
+    system: { equipped: true, armorType: "Soft", coverage: covUniform(20), mechTypedSP: { type: "acid", sp: 0 } } });
+  const fireGarment = () => ({ name: "__PW__FireCoat", type: "armor",
+    system: { equipped: true, armorType: "Soft", coverage: covUniform(20), mechTypedSP: { type: "fire", sp: 0 } } });
+  const plainGarment = () => ({ name: "__PW__PlainCoat", type: "armor",
+    system: { equipped: true, armorType: "Soft", coverage: covUniform(20) } });
+
+  const tickBefore = game.settings.get("cp2020-augmented", "mechRoundTickAutomation");
+  const msgIdsBefore = new Set(game.messages.contents.map(m => m.id));
+  const scene = game.scenes.viewed ?? game.scenes.active ?? game.scenes.contents[0];
+  const madeActors = [];
+  /** Seed a corrosive marker on one figure and advance one real combat round with it as the current
+   *  combatant. Returns { before, after, turnsLeft } — SP at Torso either side of the tick. */
+  const tickOnce = async (label, itemData) => {
+    const a = await mk(label, itemData);
+    madeActors.push(a);
+    await a.setFlag("cp2020-augmented", "dotState", [{ location: "Torso", turnsLeft: 3, formula: "3" }]);
+    const before = torsoSP(a);
+    let tok = null, combat = null;
+    try {
+      [tok] = await scene.createEmbeddedDocuments("Token", [{ name: label, actorId: a.id, actorLink: true, x: 1500, y: 1500, hidden: true }]);
+      combat = await Combat.create({ scene: scene.id, active: true });
+      await combat.createEmbeddedDocuments("Combatant", [{ tokenId: tok.id, actorId: a.id }]);
+      await combat.startCombat();          // round 0→1: the begin-combat guard skips ticking here
+      await sleep(300);
+      const turns = () => (a.getFlag("cp2020-augmented", "dotState") ?? [])[0]?.turnsLeft ?? null;
+      await combat.nextRound();            // round 1→2: the marker's own countdown proves the tick ran
+      for (let i = 0; i < 30 && turns() === 3; i++) await sleep(200);
+      return { before, after: torsoSP(a), turnsLeft: turns() };
+    } finally {
+      await combat?.delete().catch(() => {});
+      await tok?.delete().catch(() => {});
+    }
+  };
+
+  try {
+    await game.settings.set("cp2020-augmented", "mechRoundTickAutomation", true);
+    out.tickTyped = await tickOnce("__PW__AblSP TickTyped", acidGarment());
+    out.tickPlain = await tickOnce("__PW__AblSP TickPlain", plainGarment());
+    out.tickOtherType = await tickOnce("__PW__AblSP TickOther", fireGarment());
+  } finally {
+    await game.settings.set("cp2020-augmented", "mechRoundTickAutomation", tickBefore);
+    for (const a of madeActors) await a.delete().catch(() => {});
+    for (const m of game.messages.contents) if (!msgIdsBefore.has(m.id)) await m.delete().catch(() => {});
+  }
   return out;
 });
 
@@ -78,6 +129,12 @@ const checks = {
   plainArmorStillAblates: r.plainAfter === 17,
   byAmountFireAblates: r.byAmountFire === 15,
   byAmountBulletNoErode: r.byAmountBullet === 15,
+  // (6) the tick's own type argument — the marker counts down in every leg, so a red here is the
+  // layer being skipped rather than the tick failing to run.
+  tickMarkerCountedDown: [r.tickTyped, r.tickPlain, r.tickOtherType].every(t => t?.turnsLeft === 2),
+  tickErodesMatchingTypedLayer: r.tickTyped?.before === 20 && r.tickTyped?.after === 17,
+  tickErodesPlainLayer: r.tickPlain?.before === 20 && r.tickPlain?.after === 17,
+  tickLeavesOtherTypedLayerAlone: r.tickOtherType?.before === 20 && r.tickOtherType?.after === 20,
   wrapNeverThrew: !warns.some(w => /typed armor display failed/.test(w)),
   noConsoleErrors: errors.length === 0,
 };

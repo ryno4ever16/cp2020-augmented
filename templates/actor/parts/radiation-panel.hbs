@@ -1,11 +1,14 @@
 {{!--
-  radiation-panel.hbs — GM-only Deep Space radiation hub (R3b). Included from combat.hbs, guarded on
-  `radiation.show` (GM + the actor actually carries radiation — a marker, current exposure, or lifetime
-  history). Shows the running exposure, lifetime history,
-  the actor's RSP, and any active radiation stat loss, plus the four GM controls (apply dose to this actor,
-  roll the long-term reference, clear the current exposure, cure the stat loss). The .cp-rad-* buttons are
-  handled by _cpActivateRadiationControls in module/actor/actor-sheet.js. Readout values are built in
-  _prepareContext. i18n via CPLocal; no HTML/CSS in JS.
+  radiation-panel.hbs — the Deep Space radiation hub (R3b). Included from combat.hbs, guarded on
+  `radiation.show` (GM or the OWNING player, and the actor actually carries radiation — a marker, current
+  exposure, or lifetime history). Shows the running exposure, lifetime history,
+  the actor's RSP, and any active radiation stat loss, plus the five controls (apply dose to this actor,
+  roll the long-term reference, clear the current exposure, cure the stat loss, reset). The .cp-rad-*
+  buttons are handled by _cpActivateRadiationControls in module/actor/actor-sheet.js. Readout values are
+  built in _prepareContext. i18n via CPLocal; no HTML/CSS in JS.
+
+  ⭐ READ-ONLY FOR A NON-GM VIEWER (user ruling, 2026-08-29): `radiation.canEdit` is GM-only, and every
+  control carries `disabled` without it — the owner reads the dose, the GM is the only one who moves it.
 --}}
 <section class="radiation-section cp-radiation-panel">
   <header>
@@ -36,10 +39,10 @@
   {{/if}}
 
   <div class="radiation-actions">
-    <button type="button" class="cp-rad-apply" title="{{CPLocal 'RadBtnApplyHint'}}">☢ {{CPLocal "RadBtnApply"}}</button>
-    <button type="button" class="cp-rad-longterm" title="{{CPLocal 'RadBtnLongTermHint'}}">🧬 {{CPLocal "RadBtnLongTerm"}}</button>
-    <button type="button" class="cp-rad-clear" title="{{CPLocal 'RadBtnClearHint'}}">{{CPLocal "RadBtnClear"}}</button>
-    <button type="button" class="cp-rad-cure" title="{{CPLocal 'RadBtnCureHint'}}">{{CPLocal "RadBtnCure"}}</button>
-    <button type="button" class="cp-rad-reset" title="{{CPLocal 'RadBtnResetHint'}}">🗑 {{CPLocal "RadBtnReset"}}</button>
+    <button type="button" class="cp-rad-apply" title="{{CPLocal 'RadBtnApplyHint'}}" {{#unless radiation.canEdit}}disabled{{/unless}}>☢ {{CPLocal "RadBtnApply"}}</button>
+    <button type="button" class="cp-rad-longterm" title="{{CPLocal 'RadBtnLongTermHint'}}" {{#unless radiation.canEdit}}disabled{{/unless}}>🧬 {{CPLocal "RadBtnLongTerm"}}</button>
+    <button type="button" class="cp-rad-clear" title="{{CPLocal 'RadBtnClearHint'}}" {{#unless radiation.canEdit}}disabled{{/unless}}>{{CPLocal "RadBtnClear"}}</button>
+    <button type="button" class="cp-rad-cure" title="{{CPLocal 'RadBtnCureHint'}}" {{#unless radiation.canEdit}}disabled{{/unless}}>{{CPLocal "RadBtnCure"}}</button>
+    <button type="button" class="cp-rad-reset" title="{{CPLocal 'RadBtnResetHint'}}" {{#unless radiation.canEdit}}disabled{{/unless}}>🗑 {{CPLocal "RadBtnReset"}}</button>
   </div>
 </section>

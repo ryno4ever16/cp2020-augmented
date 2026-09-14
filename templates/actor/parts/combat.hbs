@@ -110,9 +110,10 @@
 
     </section>
 
-    {{!-- GM-only Deep Space radiation hub (R3b): dose readout + apply/long-term/clear/cure controls.
-          Present only when the radiation subsystem is enabled AND the viewer is a GM (radiation.show is
-          built in _prepareContext#_cpPrepareRadiation). --}}
+    {{!-- Deep Space radiation hub (R3b): dose readout + apply/long-term/clear/cure controls. Present
+          only when the actor carries radiation AND the viewer is the GM or the actor's OWNER
+          (radiation.show is built in _prepareContext#_cpPrepareRadiation); the controls are disabled
+          for a non-GM viewer, so an owner reads the dose and only the GM moves it. --}}
     {{#if radiation.show}}
     {{> "modules/cp2020-augmented/templates/actor/parts/radiation-panel.hbs" radiation=radiation}}
     {{/if}}

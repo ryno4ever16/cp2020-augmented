@@ -770,6 +770,86 @@ try {
   });
   failures += report("7 — the restored item-sheet IP field + resize geometry", S7.checks);
 
+  /*  Section 8 — the skill-level row's write path enforces the lock     */
+  /* ------------------------------------------------------------------ */
+  // The lock used to exist ONLY as a `readonly` attribute in skill.hbs; `canEditSkillLevels` had zero
+  // callers, and the sheet's change handler wrote with no check at all. So any entry path that reached
+  // the handler without the attribute — a macro, a paste/autofill, a re-render race — wrote straight
+  // through a locked row. These legs drive exactly that: strip the attribute, dispatch a real change,
+  // and read the DOCUMENT.
+  const S8 = await page.evaluate(async () => {
+    const SCOPE = "cp2020-augmented";
+    const checks = [];
+    const push = (name, pass, got) => checks.push({ name, pass: !!pass, got });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    let actor = null, modeBefore = null;
+    const warned = [];
+    const origWarn = ui.notifications?.warn;
+    try {
+      const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
+      modeBefore = game.settings.get(SCOPE, "ipSkillLockMode");
+      await game.settings.set(SCOPE, "ipSkillLockMode", "owner");
+
+      for (const x of game.actors.filter(x => x.name === "__PW__ IP RowGate")) await x.delete().catch(() => {});
+      actor = await Actor.create({ name: "__PW__ IP RowGate", type: "character" });
+      const skill = actor.items.filter(i => i.type === "skill" && !i.system?.isChipped)[0];
+      push("fixture carries an editable skill row", !!skill, skill?.name);
+      await skill.update({ "system.level": 0 });
+
+      // Engage the lock through the module's own control, not by writing the flag by hand.
+      if (!IP.ipLockState(actor).locked) await IP.toggleSkillLock(actor);
+      await sleep(200);
+      push("the lock is engaged under the owner tier", IP.ipLockState(actor).locked === true, IP.ipLockState(actor));
+      push("the gate answers no", IP.canEditSkillLevels(actor) === false, IP.canEditSkillLevels(actor));
+
+      await actor.sheet.render(true);
+      await sleep(700);
+      const rowOf = () => actor.sheet.element?.querySelector(`input.skill-level[data-skill-id="${skill.id}"]`);
+      push("the row renders with the presentation hint intact (readonly)",
+        rowOf()?.hasAttribute("readonly") === true, rowOf()?.outerHTML?.slice(0, 140));
+
+      // THE REPRO: remove the attribute, type a number, dispatch the real change event.
+      ui.notifications.warn = (m, ...rest) => { warned.push(String(m)); return origWarn?.call?.(ui.notifications, m, ...rest); };
+      const row = rowOf();
+      row.removeAttribute("readonly");
+      row.value = "9";
+      row.dispatchEvent(new Event("change", { bubbles: true }));
+      await sleep(900);
+      push("REFUSED: the stored level is unchanged after the dispatched change",
+        Number(actor.items.get(skill.id)?.system?.level) === 0, actor.items.get(skill.id)?.system?.level);
+      push("REFUSED: the refusal is announced", warned.length === 1, warned);
+      push("REFUSED: the notice is localized and names the figure",
+        warned.length === 1 && !warned[0].includes("CYBERPUNK.") && warned[0].includes(actor.name), warned[0]);
+      push("REFUSED: the row is put back to the stored value, not left showing the refused number",
+        rowOf()?.value === "0", rowOf()?.value);
+
+      // POSITIVE: release the lock and the same gesture writes.
+      await IP.toggleSkillLock(actor);
+      await sleep(300);
+      push("the gate answers yes once the lock is released", IP.canEditSkillLevels(actor) === true, IP.ipLockState(actor));
+      await actor.sheet.render(true);
+      await sleep(700);
+      const openRow = rowOf();
+      push("the row renders without the hint once unlocked", openRow?.hasAttribute("readonly") === false, openRow?.outerHTML?.slice(0, 140));
+      const warnedBefore = warned.length;
+      openRow.value = "7";
+      openRow.dispatchEvent(new Event("change", { bubbles: true }));
+      await sleep(900);
+      push("ALLOWED: the same gesture writes the value under a permitting lock state",
+        Number(actor.items.get(skill.id)?.system?.level) === 7, actor.items.get(skill.id)?.system?.level);
+      push("ALLOWED: nothing is announced on a permitted write", warned.length === warnedBefore, warned.slice(warnedBefore));
+    } catch (e) {
+      push("section 8 ran to completion", false, String(e?.message ?? e));
+    } finally {
+      if (origWarn) ui.notifications.warn = origWarn;
+      try { await actor?.sheet?.close(); } catch (e) { /* not open */ }
+      try { if (modeBefore !== null) await game.settings.set(SCOPE, "ipSkillLockMode", modeBefore); } catch (e) { /* not set */ }
+      try { await actor?.delete(); } catch (e) { /* gone */ }
+    }
+    return { checks };
+  });
+  failures += report("8 — The skill-level row's write path enforces the lock", S8.checks);
+
   const clean = pageErrors.length === 0;
   console.log(`\n  [${clean ? "PASS" : "FAIL"}] ${"0 console errors".padEnd(62)} got=${pageErrors.length}`);
   if (!clean) { console.log("    " + pageErrors.slice(0, 8).join("\n    ")); failures++; }

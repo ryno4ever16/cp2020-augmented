@@ -34,7 +34,8 @@
  *
  * ── i18n keys referenced (CYBERPUNK.* namespace) ──
  *   RadZoneTurnTitle     (params { source })   — per-round card title
- *   RadZoneTurnBody      (params { names })     — per-round card body (who suffered an effect)
+ *   RadZoneTurnBody      (params { names, effectsClause }) — per-round card body (who took a dose)
+ *   RadZoneEffectsClause (params { names })     — the clause naming who ALSO suffered an effect ("" when none)
  *   RadZoneDispersedBody (params { source })    — a legacy FINITE zone's expiry notice
  *   RadZoneBehaviorLabel (no params)            — the migrated behavior's document name
  *   Reused EXISTING key (from radiation.js): RadiationSourceDefault — the generic source-label fallback.
@@ -42,7 +43,7 @@
 
 import { deleteFieldUpdate, localize, localizeParam } from "../utils.js";
 import { mechRoundTickEnabled } from "../settings.js";
-import { postSavePromptCard } from "../compat.js";
+import { postSavePromptCard, getGMUserIds } from "../compat.js";
 import { areasByFlag, tokensInArea, deleteArea } from "../combat/area-shapes.js";
 import { applyRadiationDose } from "./radiation.js";
 import { RAD_ZONE_BEHAVIOR, radiationZoneBehaviorClass } from "./radiation-zone-behavior.js";
@@ -84,7 +85,8 @@ async function rollRads(formula) {
  */
 async function _doseZoneTokens({ radsFormula, sourceLabel, tokenDocs }) {
   const source = String(sourceLabel ?? "").trim() || localize("RadiationSourceDefault");   // display only
-  const dosed = [];
+  const dosed = [];      // took a net dose this round (the suit did not absorb all of it)
+  const affected = [];   // ALSO crossed a band / took damage / owes a death check
   for (const tokDoc of tokenDocs) {
     // Live actor: prefer the world document over the token's synthetic copy — the gas-cloud idiom, so the
     // dose lands on (and re-prepares) the real actor.
@@ -92,21 +94,36 @@ async function _doseZoneTokens({ radsFormula, sourceLabel, tokenDocs }) {
     if (!liveActor) continue;
     const rads = await rollRads(radsFormula);
     const res = await applyRadiationDose(liveActor, rads, { perTurn: true, sourceLabel, announce: false });
-    if (res && (res.bandFired != null || res.damageDealt > 0 || res.deathPosted)) dosed.push(tokDoc);
+    if (!res) continue;
+    if (res.net > 0) dosed.push(tokDoc);
+    if (res.bandFired != null || res.damageDealt > 0 || res.deathPosted) affected.push(tokDoc);
   }
-  // ONE short per-round zone card naming the field + who suffered an effect this round, IN ADDITION to
-  // applyRadiationDose's own per-actor cards. Posted only when someone crossed a band / took damage.
+  // ⭐ THE ROUND ANNOUNCES ITSELF (user ruling, 2026-08-29). It used to speak only when somebody crossed
+  // a band or took damage, so ordinary accrual was invisible and the field read as inert at the table —
+  // the same complaint that produced the entry cue. Now ONE card per round per zone reports who actually
+  // took a dose (a figure whose suit absorbed the whole thing took none and is not named), with the
+  // effect-sufferers called out in a clause beside them. Still one card, not one per figure per round:
+  // that cardinality is what the silence was protecting, and it is preserved.
   if (dosed.length) {
-    const names = dosed.map((t) => `<b>${t.name}</b>`).join(", ");
+    const nameList = (docs) => docs.map((t) => `<b>${t.name}</b>`).join(", ");
+    const effectsClause = affected.length
+      ? localizeParam("RadZoneEffectsClause", { names: nameList(affected) })
+      : "";
+    // ⛔ A HIDDEN FIGURE IS NOT NAMED IN THE OPEN. The zone's own region defaults to GAMEMASTER
+    // visibility and the entry cue is GM-whispered for that reason (radiation-zone-behavior.js); a card
+    // that names a hidden token publicly would hand the table the same answer the zone withholds. So the
+    // round card is whispered to the GM ids whenever ANY figure it names is hidden, and public otherwise.
+    const anyHidden = dosed.some((t) => t.hidden === true) || affected.some((t) => t.hidden === true);
     await postSavePromptCard({
       title: localizeParam("RadZoneTurnTitle", { source }),
-      body: localizeParam("RadZoneTurnBody", { names }),
+      body: localizeParam("RadZoneTurnBody", { names: nameList(dosed), effectsClause }),
+      ...(anyHidden ? { whisper: getGMUserIds() } : {}),
     });
   }
 }
 
 /**
- * Native radiation zones on the viewed scene: every Region carrying an ENABLED Radiation Zone behavior,
+ * Native radiation zones on the GIVEN scene: every Region carrying an ENABLED Radiation Zone behavior,
  * normalized to { radsFormula, sourceLabel, tokenDocs }. Tokens come from the region's native live
  * `tokens` Set (Foundry maintains who is inside). Empty on any scene with no such region.
  */
@@ -126,7 +143,8 @@ function regionRadZones(scene) {
 }
 
 /**
- * One per-round pass over every radiation zone on the viewed scene, from TWO sources:
+ * One per-round pass over every radiation zone on the COMBAT'S scene (falling back to the viewed one
+ * for a manual invocation that carries no combat), from TWO sources:
  *   1) NATIVE region zones — Regions carrying the Radiation Zone behavior (the model since this rework;
  *      the GM draws / hides / removes them with Foundry's own region tools).
  *   2) LEGACY flag zones — pre-behavior zones still tagged `flags.cp2020-augmented.isRadZone` (v13
@@ -136,7 +154,13 @@ function regionRadZones(scene) {
  * until radiation is in play.
  */
 export async function runRadZoneTick(combat) {
-  const scene = canvas?.scene;
+  // ⛔ THE COMBAT'S SCENE, NOT THE VIEWED ONE. This used to open on `canvas?.scene`, so a referee
+  // looking at any scene other than the one the fight is on lost that round's accrual outright —
+  // nothing was deferred and nothing was replayed, the round simply did not dose. The combat states
+  // which scene it belongs to; `canvas.scene` remains the fallback for a MANUAL invocation that
+  // carries no combat (the combat-tracker control and the keeper's direct calls both pass a plain
+  // object or nothing, and a combat with no scene of its own falls through the same way).
+  const scene = combat?.scene ?? canvas?.scene;
   if (!scene) return;
 
   // 1) Native region zones.
