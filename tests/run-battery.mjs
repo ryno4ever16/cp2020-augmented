@@ -61,6 +61,28 @@ for (const pair of String(process.env.CP_BATTERY_TIMEOUT_OVERRIDES || "").split(
 }
 const timeoutFor = (name) => SUITE_TIMEOUT_MS[name] ?? TIMEOUT_MS;
 
+/**
+ * Suites that certify a DIFFERENT core than the battery's target. The v13 spread-zone keeper asserts
+ * the MeasuredTemplates backend and can only run against the v13 rig; pointed at the v14 rig it fails
+ * its own §0 detect on purpose, which the battery then carried as a RED for a product that was never
+ * being tested (2026-09-15). Each entry names the rig it needs; the runner probes it once and, when it
+ * does not answer, records SKIPPED with the reason instead of running the suite against the wrong core.
+ * SKIPPED is its own verdict - not GREEN (nothing was certified) and not RED (nothing failed) - and the
+ * summary lists it so an unexercised core is visible rather than silently green.
+ */
+const SUITE_TARGET = {
+  "cp2020-augmented-spread-zone-v13": { url: "http://localhost:30003", reason: "templates backend (core v13) rig" },
+};
+async function rigAnswers(url) {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 4000);
+    const res = await fetch(`${url}/join`, { signal: ctl.signal, redirect: "manual" });
+    clearTimeout(timer);
+    return res.status > 0 && res.status < 500;
+  } catch { return false; }
+}
+
 const argv = process.argv.slice(2);
 const only = argv.includes("--only") ? argv[argv.indexOf("--only") + 1] : null;
 const listOnly = argv.includes("--list");
@@ -137,9 +159,20 @@ if (argv.includes("--rescrape")) {
 
 fs.writeFileSync(summaryPath, HEADER);
 
-function runOne(suite) {
+async function runOne(suite) {
+  const name = suite.replace(/\.mjs$/, "");
+  const target = SUITE_TARGET[name];
+  if (target) {
+    const up = await rigAnswers(target.url);
+    if (!up) {
+      const reason = `${target.reason} not answering at ${target.url}`;
+      fs.writeFileSync(path.join(LOG_DIR, `${name}.log`), `SKIPPED by the battery runner: ${reason}\n`);
+      fs.appendFileSync(summaryPath, `${name}\tSKIPPED\t-\t0\t0\t0.0\t${reason}\n`);
+      console.log(`SKIPPED ${name.padEnd(52)} ${"".padStart(4)}  ${"".padStart(3)}  ${"".padStart(7)}  (${reason})`);
+      return { name, verdict: "SKIPPED", code: "-", pass: 0, fail: 0, secs: "0.0", resultLine: reason };
+    }
+  }
   return new Promise((resolve) => {
-    const name = suite.replace(/\.mjs$/, "");
     const args = [];
     if (process.env.CP_COVERAGE === "1") args.push("--import", pathToFileURL(PRELOAD).href);
     args.push(path.join("tests", suite));
@@ -149,7 +182,7 @@ function runOne(suite) {
       cwd: ROOT,
       env: {
         ...process.env,
-        FVTT_URL: process.env.FVTT_URL || "http://localhost:30004",
+        FVTT_URL: target?.url ?? (process.env.FVTT_URL || "http://localhost:30004"),
         CP_COVERAGE_SUITE: name
       },
       stdio: ["ignore", "pipe", "pipe"]
@@ -293,7 +326,7 @@ for (const s of suites) {
   rows.push(row);
   sinceHeal++;
   if (!guardOn || !fs.existsSync(PREFLIGHT)) continue;
-  if (row.verdict !== "GREEN") { await healWorld(row.name); sinceHeal = 0; continue; }
+  if (row.verdict !== "GREEN" && row.verdict !== "SKIPPED") { await healWorld(row.name); sinceHeal = 0; continue; }
   if (HEAL_EVERY > 0 && sinceHeal >= HEAL_EVERY) {
     await healWorld(`${row.name} [periodic, every ${HEAL_EVERY}]`);
     sinceHeal = 0;
@@ -303,6 +336,7 @@ for (const s of suites) {
 const green = rows.filter((r) => r.verdict === "GREEN");
 const red = rows.filter((r) => r.verdict === "RED");
 const to = rows.filter((r) => r.verdict === "TIMEOUT");
+const skipped = rows.filter((r) => r.verdict === "SKIPPED");
 
 console.log("\n" + "=".repeat(96));
 console.log("BATTERY SUMMARY");
@@ -315,12 +349,16 @@ for (const r of rows) {
 }
 console.log("-".repeat(96));
 console.log(
-  `suites ${rows.length}   GREEN ${green.length}   RED ${red.length}   TIMEOUT ${to.length}   ` +
+  `suites ${rows.length}   GREEN ${green.length}   RED ${red.length}   TIMEOUT ${to.length}   SKIPPED ${skipped.length}   ` +
     `checks ${rows.reduce((a, r) => a + r.pass, 0)}P/${rows.reduce((a, r) => a + r.fail, 0)}F   ` +
     `wall ${((Date.now() - batteryStart) / 60000).toFixed(1)}min`
 );
 if (red.length || to.length) {
   console.log("\nNOT GREEN:");
   for (const r of [...red, ...to]) console.log(`  ${r.verdict}  ${r.name}  (exit ${r.code}, ${r.fail} failing checks)`);
+}
+if (skipped.length) {
+  console.log("\nSKIPPED (rig for that core not answering - nothing certified):");
+  for (const r of skipped) console.log(`  ${r.name}  (${r.resultLine})`);
 }
 process.exit(0);

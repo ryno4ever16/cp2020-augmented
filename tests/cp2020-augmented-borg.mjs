@@ -150,9 +150,12 @@ const r = await p.evaluate(async () => {
   // (9c) a hit OVER the chassis SP: only the penetrating remainder reaches SDP. 30 − 25 = 5 → 40→35.
   await spHit("Torso", 30); await sleep(500);
   out.spPenetrate = { cur: spCur("Torso") };  // 35
-  // (9d) AP halves the chassis SP (floor(25/2)=12): raw 30 → 18 through → 35 − 18 = 17.
+  // (9d) AP = one armor-piercing ROUND, applied once (resolveApProfile, user ruling 2026-09-14): the
+  // chassis SP halves (floor(25×0.5)=12) AND the penetrating remainder halves — raw 30 → 18 through →
+  // floor(18×0.5)=9 → 35 − 9 = 26. ⏪ Until 2026-09-14 the weapon flag halved SP only, and this leg
+  // pinned 17; that was the half-implementation the ruling retired.
   await spHit("Torso", 30, true); await sleep(500);
-  out.spAP = { cur: spCur("Torso") };  // 17
+  out.spAP = { cur: spCur("Torso") };  // 26
   // (9e) chassis SP COMBINES proportionally with worn armour (not a flat max): SP20 head layer + 25.
   await bsp.createEmbeddedDocuments("Item", [{
     name: "__PW__Helmet", type: "armor",
@@ -217,7 +220,7 @@ const checks = [
   ["intrinsic SP surfaces on the derived per-zone armour SP (chassis 25)", r.spDerived.hitLoc === 25 && r.spDerived.effective === 25],
   ["a hit at/under chassis SP (20 ≤ 25) is shrugged off — no SDP loss", r.spStopped.cur === 40],
   ["a hit over chassis SP: only the remainder reaches SDP (30−25=5 → 35)", r.spPenetrate.cur === 35],
-  ["AP halves the chassis SP (12): 30→18 through → 17", r.spAP.cur === 17],
+  ["AP = one AP round: chassis SP halved (12), remainder halved (18→9) → 35−9 = 26", r.spAP.cur === 26],
   ["chassis SP combines proportionally with worn armour (20+25 → 29)", r.spCombine.head === 29],
   ["stats pure: SET ref/ma/bt to the chassis values (15/25/20)", r.statsPure.ref === 15 && r.statsPure.ma === 25 && r.statsPure.bt === 20],
   ["stats pure: MA/BODY dependents re-derived (run 75, leap 18, carry 200, lift 800, BTM 5)", r.statsPure.run === 75 && r.statsPure.leap === 18 && r.statsPure.carry === 200 && r.statsPure.lift === 800 && r.statsPure.btm === 5],

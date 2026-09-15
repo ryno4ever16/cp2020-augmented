@@ -247,6 +247,19 @@ const res = await page.evaluate(async () => {
   // Nothing in the rail is queued behind a server round trip any more, so settling is a plain wait
   // for the fan-out's own timers rather than a drain on write quiescence.
   const drain = async (ms = 400) => { await sleep(ms); return true; };
+  // THE AUDIO PHASE IS A TIMER (effects.js FX_AUDIO_PHASE, shipped ON 2026-08-27): every rail sound is
+  // scheduled `audioPhaseMs()` after its round is issued, so a recorder read the instant a volley
+  // resolves sees only the plays whose timers have already fired. Six legs counted that way and went red
+  // the day the phase shipped (user ruling 2026-09-15: drain the phase before counting). This waits for
+  // the recorder to reach `expected` plays, BOUNDED by the phase's own ceiling plus one cadence per
+  // round plus slack, so a product that went silent still fails the count that follows it. Returns the
+  // wait it needed, for the log.
+  const drainAudio = async (expected, rounds = expected) => {
+    const bound = fx.FX_AUDIO_PHASE_MAX_MS + Math.max(1, rounds) * fx.SHOT_CADENCE_MS + 400;
+    const t0 = Date.now();
+    while (plays.length < expected && Date.now() - t0 < bound) await sleep(25);
+    return Date.now() - t0;
+  };
 
   /* ── flash-source helpers (the collection the flash actually lives in) ──── */
   const FLASH_PREFIX = `${SCOPE}.flash.`;
@@ -1371,8 +1384,9 @@ const res = await page.evaluate(async () => {
   const elapsed = Date.now() - t0;
   ok("fan-out: unit count from the payload", burst.shots === 5, JSON.stringify(burst));
   ok("fan-out: landed count from areaDamages", burst.hits === 2, String(burst.hits));
+  const burstDrainMs = await drainAudio(burst.shots - burst.dropped, burst.shots);
   ok("fan-out: one audio call per DRAWN round — a refused round is silent as well as unseen",
-    plays.length === burst.shots - burst.dropped, `${plays.length} plays, ${burst.shots} rounds, ${burst.dropped} dropped`);
+    plays.length === burst.shots - burst.dropped, `${plays.length} plays, ${burst.shots} rounds, ${burst.dropped} dropped (drained ${burstDrainMs}ms)`);
   const gaps = plays.slice(1).map((p, i) => p.t - plays[i].t);
   // Gaps between rounds that WERE drawn. Where a round in between was refused the gap is a multiple
   // of the cadence, never a fraction of it — which is the property the whole rule exists for.
@@ -1594,10 +1608,22 @@ const res = await page.evaluate(async () => {
     && aimedBurst.impacts?.queued === Math.min(aimedBurst.hits, fx.HIT_MARK_MAX_PER_PAYLOAD)
     && (aimedBurst.impacts?.refused ?? 0) <= (aimedBurst.impacts?.queued ?? 0),
     `${aimedBurst.dropped} refused, ${markSeqs.length} lone mark(s), ${aimedBurst.impacts?.queued} arrivals for ${aimedBurst.hits} hits`);
+  // ⏪ RE-PINNED 2026-09-15 (user ruling, after the phase shipped): this leg used to demand every
+  // sprite within 100ms of its audio on WALL time. On the headless software rasteriser the phase's own
+  // timer is starved by the renderer everything else waits on, so the picture LEADS its report by
+  // 250-385ms here (effects.js FX_AUDIO_PHASE records the measurement) while a client with a GPU does
+  // not. Wall-time sync is therefore a fact about this rig. What the product promises, and what is
+  // pinned: (a) the audio for every drawn round arrives once the phase has drained, and (b) audio never
+  // LEADS its sprite by more than the old tolerance — leading sound is the defect the phase exists to
+  // remove. The sprite-minus-audio gaps are still reported, as numbers, for the table listen.
+  await drainAudio(aimedBurst.shots - aimedBurst.dropped, aimedBurst.shots);
   const syncGaps = shotSeqPlays.map((t, i) => t - (plays[i]?.t ?? t));
-  ok("sync: every sprite starts within 100ms of its own round's audio",
+  ok("sync: every drawn round's audio arrives once the phase drains, and never leads its sprite by more than 100ms",
     syncGaps.length === aimedBurst.shots - aimedBurst.dropped && syncGaps.length > 0
-    && syncGaps.every(g => Math.abs(g) <= 100), `${syncGaps.join(",")} (${aimedBurst.dropped} dropped)`);
+    && plays.length >= syncGaps.length && syncGaps.every(g => g <= 100),
+    `${syncGaps.join(",")} (${aimedBurst.dropped} dropped, phase ${aimedBurst.audioPhaseMs ?? fx.audioPhaseMs()}ms)`);
+  ok("sync (report, rig-limited): sprite − audio gaps in ms, negative = picture led its report — a GPU client reads near 0",
+    true, `${syncGaps.join(",")}`);
   await drain();
 
   /* ── 6c. asset selection by round count, at the real fan-out call site ──── */
@@ -1609,6 +1635,7 @@ const res = await page.evaluate(async () => {
 
   plays = [];
   await fx.fxWeaponFired(shellPayload({ shotsFired: 1, areaDamages: { Torso: [{ damage: 5 }] } }));
+  await drainAudio(1);
   ok("fan-out: a single-round payload plays the class's full-bodied asset",
     plays.length === 1 && plays[0].src === `${dir}/shot-shotgun.ogg`, JSON.stringify(plays.map(p => p.src)));
   await sleep(700); await drain();
@@ -1617,6 +1644,7 @@ const res = await page.evaluate(async () => {
   const shellBurstT0 = Date.now();
   const shellBurst = await fx.fxWeaponFired(shellPayload({ shotsFired: 5, areaDamages: {} }));
   const shellElapsed = Date.now() - shellBurstT0;
+  await drainAudio(shellBurst.shots - shellBurst.dropped, shellBurst.shots);
   ok("fan-out: every DRAWN round of a multi-round payload plays the class's short asset",
     plays.length === shellBurst.shots - shellBurst.dropped && plays.length > 0
     && plays.every(p => p.src === `${dir}/shot-shotgun-burst.ogg`),
@@ -1740,6 +1768,7 @@ const res = await page.evaluate(async () => {
   const noCount = await fx.fxWeaponFired(payload({ shotsFired: undefined,
     areaDamages: { Torso: [{ damage: 1 }], Head: [{ damage: 2 }, { damage: 3 }] } }));
   ok("fallback: count derived from landed rounds when absent", noCount.shots === 3 && noCount.hits === 3, JSON.stringify(noCount));
+  await drainAudio(noCount.shots - noCount.dropped, noCount.shots);
   ok("fallback: one audio call per DRAWN derived unit",
     plays.length === noCount.shots - noCount.dropped, `${plays.length} of ${noCount.shots} − ${noCount.dropped}`);
   await sleep(900);
@@ -1747,6 +1776,7 @@ const res = await page.evaluate(async () => {
   plays = [];
   const missOnly = await fx.fxWeaponFired(payload({ shotsFired: undefined, areaDamages: {} }));
   ok("fallback: nothing landed still resolves one unit", missOnly.shots === 1 && missOnly.hits === 0, JSON.stringify(missOnly));
+  await drainAudio(1);
   ok("fallback: one audio call for the single unit", plays.length === 1, String(plays.length));
   await sleep(500);
 

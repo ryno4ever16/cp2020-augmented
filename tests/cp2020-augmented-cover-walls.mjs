@@ -397,9 +397,13 @@ if (fieldsetSeen) {
   check("labels stay SHORT — the teaching is in the tooltip, not the label",
     diegetic.rows.every(r => r.label.length > 0 && r.label.length <= 44),
     diegetic.rows.map(r => `${r.label.length}`).join(","));
-  check("every field AND its input carry a real tooltip",
-    diegetic.rows.every(r => r.labelTip.length > 40 && r.inputTip === r.labelTip),
-    diegetic.rows.map(r => r.labelTip.length).join(","));
+  // ⏪ RE-PINNED 2026-09-15: tooltips live on the LABELS ONLY (user ruling 2026-08-28, commit 26f9272 —
+  // a tooltip on the number input opened under the pointer and covered the form). This leg had kept
+  // demanding the input carry the same tooltip and was red from that day. The rule now pinned is the
+  // ruling itself: the label teaches at length, the input stays quiet.
+  check("every field's LABEL carries the full tooltip and its input stays quiet (ruling 2026-08-28)",
+    diegetic.rows.every(r => r.labelTip.length > 40 && r.inputTip === ""),
+    diegetic.rows.map(r => `${r.labelTip.length}/${r.inputTip.length}`).join(","));
   check("every tooltip names the BOOK and the PAGE",
     diegetic.rows.every(r => /p\.\d+/.test(r.labelTip)) && /Core/.test(diegetic.rows[0].labelTip)
     && diegetic.rows.slice(1).every(r => /Maximum Metal/.test(r.labelTip)),
