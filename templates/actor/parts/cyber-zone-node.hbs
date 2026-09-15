@@ -6,8 +6,11 @@
      data-item-id="{{node.item.id}}" data-drop-target="host:{{node.item.id}}" draggable="true"
      {{#if (lookup @root.cpCyberOff node.item.id)}}title="{{CPLocal 'CyberInstalledOff'}}"{{/if}}>
     <label>{{node.item.name}}</label>
+    {{!-- Hand / foot rows say what they cost, with the page (Core p.89-90): a foot that took the leg's
+          basic-foot slot says so; every other hand or foot says it takes one option slot. --}}
+    {{#if node.part}}<span class="cp-part-note" title="{{#if node.partWaived}}{{CPLocal 'CyberLimbFootReplacesTip'}}{{else}}{{CPLocal 'CyberLimbPartSlotTip'}}{{/if}}">&#9432;</span>{{/if}}
     {{#with (lookup @root.cpActiveBadges node.item.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
-    {{#if node.isContainer}}<span class="cp-capacity-badge" title="{{CPLocal 'CyberHostCapacityTip'}}">{{node.used}}/{{node.capacity}}</span>{{/if}}
+    {{#if node.isContainer}}<span class="cp-capacity-badge" title="{{#if node.includedFoot}}{{CPLocal 'CyberLimbBasicFootTip'}}{{else}}{{CPLocal 'CyberHostCapacityTip'}}{{/if}}">{{node.used}}/{{node.capacity}}</span>{{/if}}
     {{#with node.item.system}}<span class="cp-hl">{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>{{/with}}
     <span class="flex-pad"></span>
     {{!-- ⚡ Activated-implant switch (cpCyberSwitch): present only on implants whose EffectMode is
@@ -15,8 +18,16 @@
     {{#with (lookup @root.cpCyberSwitch node.item.id)}}<span class="cp-cyber-switch{{#if active}} is-on{{/if}}" data-item-id="{{id}}" draggable="false" title="{{title}}">&#9889;</span>{{/with}}
     <span class="item-unequip cp-uninstall" data-item-id="{{node.item.id}}" draggable="false" title="{{CPLocal 'CyberUninstall'}}">&#9167;</span>
 </div>
-{{#if node.children.length}}
+{{#if (or node.children.length node.includedFoot)}}
 <div class="cp-zone-children">
+    {{!-- The leg's basic foot module (Core p.89): shown as the occupied slot it is, until a bought foot
+          replaces it. Not an item - no controls, no drag, nothing to open. --}}
+    {{#if node.includedFoot}}
+    <div class="field gear full-width cp-zone-node cp-basic-part" title="{{CPLocal 'CyberLimbBasicFootTip'}}" draggable="false">
+        <label>{{CPLocal 'CyberLimbBasicFootRow'}}</label>
+        <span class="flex-pad"></span>
+    </div>
+    {{/if}}
     {{#each node.children as |child|}}
         {{> "modules/cp2020-augmented/templates/actor/parts/cyber-zone-node.hbs" node=child}}
     {{/each}}

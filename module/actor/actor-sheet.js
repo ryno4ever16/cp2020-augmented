@@ -17,7 +17,7 @@ import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/d
 import { cyberlimbSheetStatus, repairCyberlimb, clearFleshLimb, contributingItems, fleshLimbStatusLabel, severFleshUnder, cyberlimbZoneOf, fleshLimbSetZones, openFleshLimbStateDialog } from "../mech/cyberlimb.js";
 import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
-import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
+import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots, limbSlotView } from "../mech/container.js";
 import { hasLoadout, deactivateLoadout, loadoutOptionsOf } from "../mech/loadout.js";
 import { getAutoLayerOrder, getArmorHardness, LAYER_LAW } from "../combat/armor-layers.js";
 import { layerEvPenalty } from "../combat/book-legality.js";
@@ -2727,10 +2727,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (borgSpaces) {
         return { used: inZone.filter(zoneRoot).reduce((s, it) => s + slotsTakenOf(it), 0), total: Number(borgSpaces[area]) || 0 };
       }
+      // limbSlotView: a cyberleg's badge shows its basic foot module as an occupied slot (capacity + 1,
+      // used + 1 until a bought foot replaces it) - same net free count, arithmetic that reads like an arm's.
       let used = 0, total = 0;
       for (const it of inZone) {
-        const cap = capacityOf(it);
-        if (cap > 0) { total += cap; used += usedSlots(allItems, it.id); }
+        const view = limbSlotView(it, allItems);
+        if (view.capacity > 0) { total += view.capacity; used += view.used; }
       }
       return { used, total };
     };

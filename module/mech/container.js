@@ -46,6 +46,51 @@ export function slotsTakenOf(item) {
   return Math.max(1, Number.isFinite(raw) && raw > 0 ? raw : 1);
 }
 
+/**
+ * THE BASIC FOOT MODULE (user ruling 2026-09-15; Core p.89 + p.90 reconciled).
+ *
+ * Core p.89: "A cyberlimb can hold up to 4 options or built-ins. A hand or foot is considered to be
+ * one option. (Cyberlimbs automatically come with basic foot modules.)" Core p.90: "The basic cyberlimb
+ * comes without hands or feet attached; these are purchased separately". Both are true at once when a
+ * LEG ships with its basic foot already sitting in one of its four slots - which is exactly what the
+ * base data encodes (Standard Cyberarm OptionsAvailable 4, Standard Cyberleg 3) - and a purchased foot
+ * REPLACES that basic foot rather than adding to it. So: the FIRST foot installed in a leg host costs
+ * no slot (it takes the pre-spent one); a second foot, a foot in an arm, and every hand pay their
+ * printed footprint. The sheet shows the trade rather than a free foot: a leg displays capacity + 1
+ * with the basic foot as an occupied row until a bought foot takes its place (limbSlotView below).
+ *
+ * Recognition is by the base data's own type field - every hand in the cyberlimbs pack carries
+ * `cyberwareType` CYBERHAND and every foot CYBERFOOT - so a homebrew foot joins the rule by setting
+ * that type on its sheet; no name matching anywhere. Pure.
+ */
+export function limbPartOf(item) {
+  if (item?.type !== "cyberware") return "";
+  // The RAW field, not pickCwType: the alias table folds CYBERHAND into CyberArm and CYBERFOOT into
+  // CyberLeg (their HOST families), which is exactly the distinction this reader exists to keep.
+  const t = String(item.system?.cyberwareType ?? "").trim().toUpperCase();
+  if (t === "CYBERFOOT") return "foot";
+  if (t === "CYBERHAND") return "hand";
+  return "";
+}
+
+/** A cyberleg host: a cyberware CONTAINER (not a module) mounted in the Leg zone. Pure. */
+export function isLegHost(item) {
+  if (item?.type !== "cyberware" || item.system?.Module?.IsModule) return false;
+  const zone = String(item.system?.MountZone || item.system?.CyberBodyType?.Type || "");
+  return zone === "Leg";
+}
+
+/** The child whose slot the leg's basic foot already paid for: the FIRST foot among `children`
+ *  (by `sort`, then id - a stable choice when two feet are installed), or null. Pure. */
+export function waivedChild(parent, children) {
+  if (!isLegHost(parent)) return null;
+  const feet = (children ?? []).filter((c) => limbPartOf(c) === "foot");
+  if (!feet.length) return null;
+  const key = (it) => [Number(it.sort) || 0, String(it.id ?? it._id ?? "")];
+  feet.sort((a, b) => { const [sa, ia] = key(a), [sb, ib] = key(b); return sa - sb || (ia < ib ? -1 : ia > ib ? 1 : 0); });
+  return feet[0];
+}
+
 /** True when the item can hold children. Pure. */
 export function isContainer(item) {
   return capacityOf(item) > 0;
@@ -57,14 +102,34 @@ export function childrenOf(items, parentId) {
   return (items ?? []).filter(it => installedInOf(it) === parentId);
 }
 
-/** Slots used in `parentId` by its direct children. Pure. */
-export function usedSlots(items, parentId) {
-  return childrenOf(items, parentId).reduce((s, c) => s + slotsTakenOf(c), 0);
+/** Slots used in `parentId` by its direct children - minus the leg's waived foot (see limbPartOf).
+ *  `parent` is resolved from `items` when not passed. Pure. */
+export function usedSlots(items, parentId, parent = null) {
+  const kids = childrenOf(items, parentId);
+  const host = parent ?? (items ?? []).find((it) => (it.id ?? it._id) === parentId) ?? null;
+  const waived = waivedChild(host, kids);
+  return kids.reduce((s, c) => s + (c === waived ? 0 : slotsTakenOf(c)), 0);
+}
+
+/**
+ * What a host's badge and row list should SHOW. For a leg host the basic foot is an occupied slot the
+ * data pre-spent: capacity + 1 and used + 1, with `includedFoot` true while no bought foot has taken
+ * that slot (the sheet renders a greyed "Basic foot module (included)" row then). Net free slots are
+ * the same as the raw accounting - only the presentation changes, so the arithmetic reads like an
+ * arm's: a foot occupies a slot, it is just the slot the leg already spent. Pure.
+ */
+export function limbSlotView(host, items) {
+  const capacity = capacityOf(host);
+  const id = host?.id ?? host?._id;
+  const used = usedSlots(items, id, host);
+  if (!isLegHost(host) || capacity <= 0) return { capacity, used, includedFoot: false };
+  const hasFoot = !!waivedChild(host, childrenOf(items, id));
+  return { capacity: capacity + 1, used: used + 1, includedFoot: !hasFoot };
 }
 
 /** Free slots remaining in `parent`. Pure. */
 export function freeSlots(parent, items) {
-  return Math.max(0, capacityOf(parent) - usedSlots(items, parent.id ?? parent._id));
+  return Math.max(0, capacityOf(parent) - usedSlots(items, parent.id ?? parent._id, parent));
 }
 
 /** Would installing `child` into `parent` create a cycle (parent is child, or a descendant of child)? Pure. */
@@ -140,7 +205,13 @@ export function checkInstall(child, parent, items) {
   // usedSlots, so add them back before the fits check. Without this a child in a full host reports
   // "full" against itself and the drop path's relocate fallback silently unmounts it.
   const ownSlots = installedInOf(child) === parentId ? slotsTakenOf(child) : 0;
-  if (freeSlots(parent, items) + ownSlots < slotsTakenOf(child)) return { ok: false, reason: "full" };
+  // The leg's basic-foot slot: a foot going into a leg that holds no foot yet takes the pre-spent slot
+  // and needs nothing free (limbPartOf). Re-dropping the waived foot itself is likewise free.
+  const kids = childrenOf(items, parentId);
+  const waived = waivedChild(parent, kids);
+  const footFree = limbPartOf(child) === "foot" && isLegHost(parent) && (!waived || waived === child);
+  const needed = footFree ? 0 : slotsTakenOf(child);
+  if (freeSlots(parent, items) + ownSlots < needed) return { ok: false, reason: "full" };
   return { ok: true, reason: null };
 }
 
@@ -162,14 +233,22 @@ export function buildContainerTree(items, filterRoot = () => true, allItems = it
   // stays on the filtered `list`.
   const all = allItems ?? list;
   const ids = new Set(list.map(it => it.id ?? it._id));
-  const node = (item) => ({
-    item,
-    capacity: capacityOf(item),
-    used: usedSlots(all, item.id ?? item._id),
-    isContainer: isContainer(item),
-    installed: !!installedInOf(item),
-    children: childrenOf(list, item.id ?? item._id).map(node)
-  });
+  const node = (item) => {
+    const view = limbSlotView(item, all);
+    const host = all.find((it) => (it.id ?? it._id) === installedInOf(item)) ?? null;
+    const waivedHere = host ? waivedChild(host, childrenOf(all, host.id ?? host._id)) : null;
+    return {
+      item,
+      capacity: view.capacity,
+      used: view.used,
+      includedFoot: view.includedFoot,
+      part: limbPartOf(item),
+      partWaived: waivedHere === item,
+      isContainer: isContainer(item),
+      installed: !!installedInOf(item),
+      children: childrenOf(list, item.id ?? item._id).map(node)
+    };
+  };
   // Roots: loose items AND items whose recorded parent is NOT in the list — an unresolvable link
   // (stale copy, parent filtered out of this view) must surface the item, never hide it (the same
   // tolerance buildZoneTrees applies).
@@ -197,14 +276,22 @@ export function buildZoneTrees(items, areaOf, allItems = items) {
   const idOf = (it) => it?.id ?? it?._id;
   const placeable = (it) => String(areaOf(it) || "") !== "";
   const byId = new Map(list.map(it => [idOf(it), it]));
-  const node = (item) => ({
-    item,
-    area: areaOf(item),
-    capacity: capacityOf(item),
-    used: usedSlots(all, idOf(item)),
-    isContainer: isContainer(item),
-    children: childrenOf(list, idOf(item)).map(node),
-  });
+  const node = (item) => {
+    const view = limbSlotView(item, all);
+    const host = all.find((it) => idOf(it) === installedInOf(item)) ?? null;
+    const waivedHere = host ? waivedChild(host, childrenOf(all, idOf(host))) : null;
+    return {
+      item,
+      area: areaOf(item),
+      capacity: view.capacity,
+      used: view.used,
+      includedFoot: view.includedFoot,
+      part: limbPartOf(item),
+      partWaived: waivedHere === item,
+      isContainer: isContainer(item),
+      children: childrenOf(list, idOf(item)).map(node),
+    };
+  };
   const isRoot = (it) => {
     if (!placeable(it)) return false;
     const parent = byId.get(installedInOf(it));

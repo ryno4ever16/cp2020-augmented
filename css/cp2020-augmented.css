@@ -3611,6 +3611,11 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .field-list .field {
 /* Installed-but-switched-off implant: stays in its zone (its row is the re-enable path), dimmed. */
 .cp-zone-node.cp-cyber-off { opacity: 0.55; }
 .cp-zone-node.cp-cyber-off > label { font-style: italic; }
+/* The leg's basic foot module (Core p.89): an occupied slot, not an item - greyed, italic, inert. */
+.cp-basic-part { opacity: 0.55; cursor: default; }
+.cp-basic-part > label { font-style: italic; }
+/* Hand / foot slot note (a hover glyph beside the name; the tooltip carries the page). */
+.cp-part-note { opacity: 0.6; font-size: 0.85em; cursor: help; margin-left: 0.25em; }
 
 /* Uninstall (⏏) control on a body-map / internal row — mirrors the container ⏏ glyph and colour. */
 .cp-uninstall { cursor: pointer; opacity: 0.65; font-weight: bold; }

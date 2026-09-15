@@ -170,6 +170,23 @@ hand-edit skill levels), and **hide the IP UI entirely** for tables that don't u
 > (armor mode, limb model, the supplement layers), permission scoping, and per-user display
 > preferences. Regenerate this section from `module/settings.js` at the next release.
 
+### Cyberlimb option slots, hands and feet
+
+A cyberlimb holds up to four options, and a hand or foot counts as one of them (Core p.89). The two
+limbs start differently, and the sheet shows the difference rather than hiding it:
+
+- **A cyberarm ships bare.** Its badge reads 0/4. A hand is bought separately and takes one slot
+  (Core p.90), so an arm with a Standard Hand reads 1/4.
+- **A cyberleg ships with a basic foot module** (Core p.89, "cyberlimbs automatically come with basic
+  foot modules"). That foot already occupies one of the four slots, so an empty leg reads 1/4 and lists
+  a greyed *Basic foot module (included)* row. A purchased foot **replaces** it: install a Standard
+  Foot and the row disappears, the foot takes its place, and the badge still reads 1/4. A second foot,
+  or a foot forced into an arm, pays a slot like any other option.
+
+Hands and feet are recognised by their item type (the base compendium marks them CYBERHAND and
+CYBERFOOT); a homebrew foot joins the rule by carrying that type. Hover the small note beside a hand
+or foot row on the body map to see which case applies.
+
 ### Hit locations and the limb-damage model (moved here from the old setting hint)
 
 The **Combat: Limb-Damage Model** setting changes what a wound *does* to an arm or leg, not
