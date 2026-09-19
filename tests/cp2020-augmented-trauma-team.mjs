@@ -178,6 +178,12 @@ const pure = await page.evaluate(async (mod) => {
     prefix: M.TRAUMA_TEAM_NAME,
     keys: M.TRAUMA_TEAM_KEYS,
     totalMs: M.landingLadderMs(),
+    // ⭐ 2026-09-19 flight look: no altitude scale, an overshooting descent, an off-centre station
+    entryScale: M.TRAUMA_TEAM.entryScale,
+    descentEase: M.TRAUMA_TEAM.descentEase,
+    hoverIsDescentEnd: M.TRAUMA_TEAM.hoverAtMs === M.TRAUMA_TEAM.descentAtMs + M.TRAUMA_TEAM.descentMs,
+    station: M.stationPoint(centre, G),
+    stationBig: M.stationPoint(centre, 200),
   };
 }, MOD);
 // ⏪ LANDSCAPE since the 2026-08-27 user ruling ("it needs to be rotated 90 degrees") — the whole
@@ -193,7 +199,7 @@ check("the same placement computes the same rectangle twice", pure.rectTwice);
 eq("a doubled grid doubles the drawn footprint", [pure.bigGridW, pure.bigGridH], [1200, 800]);
 check("the entry point sits off the near edge, on the entry heading", pure.entry.y < pure.rect.y - pure.rect.h / 2, JSON.stringify(pure.entry));
 eq("the entry point keeps the placement's own axis", pure.entry.x, 1000);
-eq("four rings, spaced against the ring's own 2750 ms clip", pure.pulses, [3700, 4900, 6100, 7300]);
+eq("four rings, spaced against the ring's own 2750 ms clip (from the 09-19 hover at 4500)", pure.pulses, [4700, 5900, 7100, 8300]);
 check("five figures leave one after another, never together",
   pure.figures.length === 5 && pure.figures.every((f, i) => i === 0 || f.atMs > pure.figures[i - 1].atMs),
   JSON.stringify(pure.figures.map(f => f.atMs)));
@@ -211,6 +217,11 @@ eq("the shipped database keys", pure.keys, {
   pulse: "jb2a.zoning.outward.circle.once.bluegreen.01",
   figure: "jb2a.token_stage.round.blue.01",
 });
+eq("⭐ FLIGHT LOOK (2026-09-19): the airframe is full size throughout — no shrink and grow", pure.entryScale, 1);
+eq("the descent overshoots its station and settles back up", pure.descentEase, "easeOutBack");
+check("the hover instant is the descent's own end", pure.hoverIsDescentEnd === true);
+eq("station is up and to the right of the placement, in squares", pure.station, { x: 1040, y: 960 });
+eq("and scales with the grid", pure.stationBig, { x: 1080, y: 920 });
 check("the ladder ends after BOTH the last figure and the last ring",
   pure.totalMs >= pure.figures[4].atMs && pure.totalMs >= pure.pulses[3], String(pure.totalMs));
 
@@ -900,8 +911,13 @@ const crewDialog = await page.evaluate(async (tool) => {
     /* the picture: the portrait opens the platform's file browser; the path lands in the hidden field */
     const appsBefore = new Set([...foundry.applications.instances.keys()]);
     img.click();
-    await sleep(400);
-    const picker = [...foundry.applications.instances.values()].find(a => !appsBefore.has(a.id) && /FilePicker/.test(a.constructor?.name ?? ""));
+    // The V2 browser lists its directory BEFORE it registers and paints — a fixed wait here red seven
+    // legs in a row on a slow listing (2026-09-19). Polled, bounded.
+    let picker = null;
+    for (let i = 0; i < 80 && !picker; i++) {
+      picker = [...foundry.applications.instances.values()].find(a => !appsBefore.has(a.id) && /FilePicker/.test(a.constructor?.name ?? "")) ?? null;
+      if (!picker) await sleep(100);
+    }
     out.pickerOpened = !!picker;
     out.pickerType = picker?.options?.type ?? picker?.type ?? null;
     // ⭐ the picker sits ABOVE the window once rendered (user report: it opened behind). The V2 picker

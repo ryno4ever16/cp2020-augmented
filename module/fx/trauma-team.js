@@ -111,15 +111,26 @@ export const TRAUMA_TEAM = Object.freeze({
   // How far above the near edge of the rectangle the airframe starts, in grid squares — far enough that
   // it is off any ordinary viewport before it begins to move.
   entryRiseSquares: 8,
-  // The airframe is drawn smaller while it is high and reaches full size at station: the one cue a flat
-  // camera has for altitude.
-  entryScale: 0.55,
+  // ⏪ 2026-09-19 (user-ruled, against the reference macro): the airframe used to be drawn at 0.55 of
+  // its size while high and grow to full size at station — an altitude cue the reference does not have,
+  // and at the table it read as "shrink and grow". Now full size throughout; the descent's own overshoot
+  // (below) is the altitude cue instead. REVERT = 0.55 (the draw skips the scale animation at 1).
+  entryScale: 1,
+  // Where it holds station: a little up and to the right of the marked rectangle's centre (in squares),
+  // which is what gives a flat camera its parallax — the reference hovers off-centre the same way.
+  // ⏪ REVERT = { x: 0, y: 0 } (dead centre, as shipped through 1.2.5).
+  hoverOffsetSquares: { x: 0.4, y: -0.4 },
 
   /* ── the ladder, in milliseconds from the placement instant ── */
   zoneAtMs: 0,
   descentAtMs: 900,        // the marker gets a beat to itself before anything moves
-  descentMs: 2600,
-  hoverAtMs: 3500,         // = descentAtMs + descentMs
+  // ⏪ 2026-09-19: 2600 → 3600, and the ease is `easeOutBack` (was `easeOutCubic`): the reference comes
+  // in past its station and settles back UP to it — the "low, then bobs up" the user saw — which is what
+  // an ease-out-back does over one property, and it needs the extra second for the settle to read.
+  // REVERT = 2600 / "easeOutCubic" (the ease is `descentEase` below).
+  descentMs: 3600,
+  descentEase: "easeOutBack",
+  hoverAtMs: 4500,         // = descentAtMs + descentMs
   // The station-keeping bob: a small vertical sway, ping-ponged forever, so a stationary airframe still
   // reads as flying rather than as a decal.
   bobSquares: 0.16,
@@ -127,7 +138,7 @@ export const TRAUMA_TEAM = Object.freeze({
 
   /* ── the rings ── */
   pulseCount: 4,           // RULING: the reference shows four
-  pulseFirstAtMs: 3700,    // = hoverAtMs + 200; the first ring goes out as it settles
+  pulseFirstAtMs: 4700,    // = hoverAtMs + 200; the first ring goes out as it settles (⏪ 3700 before the 09-19 descent)
   // Spaced against the RING'S OWN CLIP rather than picked: each ring runs 2 750 ms, so a 900 ms gap put
   // three on screen at once and read as churn instead of as four waves. At 1 200 ms a ring is a little
   // over half gone when the next leaves, which is a downwash rather than a strobe.
@@ -141,7 +152,7 @@ export const TRAUMA_TEAM = Object.freeze({
 
   /* ── the figures ── */
   figureCount: 5,          // RULING: the reference shows five
-  unloadAtMs: 4600,
+  unloadAtMs: 5600,        // ⏪ 4600 before the 09-19 descent; still hoverAtMs + 1100
   unloadGapMs: 700,        // RULING: one after another — never together
   figureSquares: 1,
   figureHoldMs: 1100,      // how long the last figure's mark is given before the ladder is called done
@@ -161,7 +172,7 @@ export const TRAUMA_TEAM = Object.freeze({
   downdraftMs: 3200,
   downdraftSquares: 7,
   downdraftOpacity: 0.35,
-  dustFirstAtMs: 3100,
+  dustFirstAtMs: 4100,     // = hoverAtMs − 400 (⏪ 3100 before the 09-19 descent)
   dustGapMs: 500,
   dustCount: 2,
   dustSquares: 6,
@@ -752,26 +763,38 @@ function airframeShape() {
  * already states. The station-keeping bob rides the sprite INSIDE that container, delayed to the
  * instant the descent ends, so the two never fight over one property.
  */
+/** Where the airframe holds station: the placement plus the stated offset, in pixels. Pure. */
+export function stationPoint(centre = { x: 0, y: 0 }, gridPx = 100) {
+  const g = Number(gridPx) > 0 ? Number(gridPx) : 100;
+  const o = TRAUMA_TEAM.hoverOffsetSquares ?? { x: 0, y: 0 };
+  return { x: (Number(centre?.x) || 0) + (Number(o.x) || 0) * g, y: (Number(centre?.y) || 0) + (Number(o.y) || 0) * g };
+}
+
 function drawAirframe(record) {
   const name = traumaFxNameFor(record.id, "airframe");
   const g = record.gridPx;
   const rise = entryRisePx(g);
   const bobPx = TRAUMA_TEAM.bobSquares * g;
+  const station = stationPoint(record.centre, g);
   const seq = new globalThis.Sequence();
   const fx = hull(section(seq, name), record)
-    .atLocation({ x: record.centre.x, y: record.centre.y })
+    .atLocation(station)
     .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
     .duration(TRAUMA_TEAM.lifetimeMs)
     .fadeIn(TRAUMA_TEAM.fadeInMs)
     .fadeOut(TRAUMA_TEAM.fadeOutMs);
-  // The descent: the container falls the stated distance over the stated time.
+  // The descent: the container falls the stated distance over the stated time, overshooting its station
+  // and settling back up to it (`descentEase`). The altitude scale is drawn only when the knob asks for
+  // one (⏪ it did until 2026-09-19).
   try {
     fx.animateProperty("spriteContainer", "position.y",
-      { from: -rise, to: 0, duration: _scaled(TRAUMA_TEAM.descentMs), ease: "easeOutCubic" });
-    fx.animateProperty("sprite", "scale.x",
-      { from: TRAUMA_TEAM.entryScale, to: 1, duration: _scaled(TRAUMA_TEAM.descentMs), ease: "easeOutCubic" });
-    fx.animateProperty("sprite", "scale.y",
-      { from: TRAUMA_TEAM.entryScale, to: 1, duration: _scaled(TRAUMA_TEAM.descentMs), ease: "easeOutCubic" });
+      { from: -rise, to: 0, duration: _scaled(TRAUMA_TEAM.descentMs), ease: TRAUMA_TEAM.descentEase });
+    if (TRAUMA_TEAM.entryScale !== 1) {
+      fx.animateProperty("sprite", "scale.x",
+        { from: TRAUMA_TEAM.entryScale, to: 1, duration: _scaled(TRAUMA_TEAM.descentMs), ease: TRAUMA_TEAM.descentEase });
+      fx.animateProperty("sprite", "scale.y",
+        { from: TRAUMA_TEAM.entryScale, to: 1, duration: _scaled(TRAUMA_TEAM.descentMs), ease: TRAUMA_TEAM.descentEase });
+    }
   } catch (err) {
     console.warn(`${SCOPE} | arrival sequence descent animation unavailable`, err);
   }
@@ -1066,17 +1089,19 @@ function drawDeparture(record) {
   const g = record.gridPx;
   const seq = new globalThis.Sequence();
   const fx = hull(section(seq, name), record)
-    .atLocation({ x: record.centre.x, y: record.centre.y })
+    .atLocation(stationPoint(record.centre, g))
     .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
     .duration(_scaled(TRAUMA_TEAM.ascentMs))
     .fadeOut(TRAUMA_TEAM.fadeOutMs);
   try {
     fx.animateProperty("spriteContainer", "position.y",
       { from: 0, to: -entryRisePx(g), duration: _scaled(TRAUMA_TEAM.ascentMs), ease: "easeInCubic" });
-    fx.animateProperty("sprite", "scale.x",
-      { from: 1, to: TRAUMA_TEAM.entryScale, duration: _scaled(TRAUMA_TEAM.ascentMs), ease: "easeInCubic" });
-    fx.animateProperty("sprite", "scale.y",
-      { from: 1, to: TRAUMA_TEAM.entryScale, duration: _scaled(TRAUMA_TEAM.ascentMs), ease: "easeInCubic" });
+    if (TRAUMA_TEAM.entryScale !== 1) {
+      fx.animateProperty("sprite", "scale.x",
+        { from: 1, to: TRAUMA_TEAM.entryScale, duration: _scaled(TRAUMA_TEAM.ascentMs), ease: "easeInCubic" });
+      fx.animateProperty("sprite", "scale.y",
+        { from: 1, to: TRAUMA_TEAM.entryScale, duration: _scaled(TRAUMA_TEAM.ascentMs), ease: "easeInCubic" });
+    }
   } catch (err) {
     console.warn(`${SCOPE} | arrival sequence departure animation unavailable`, err);
   }
