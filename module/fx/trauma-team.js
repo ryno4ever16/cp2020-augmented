@@ -148,8 +148,13 @@ export const TRAUMA_TEAM = Object.freeze({
   // Where they step: spaced across the far edge and progressively further out of the rectangle, so five
   // marks read as five people leaving rather than as a row of lights.
   figureStepSquares: 0.9,
-  figureWalkSquares: 1.1,
-  figureWalkGrowthSquares: 0.18,
+  // ⏪ 2026-09-19 (user-ruled "straighter and closer to the AV"): the file used to start 1.1 squares
+  // past the near edge and walk 0.18 further out per figure (a diagonal). Now one straight rank close
+  // to the edge, and every FIFTH figure starts a new rank one square further out (`figureRowSquares`)
+  // rather than walking the line off into the scenery. REVERT = 1.1 / 0.18.
+  figureWalkSquares: 0.6,
+  figureWalkGrowthSquares: 0,
+  figureRowSquares: 1,
 
   /* ── the downdraft ── */
   downdraftAtMs: 1800,     // it arrives before the airframe does; the air moves first
@@ -171,7 +176,7 @@ export const TRAUMA_TEAM = Object.freeze({
   // the condition overlays' ten minutes is: a cap, not a promise, so a leak cannot outlive a session.
   lifetimeMs: 600000,
   // Every part of one placement, across every client's own copy of it. One placement draws at most
-  // 18 (1 plate + 4 marks + 1 airframe + 1 downdraft + 2 dust + 4 rings + 5 figures); the scene-wide
+  // 18 (1 plate + 4 marks + 1 airframe + 1 downdraft + 2 dust + 4 rings + up to 5 figures); the scene-wide
   // bound is a shade over two of those, past which the OLDEST are ended to make room — the same rule
   // and the same reason as the burning ground's and the overlays'.
   maxLive: 40,
@@ -314,24 +319,26 @@ export function figureSchedule(centre = { x: 0, y: 0 }, gridPx = 100) {
 }
 
 /**
- * THE SAME LINE, FOR ANY NUMBER OF SEATS (user ruling 2026-09-19: "let's allow unlimited placements…
- * keep the philosophy of not hard limiting people"). The first `figureCount` seats ARE the drawn marks —
- * same instants, same places, the formula is centred on the marks so nothing about them moves. Seat
- * six onward keeps walking the same file at the same cadence: one square further along and a little
- * further out each, so a big squad reads as a longer line leaving the aircraft, not a heap on the last
- * mark. The marks stay five; only the tokens go past them.
+ * THE SAME RANK, FOR ANY NUMBER OF SEATS (user rulings 2026-09-19: "allow unlimited placements… keep
+ * the philosophy of not hard limiting people", then "after 5, wrap back to below the number one slot…
+ * keep the units closer to the AV"). Seats are dealt five wide: seat i stands in column i mod 5 of rank
+ * floor(i / 5). The first rank IS the drawn marks — same instants, same places — and each further rank
+ * sits `figureRowSquares` further from the aircraft, directly behind the first. Same cadence throughout.
  */
 export function seatSchedule(centre = { x: 0, y: 0 }, gridPx = 100, count = TRAUMA_TEAM.figureCount) {
   const g = Number(gridPx) > 0 ? Number(gridPx) : 100;
   const rect = landingRect(centre, g);
-  const marks = TRAUMA_TEAM.figureCount;
+  const wide = TRAUMA_TEAM.figureCount;
   const n = clampCrewCount(count);
-  return Array.from({ length: n }, (_v, i) => ({
-    atMs: TRAUMA_TEAM.unloadAtMs + i * TRAUMA_TEAM.unloadGapMs,
-    x: rect.x + (i - (marks - 1) / 2) * TRAUMA_TEAM.figureStepSquares * g,
-    y: rect.y + rect.h / 2
-       + (TRAUMA_TEAM.figureWalkSquares + i * TRAUMA_TEAM.figureWalkGrowthSquares) * g,
-  }));
+  return Array.from({ length: n }, (_v, i) => {
+    const col = i % wide, rank = Math.floor(i / wide);
+    return {
+      atMs: TRAUMA_TEAM.unloadAtMs + i * TRAUMA_TEAM.unloadGapMs,
+      x: rect.x + (col - (wide - 1) / 2) * TRAUMA_TEAM.figureStepSquares * g,
+      y: rect.y + rect.h / 2
+         + (TRAUMA_TEAM.figureWalkSquares + col * TRAUMA_TEAM.figureWalkGrowthSquares + rank * TRAUMA_TEAM.figureRowSquares) * g,
+    };
+  });
 }
 
 /* ══════════════════════════ The crew a referee can move afterwards ══════════════════════════
@@ -972,7 +979,12 @@ function drawLanding({ id, x, y, sceneId, crew = null, img = "", imgSize = null 
   record.crew = crewPlanFor(crew, record.centre, gridPx);
   _active = record;
 
-  const figures = figureSchedule(record.centre, gridPx);
+  // ⏪ 2026-09-19 (user-ruled): the figure marks FOLLOW THE CREW. No crew, no marks; a crew of three,
+  // three marks; five or more, the five of the first rank (later ranks reuse those columns). Until now
+  // five marks were always drawn as part of the picture — with tokens actually stepping off, a mark
+  // with nobody on it read as a missing person.
+  const seatCount = record.crew ? record.crew.plan.length : 0;
+  const figures = figureSchedule(record.centre, gridPx).slice(0, Math.min(seatCount, TRAUMA_TEAM.figureCount));
   const pulses = pulseSchedule();
   // The whole placement's part count, resolved before anything is queued, so the cap is asked once.
   const wanting = (plan.zone ? 1 : 0) + (plan.corner ? 4 : 0) + 1

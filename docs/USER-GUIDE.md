@@ -172,8 +172,8 @@ again sends the aircraft away.
   - **Aircraft image.** Click the picture, the same way you click a character's portrait, and choose any
     image in your world's files (a top-down vehicle token works best — the heavy AV in a vehicle-token
     pack, say). It is fitted to the aircraft's long side with its proportions kept. Leave it alone for
-    the built-in shape; **Use built-in shape** clears it. The window remembers your last picture and
-    squad until you reload.
+    the built-in shape. The window remembers your last picture and squad until you reload; a picture
+    chosen after the window has closed applies to the next call.
   - **Place crew tokens.** Off by default: the arrival alone, nothing created. On: tokens for the
     actors in the squad list are placed as each figure leaves the aircraft. Hover the words for the
     short version.
@@ -182,9 +182,10 @@ again sends the aircraft away.
     actor** and pick from the list. Each row is one actor and how many of it step off; rows step off in
     order, so put the medtech first if you want the medtech first. Only this world's own actors can step
     off (not compendium entries) — the module ships no NPCs.
-  - **How many.** As many as you like. The first five stand on the drawn marks; the rest keep walking
-    the same line behind them. Nobody is ever placed off the map — a landing area marked at the edge
-    still puts every figure on the scene.
+  - **How many.** As many as you like. Figures step off five wide in a rank just past the aircraft,
+    and every fifth starts a new rank directly behind the first. A mark is drawn only where someone
+    actually steps off: no crew, no marks; three crew, three marks. Nobody is ever placed off the map —
+    a landing area marked at the edge still puts every figure on the scene.
 - **Then place.** Confirm, move the ghost rectangle to where the aircraft lands, click. Every figure
   is placed **unlinked** (its own copy, the way five mooks dragged from the sidebar would be), whatever
   the actor's own prototype says. The tokens stay when the aircraft leaves; they are yours to move.

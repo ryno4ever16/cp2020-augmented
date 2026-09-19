@@ -623,9 +623,12 @@ Those questions now have answers, and the seam is closed rather than deferred:
   count, in step-off order — a mixed squad (two medtechs, three security) is one call. `crewRows`
   normalises the answer (the old single pair is still accepted, as one row); `crewSeatPlan` is the pure
   statement of the seats: one per figure, each carrying ITS OWN actor and footprint. **No ceiling.**
-  `clampCrewCount` floors at one and stops there; the first `figureCount` (5) seats are the drawn marks,
-  and seat six onward continues the same line at the same cadence (`seatSchedule` — the marks stay five,
-  only the tokens go past them). Every corner is then held inside the scene rectangle
+  `clampCrewCount` floors at one and stops there; seats are dealt FIVE WIDE (`seatSchedule`: column
+  i mod 5, rank floor(i / 5), each rank `figureRowSquares` further from the aircraft — user-ruled the
+  same day, "wrap back to below the number one slot… keep the units closer to the AV"). ⭐ **The marks
+  follow the crew:** no crew draws no figure marks, three crew draws three, five or more draws the five
+  of the first rank — a mark with nobody on it read as a missing person once tokens really stepped off.
+  The rank is straight and close (`figureWalkSquares` 0.6, growth 0; ⏪ was 1.1 / 0.18). Every corner is then held inside the scene rectangle
   (`clampSeatToBounds`, "never placed out of the map bounds"), so a landing area marked at an edge
   still puts every figure on the map. The one conversion is still centre → top-left corner (half the
   seat's own footprint off both axes), which is what makes a 2 × 2 figure straddle its mark.
@@ -720,7 +723,8 @@ picture draws as one `.file(path)` sprite, `.size()`d to the fit in the record; 
 **engine-native shape** below — a dark rounded lozenge with a lit edge, which is what a top-down
 camera sees of a planform. The fit is measured ONCE by the calling client (`measureImage` → the
 platform's texture loader, after `srcExists` so a typo is a warning and the shape, not a red console
-line) and `fitImageSquares` sets the picture's LONGER side to `airframeWidthSquares` (4.6) with its
+line); the file browser is brought forward after it renders and is closed with the window, and a pick
+made after the window has gone lands in the session memory for the next call (user report, same day) and `fitImageSquares` sets the picture's LONGER side to `airframeWidthSquares` (4.6) with its
 own proportions kept — a nose-up token stays nose-up and is never stretched into the lozenge's box.
 The path and the fit ride the announcement (§2b.2a), so a receiving client draws without measuring.
 This is the rail's one documented exception to *database keys, never file paths* (§9): the path is the
@@ -2285,7 +2289,7 @@ is the table, so a sixth condition is a row rather than a change:
 | `pulseCount` / `pulseFirstAtMs` / `pulseGapMs` | 4 / 3700 / **1200** | the rings. The gap is set against their own 2 750 ms clip |
 | `pulseSquares` | 7.2 | ring frame, sized so its ink clears the rectangle |
 | `figureCount` / `unloadAtMs` / `unloadGapMs` | 5 / 4600 / 700 | the file of figures. **The count and the one-after-another are rulings** |
-| `figureStepSquares` / `figureWalkSquares` / `figureWalkGrowthSquares` | 0.9 / 1.1 / 0.18 | how they are spread and how far out each walks |
+| `figureStepSquares` / `figureWalkSquares` / `figureWalkGrowthSquares` / `figureRowSquares` | 0.9 / 0.6 / 0 / 1 | the rank: column spacing, distance from the near edge, per-column walk (⏪ 2026-09-19: was 1.1 / 0.18 — "straighter and closer"), and the gap between ranks of five |
 | `downdraft*` / `dust*` | see the block | the air under it |
 | `ascentMs` | 2200 | the departure |
 | `lifetimeMs` / `maxLive` | 600000 / 40 | the leak bound and the scene cap |

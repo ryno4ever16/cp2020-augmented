@@ -306,9 +306,9 @@ const live = await page.evaluate(async (mod) => {
     allUnderPrefix: settled.every(n => n.startsWith(M.TRAUMA_TEAM_NAME + ".")),
   };
 }, MOD);
-eq("the placement reports the parts it queued, by name", live.result.queued, [
+eq("the placement reports the parts it queued, by name — and with NO crew there are NO figure marks (2026-09-19)", live.result.queued, [
   "zone", "corner", "corner", "corner", "corner", "airframe", "downdraft", "dust", "dust",
-  "pulse", "pulse", "pulse", "pulse", "figure", "figure", "figure", "figure", "figure",
+  "pulse", "pulse", "pulse", "pulse",
 ]);
 check("it reports nothing skipped", live.result.skipped === null, JSON.stringify(live.result.skipped));
 check("the ground plate is up before the airframe arrives", live.earlyHasZone, JSON.stringify(live.firstSeen));
@@ -531,6 +531,7 @@ const crewPure = await page.evaluate(async (mod) => {
     hullNoSize: M.hullSpec({ img: "modules/x/av.png", imgSize: null }).kind,
     hullNone: M.hullSpec({ img: "" }).kind,
     longSide: M.TRAUMA_TEAM.airframeWidthSquares,
+    rowSquares: M.TRAUMA_TEAM.figureRowSquares,
   };
 }, MOD);
 eq("a crew of three takes the first three unload beats, by time",
@@ -552,11 +553,14 @@ eq("an exact count is left alone", crewPure.clampExact, 5);
 eq("so the plan is as long as the count", crewPure.seats, 99);
 eq("the first five seats ARE the drawn marks — same instants, same places",
   crewPure.seats9.slice(0, 5), crewPure.marks);
-check("seat six onward continues the line: later, further along, further out",
-  crewPure.seats9.slice(5).every((s, i) => {
-    const prev = crewPure.seats9[4 + i];
-    return s.atMs > prev.atMs && s.x > prev.x && s.y > prev.y;
-  }), JSON.stringify(crewPure.seats9.slice(4)));
+check("⭐ WRAP (2026-09-19): seat six stands directly behind seat one, one rank further from the aircraft",
+  crewPure.seats9[5].x === crewPure.seats9[0].x && crewPure.seats9[5].y === crewPure.seats9[0].y + 100 * crewPure.rowSquares,
+  JSON.stringify([crewPure.seats9[0], crewPure.seats9[5]]));
+check("and seats six to nine reuse the first four columns, in order, later each",
+  crewPure.seats9.slice(5).every((s, i) => s.x === crewPure.seats9[i].x && s.atMs > crewPure.seats9[4 + i].atMs),
+  JSON.stringify(crewPure.seats9.map(s => [s.x, s.y, s.atMs])));
+check("the first rank is STRAIGHT — one y for all five", new Set(crewPure.marks.map(m => m.y)).size === 1,
+  JSON.stringify(crewPure.marks.map(m => m.y)));
 eq("mixed rows: each seat carries its own actor, in row order",
   crewPure.mixed.map(s => s.actorId), ["A", "A", "B"]);
 eq("mixed rows: each seat is offset by ITS OWN footprint",
@@ -614,6 +618,7 @@ const crewLive = await page.evaluate(async (mod) => {
     out.wireHasCrew = wire.some(m => "crew" in (m ?? {}));
     out.placedQueued = placed.queued;
     out.placedCrew = placed.crew ?? null;
+    out.marksFor3 = placed.queued.filter(q => q === "figure").length;
 
     /* (b) the write itself — polled to the engine's own answer, never slept at. */
     const before = new Set(scene.tokens.map(t => t.id));
@@ -650,6 +655,7 @@ const crewLive = await page.evaluate(async (mod) => {
     const before2 = new Set(scene.tokens.map(t => t.id));
     const over = await M.landTraumaTeam(centre, { crew: { actorId: actor.id, count: 9 } });
     out.overCrewCount = over.crew?.count ?? null;
+    out.marksFor9 = over.queued.filter(q => q === "figure").length;
     let fresh2 = [];
     for (let i = 0; i < 80; i++) {
       await sleep(150);
@@ -756,6 +762,7 @@ eq("the placement reports the crew it will write, by value", crewLive.placedCrew
 eq("the announcement to other clients carries only the cinematic's own fields",
   crewLive.wireKeys, [["id", "sceneId", "type", "x", "y"]]);
 check("NEGATIVE: no crew rides the wire, so no other client can write one", crewLive.wireHasCrew === false);
+eq("⭐ the marks follow the crew: three seats, three figure marks", crewLive.marksFor3, 3);
 eq("three seats asked for, three token documents created", crewLive.spawned, 3);
 eq("each stands on its own unload beat, by coordinate", crewLive.spawnedAt, crewLive.wantedAt);
 check("and every one of them is the actor the referee chose", crewLive.allFromChosenActor === true);
@@ -768,6 +775,7 @@ eq("NEGATIVE: a call with no crew named writes no document at all",
   crewLive.censusAfterNoCrew, crewLive.censusBeforeNoCrew);
 eq("⭐ NO CEILING: nine asked for is nine — reported", crewLive.overCrewCount, 9);
 eq("nine asked for is nine — written", crewLive.overSpawned, 9);
+eq("and nine seats draw the five marks of the first rank, no more", crewLive.marksFor9, 5);
 check("and every one of the nine stands inside the scene", crewLive.overInside === true);
 eq("a line marked at the map's bottom edge still writes every seat", crewLive.edgeSpawned, 7);
 check("⭐ NEVER OFF THE MAP: every edge-marked seat stands inside the scene", crewLive.edgeInside === true);
@@ -860,6 +868,7 @@ const crewDialog = await page.evaluate(async (tool) => {
     const tip = body?.querySelector("label.cp-tt-crew-toggle span.cp-tt-tip") ?? null;
     const squad = body?.querySelector(".cp-tt-squad") ?? null;
     out.selectorsMatch = !!img && !!imgIn && !!toggle && !!tip && !!squad && !!body?.querySelector(".cp-tt-row-add") && !!body?.querySelector(".cp-tt-row-proto-holder.cp-hidden .cp-tt-row-proto");
+    out.noClearButton = !body?.querySelector(".cp-tt-av-clear");
     out.placeholderShown = /av-lozenge\.svg$/.test(img?.getAttribute("src") ?? "");
     out.imgStartsEmpty = imgIn?.value ?? null;
     out.toggleStartsOff = toggle?.checked === false;
@@ -895,13 +904,36 @@ const crewDialog = await page.evaluate(async (tool) => {
     const picker = [...foundry.applications.instances.values()].find(a => !appsBefore.has(a.id) && /FilePicker/.test(a.constructor?.name ?? ""));
     out.pickerOpened = !!picker;
     out.pickerType = picker?.options?.type ?? picker?.type ?? null;
-    try { await picker?.close(); } catch (_e) { /* fine */ }
+    // ⭐ the picker sits ABOVE the window once rendered (user report: it opened behind). The V2 picker
+    // fetches its listing before its first paint, so its element is polled for, not assumed.
+    for (let i = 0; i < 40 && !picker?.element?.isConnected; i++) await sleep(100);
+    await sleep(150);
+    out.pickerZ = [Number(picker?.element?.style?.zIndex), Number(el?.style?.zIndex)];
+    out.pickerAbove = out.pickerZ[0] > out.pickerZ[1];
+    // and normal click order between the two: touching the window raises it, touching the picker raises it back
+    el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })); await sleep(50);
+    const zAfterWindowTouch = [Number(picker?.element?.style?.zIndex), Number(el?.style?.zIndex)];
+    picker?.element?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })); await sleep(50);
+    const zAfterPickerTouch = [Number(picker?.element?.style?.zIndex), Number(el?.style?.zIndex)];
+    out.clickOrder = zAfterWindowTouch[1] > zAfterWindowTouch[0] && zAfterPickerTouch[0] > zAfterPickerTouch[1];
+    out.clickOrderZ = [zAfterWindowTouch, zAfterPickerTouch];
+    // ⭐ the picker is closed WITH the window, not left standing (user report)
     setInput(imgIn, IMG);
     img.src = IMG;
     out.pressedCall = press(el, "call");
     const a = await settled(answered, "the answered call");
     out.answeredSettled = a.ok;
     out.answered = a.v;
+    await sleep(300);
+    out.pickerClosedWithWindow = !picker?.rendered;
+    // ⭐ a pick made AFTER the window has gone still applies to the next call (user report): drive the
+    // picker's own callback the way its file list would, against a window that no longer exists.
+    const lateFp = new (foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker)({
+      type: "image", callback: picker?.options?.callback ?? picker?.callback ?? (() => {}),
+    });
+    out.lateCallbackExists = typeof (picker?.options?.callback ?? picker?.callback) === "function";
+    try { (picker?.options?.callback ?? picker?.callback)?.("modules/cp2020-augmented/img/missile.webp"); } catch (e) { out.lateCallbackThrew = String(e?.message ?? e); }
+    try { await lateFp.close?.(); } catch (_e) { /* never rendered */ }
 
     /* (b) the second call remembers the first; the toggle off is the cinematic alone, the picture kept */
     out.firstDialogClosed = await waitGone();
@@ -911,6 +943,8 @@ const crewDialog = await page.evaluate(async (tool) => {
     out.remembersRows = [...(body2?.querySelectorAll(".cp-tt-rows .cp-tt-row") ?? [])].map(r => [r.querySelector(".cp-tt-row-actor").value, r.querySelector(".cp-tt-row-count").value]);
     out.remembersImg = body2?.querySelector('input[name="cp-tt-img"]')?.value ?? null;
     out.remembersImgShown = body2?.querySelector("img.cp-tt-av-img")?.getAttribute("src") ?? null;
+    // the second window shows the LATE pick, then the driven state below re-pins the chip for the rest
+    setInput(body2?.querySelector('input[name="cp-tt-img"]'), IMG);
     out.remembersToggle = body2?.querySelector('input[name="cp-tt-crew-on"]')?.checked ?? null;
     const t2 = body2?.querySelector('input[name="cp-tt-crew-on"]');
     t2.checked = false; t2.dispatchEvent(new Event("change", { bubbles: true }));
@@ -920,14 +954,11 @@ const crewDialog = await page.evaluate(async (tool) => {
     out.untouchedSettled = u.ok;
     out.untouched = u.v;
 
-    /* (c) the built-in shape is one click away; a removed row is gone; the refusal backs out */
+    /* (c) a removed row is gone; the refusal backs out */
     out.secondDialogClosed = await waitGone();
     const refused = T.promptTraumaTeamCrew();
     const el3 = await openDialog();
     const body3 = el3?.querySelector(".cp-tt-crew-body");
-    body3?.querySelector(".cp-tt-av-clear")?.click();
-    out.clearedImg = body3?.querySelector('input[name="cp-tt-img"]')?.value ?? null;
-    out.clearedShown = /av-lozenge\.svg$/.test(body3?.querySelector("img.cp-tt-av-img")?.getAttribute("src") ?? "");
     body3?.querySelector(".cp-tt-rows .cp-tt-row .cp-tt-row-remove")?.click();
     out.rowsAfterRemove = body3?.querySelectorAll(".cp-tt-rows .cp-tt-row").length ?? -1;
     body3?.querySelector(".cp-tt-row-add")?.click();
@@ -956,6 +987,7 @@ const crewDialog = await page.evaluate(async (tool) => {
 check("the call window section ran without throwing", !crewDialog.threw, String(crewDialog.threw ?? ""));
 check("the window renders and is wired", crewDialog.rendered === true);
 check("the handler's own selectors match the rendered nodes", crewDialog.selectorsMatch === true);
+check("no 'use built-in shape' button (removed on the user's word 2026-09-19)", crewDialog.noClearButton === true);
 check("the portrait shows the built-in shape until a picture is chosen", crewDialog.placeholderShown === true);
 eq("and the image field starts empty", crewDialog.imgStartsEmpty, "");
 check("the crew toggle starts OFF — the default is the cinematic alone", crewDialog.toggleStartsOff === true);
@@ -972,19 +1004,21 @@ check("the seat readout counts the squad (3)", /\b3\b/.test(crewDialog.seatsText
 check("a hand-typed count past the marks is counted, not refused (2 + 7 = 9)", /\b9\b/.test(crewDialog.seatsTextAfterType), crewDialog.seatsTextAfterType);
 check("⭐ the portrait opens the platform's own file browser", crewDialog.pickerOpened === true);
 eq("browsing images", crewDialog.pickerType, "image");
+check("⭐ the file browser sits ABOVE the call window once rendered", crewDialog.pickerAbove === true, `z picker/window ${JSON.stringify(crewDialog.pickerZ)}`);
+check("and the two keep normal click order — touch the window, it leads; touch the picker, it leads again", crewDialog.clickOrder === true, JSON.stringify(crewDialog.clickOrderZ));
 check("the confirm button is present and pressable", crewDialog.pressedCall === true, `footer: ${(crewDialog.footer ?? []).join(", ")}`);
 check("pressing it settles the call", crewDialog.answeredSettled === true, String(crewDialog.answered));
 eq("the answer is the squad, in row order, with the counts typed", crewDialog.answered?.crew?.map(r => r.count) ?? null, [2, 7]);
 eq("and the picture that was named", crewDialog.answered?.img ?? null, "modules/cp2020-augmented/img/chip.png");
+check("⭐ the file browser is closed with the window", crewDialog.pickerClosedWithWindow === true);
+check("a pick made after the window has gone does not throw", crewDialog.lateCallbackExists === true && !crewDialog.lateCallbackThrew, String(crewDialog.lateCallbackThrew ?? ""));
 check("the second window remembers the first call's rows", JSON.stringify(crewDialog.remembersRows) === JSON.stringify(crewDialog.rowsAfterOtherDrop?.map((r, i) => [r[0], i === 1 ? "7" : r[1]])), JSON.stringify(crewDialog.remembersRows));
-eq("and its picture", crewDialog.remembersImg, "modules/cp2020-augmented/img/chip.png");
-eq("shown in the portrait", crewDialog.remembersImgShown, "modules/cp2020-augmented/img/chip.png");
+eq("⭐ and the LATE pick is what the next window opens with", crewDialog.remembersImg, "modules/cp2020-augmented/img/missile.webp");
+eq("shown in the portrait", crewDialog.remembersImgShown, "modules/cp2020-augmented/img/missile.webp");
 check("and that the crew was on", crewDialog.remembersToggle === true);
 check("unticking the toggle hides the squad list", crewDialog.squadHiddenAfterUntick === true);
 check("the toggled-off confirm settles", crewDialog.untouchedSettled === true, String(crewDialog.untouched));
 eq("NEGATIVE: with the toggle off, no crew is asked for — the picture still is", crewDialog.untouched, { crew: null, img: "modules/cp2020-augmented/img/chip.png" });
-eq("the built-in shape is one click away — the field clears", crewDialog.clearedImg, "");
-check("and the portrait shows the shape again", crewDialog.clearedShown === true);
 eq("a removed row is gone", crewDialog.rowsAfterRemove, 1);
 eq("the add control appends an empty row", crewDialog.rowsAfterAdd, 2);
 check("the refusal button is offered", crewDialog.hasCancel === true);

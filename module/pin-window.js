@@ -16,14 +16,17 @@
  *
  * A window counts as "pinned" if it is a DialogV2 / core V1 Dialog (covering every confirm either
  * framework spawns, with no per-call wiring), if its class opts in with `static CP_PIN_ON_TOP = true`,
- * or if it is the base system's V1 Attack Modifiers window (matched by its stable id — the module
- * never edits the base class).
+ * if the INSTANCE opts in with `_cpPinOnTop = true` (⭐ 2026-09-19: a window a pinned dialog spawns —
+ * the AV call window's file browser — must float WITH its parent, or the parent's own pin buries it
+ * the instant it opens; user report), or if it is the base system's V1 Attack Modifiers window
+ * (matched by its stable id — the module never edits the base class).
  */
 
 /** @param {ApplicationV2} app */
 function isPinnedWindow(app) {
   const DialogV2 = foundry.applications?.api?.DialogV2;
   if (DialogV2 && app instanceof DialogV2) return true;
+  if (app?._cpPinOnTop === true) return true;
   return app?.constructor?.CP_PIN_ON_TOP === true;
 }
 

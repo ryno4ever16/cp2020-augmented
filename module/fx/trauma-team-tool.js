@@ -189,6 +189,8 @@ const PLACEHOLDER_IMG = `modules/${SCOPE}/img/av-lozenge.svg`;
  * aircraft in twice should not have to find the picture twice; nothing about it is written anywhere.
  */
 let _lastCall = { img: "", crewOn: false, rows: [] };
+/** The file browser the window opened, if any — closed with the window so a pick cannot outlive it. */
+let _picker = null;
 
 /** The drag payload the platform puts on a sidebar drag, whichever namespace this core exposes it under. */
 function dragDataOf(ev) {
@@ -268,7 +270,14 @@ export async function promptTraumaTeamCrew() {
       squad?.classList.toggle("cp-hidden", !on);
     };
 
-    // The picture: the sheet's own picker, the sheet's own bind.
+    // The picture: the sheet's own picker, the sheet's own bind. ⭐ THE PICKER IS PINNED WITH THIS
+    // WINDOW (user report 2026-09-19: it opened behind). This window is a DialogV2, and the module's
+    // pin-window helper floats every DialogV2 above ordinary windows — so an ordinary file browser it
+    // spawns is re-buried the moment it renders. Pinned as well (`_cpPinOnTop`, the instance opt-in the
+    // helper reads), the two keep normal click order between themselves: whichever was touched last is
+    // in front. The picker is held so the window can close it, and a pick made after this window has
+    // already gone still lands in the session memory — so it applies to the next call, as the user
+    // expects, instead of writing into a detached field.
     img?.addEventListener("click", (ev) => {
       ev.preventDefault();
       const FP = foundry.applications?.apps?.FilePicker?.implementation ?? foundry.applications?.apps?.FilePicker ?? globalThis.FilePicker;
@@ -276,13 +285,15 @@ export async function promptTraumaTeamCrew() {
         type: "image",
         activeSource: "data",
         current: imgIn?.value || "",
-        callback: (path) => { if (imgIn) imgIn.value = path; if (img) img.src = path; },
+        callback: (path) => {
+          if (imgIn?.isConnected) imgIn.value = path;
+          if (img?.isConnected) img.src = path;
+          _lastCall = { ..._lastCall, img: path };
+        },
       });
+      fp._cpPinOnTop = true;
+      _picker = fp;
       fp.render(true);
-    });
-    body.querySelector(".cp-tt-av-clear")?.addEventListener("click", () => {
-      if (imgIn) imgIn.value = "";
-      if (img) img.src = PLACEHOLDER_IMG;
     });
 
     toggle?.addEventListener("change", () => setCrewOn(toggle.checked));
@@ -343,6 +354,8 @@ export async function promptTraumaTeamCrew() {
     return answer;
   } finally {
     Hooks.off("renderDialogV2", hookId);
+    const fp = _picker; _picker = null;
+    if (fp?.rendered) { try { await fp.close(); } catch (_e) { /* already gone */ } }
   }
 }
 

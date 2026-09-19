@@ -4302,7 +4302,6 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-tt-crew-body .cp-tt-av-img { flex: 0 0 auto; width: 96px; height: 64px; object-fit: contain; cursor: pointer; border: 1px solid rgba(192,160,98,0.5); border-radius: 4px; background: rgba(0,0,0,0.25); }
 .cp-tt-crew-body .cp-tt-av-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .cp-tt-crew-body .cp-tt-av-label { font-weight: bold; }
-.cp-tt-crew-body .cp-tt-av-clear,
 .cp-tt-crew-body .cp-tt-row-add,
 .cp-tt-crew-body .cp-tt-row-remove { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; line-height: 1.6; padding: 0 8px; }
 .cp-tt-crew-body .cp-tt-crew-toggle { display: flex; align-items: center; gap: 6px; }
