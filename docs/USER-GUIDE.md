@@ -161,7 +161,37 @@ hand-edit skill levels), and **hide the IP UI entirely** for tables that don't u
 
 ## 9. Chipware & skill chips (stub)
 
-## 10. Settings reference (stub — regenerate at release; every setting, its default, and who it's for)
+## 10. Calling in an AV (Trauma Team, police, military, anyone)
+
+GM only — players never see the control. With the free **Sequencer** and **JB2A** modules installed, a
+button on the token tool group (**Call In An AV**) flies an aircraft onto the map: a marked landing
+area, a descent, downdraft and dust, the figures stepping off one after another. Pressing the control
+again sends the aircraft away.
+
+- **The window.** The button opens one window before you place anything.
+  - **Aircraft image.** Click the picture, the same way you click a character's portrait, and choose any
+    image in your world's files (a top-down vehicle token works best — the heavy AV in a vehicle-token
+    pack, say). It is fitted to the aircraft's long side with its proportions kept. Leave it alone for
+    the built-in shape; **Use built-in shape** clears it. The window remembers your last picture and
+    squad until you reload.
+  - **Place crew tokens.** Off by default: the arrival alone, nothing created. On: tokens for the
+    actors in the squad list are placed as each figure leaves the aircraft. Hover the words for the
+    short version.
+  - **The squad list.** Drag actors straight from the sidebar's Actors tab onto the window: each
+    becomes a row at count 1, and dropping the same actor again adds one more of it. Or use **+ Add
+    actor** and pick from the list. Each row is one actor and how many of it step off; rows step off in
+    order, so put the medtech first if you want the medtech first. Only this world's own actors can step
+    off (not compendium entries) — the module ships no NPCs.
+  - **How many.** As many as you like. The first five stand on the drawn marks; the rest keep walking
+    the same line behind them. Nobody is ever placed off the map — a landing area marked at the edge
+    still puts every figure on the scene.
+- **Then place.** Confirm, move the ghost rectangle to where the aircraft lands, click. Every figure
+  is placed **unlinked** (its own copy, the way five mooks dragged from the sidebar would be), whatever
+  the actor's own prototype says. The tokens stay when the aircraft leaves; they are yours to move.
+- **Other players' screens.** Everyone sees the same arrival and the same aircraft image; only your
+  client writes the tokens, so one call is one squad.
+
+## 11. Settings reference (stub — regenerate at release; every setting, its default, and who it's for)
 
 > **2026-08-29 settings trim:** ~23 world switches were retired or merged in one pass. The
 > governing principle is action-as-consent: a rule you engage by *doing something* (loading a

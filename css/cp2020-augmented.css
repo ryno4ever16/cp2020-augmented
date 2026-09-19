@@ -4294,6 +4294,27 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-tt-crew-body > :is(p, div) { margin: 0; flex: 0 0 auto; }
 .cp-tt-crew-body .field > label { flex: 1 1 11em; min-width: 8em; }
 .cp-tt-crew-body .field > select { height: 24px; min-height: 24px; }
+/* The call window's three parts (2026-09-19). The portrait is the sheet's own profile-img idiom at the
+   sheet's own size; the toggle's tooltip lives on the text span alone, so only the span gets a cursor.
+   Rows are one flex line each: the picker shares the leftover width (the install-picker idiom), the
+   count and the remove button stay at their own size. */
+.cp-tt-crew-body .cp-tt-av { align-items: flex-start; gap: 10px; flex-wrap: nowrap; }
+.cp-tt-crew-body .cp-tt-av-img { flex: 0 0 auto; width: 96px; height: 64px; object-fit: contain; cursor: pointer; border: 1px solid rgba(192,160,98,0.5); border-radius: 4px; background: rgba(0,0,0,0.25); }
+.cp-tt-crew-body .cp-tt-av-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cp-tt-crew-body .cp-tt-av-label { font-weight: bold; }
+.cp-tt-crew-body .cp-tt-av-clear,
+.cp-tt-crew-body .cp-tt-row-add,
+.cp-tt-crew-body .cp-tt-row-remove { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; line-height: 1.6; padding: 0 8px; }
+.cp-tt-crew-body .cp-tt-crew-toggle { display: flex; align-items: center; gap: 6px; }
+.cp-tt-crew-body .cp-tt-tip { cursor: help; }
+.cp-tt-crew-body .cp-tt-squad { display: flex; flex-direction: column; gap: 6px; }
+.cp-tt-crew-body .cp-tt-rows { display: flex; flex-direction: column; gap: 4px; }
+.cp-tt-crew-body .cp-tt-row { flex-wrap: nowrap; align-items: center; gap: 6px; }
+.cp-tt-crew-body .cp-tt-row-actor { flex: 1 1 0; min-width: 6em; height: 24px; min-height: 24px; }
+.cp-tt-crew-body .cp-tt-row-count { flex: 0 0 4em; width: 4em; height: 24px; text-align: center; }
+.cp-tt-crew-body .cp-tt-squad-foot { align-items: center; gap: 8px; flex-wrap: nowrap; }
+.cp-tt-crew-body .cp-tt-seats { flex: 1 1 auto; min-width: 0; font-size: 0.9em; opacity: 0.85; }
+.cp-tt-crew-body.cp-drop-hot { outline: 1px dashed #b8916a; outline-offset: 2px; background: rgba(138,109,59,0.12); }
 
 /* Goon Factory — the live formula check's invalid state (npcgen-app _onRender; user-ordered
    2026-08-28). The warn colour matches .cp-goon-warn; the border is the field marking itself. */

@@ -28,7 +28,7 @@
 import {
   landingRect, landTraumaTeam, endTraumaTeam, traumaTeamActive, clampCrewCount, TRAUMA_TEAM,
 } from "./trauma-team.js";
-import { localize } from "../utils.js";
+import { localize, localizeParam } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -181,53 +181,169 @@ export function landingPickerActive() {
   return _active !== null;
 }
 
+/** The built-in aircraft, as the portrait shows it before an image is chosen. */
+const PLACEHOLDER_IMG = `modules/${SCOPE}/img/av-lozenge.svg`;
+
 /**
- * WHO STEPS OFF — the optional half of the call (user ruling 2026-08-28), asked BEFORE the spot is
- * picked so that the click stays the trigger: the referee answers this, then aims, and the sequence
- * begins the instant they commit a place rather than a beat later behind a dialog.
+ * WHAT THE LAST CALL ASKED FOR, kept for the session on this client only. A referee calling the same
+ * aircraft in twice should not have to find the picture twice; nothing about it is written anywhere.
+ */
+let _lastCall = { img: "", crewOn: false, rows: [] };
+
+/** The drag payload the platform puts on a sidebar drag, whichever namespace this core exposes it under. */
+function dragDataOf(ev) {
+  const TE = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor ?? null;
+  try { return TE?.getDragEventData?.(ev) ?? null; } catch (_e) { return null; }
+}
+
+/**
+ * THE CALL WINDOW (reworked 2026-09-19, user-ruled). One window, three parts, asked BEFORE the spot is
+ * picked so that the click stays the trigger:
+ *   • the AIRCRAFT IMAGE — the sheet's own idiom (`data-edit="img"` → the platform's file browser),
+ *     chosen per call; no world setting, because the gesture is opt-in by nature;
+ *   • the CREW TOGGLE — tokens step off only when it is on; its tooltip is on the label TEXT only;
+ *   • the SQUAD LIST — rows of actor + count in step-off order, with no ceiling on the total; an actor
+ *     dragged from the sidebar onto the window becomes a row (or one more of an existing row).
  *
- * ⛔ THE LIST IS THE WORLD'S OWN ACTORS AND NOTHING ELSE. This module ships no medical-response NPC,
- * names none and bundles no stat block; the referee supplies the figure. Default is the empty option,
- * so pressing the confirm without touching anything keeps the pure cinematic that shipped.
+ * ⛔ THE LIST IS THE WORLD'S OWN ACTORS AND NOTHING ELSE. This module ships no NPC, names none and
+ * bundles no stat block; the referee supplies the figures.
  *
- * ⚠ NO RENDER WIRING, DELIBERATELY. DialogV2's config `render` callback never fires on v14, so a
- * dialog that needs live behaviour has to patch `_onRender` or ride the `renderDialogV2` hook. This
- * one needs none: both controls are read once, at the confirm, exactly as the deploy-name prompt and
- * the cover placement dialog read theirs. The count is simply ignored when no actor is chosen, which
- * the hint says in as many words rather than being enforced by greying a field.
+ * The rows are cloned from the template's own hidden prototype row — the markup lives in the .hbs, the
+ * wiring here. DialogV2's config `render` callback never fires on v14, so the wiring rides the
+ * `renderDialogV2` hook, bound for exactly this dialog's lifetime (the cover dialog's idiom).
  *
- * @returns {Promise<{crew:{actorId:string,count:number}|null}|null>} null = the referee backed out
+ * @returns {Promise<{crew:Array<{actorId:string,count:number}>|null, img:string}|null>} null = backed out
  */
 export async function promptTraumaTeamCrew() {
   const { DialogV2 } = foundry.applications.api;
   const actors = (game.actors?.contents ?? [])
     .map((a) => ({ id: a.id, name: String(a.name ?? "") }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const last = _lastCall;
   const content = await renderTpl(`modules/${SCOPE}/templates/dialog/trauma-team-crew.hbs`, {
     actors,
-    maxCount: TRAUMA_TEAM.figureCount,
-    defaultCount: TRAUMA_TEAM.figureCount,
+    img: last.img || PLACEHOLDER_IMG,
+    imgValue: last.img,
+    crewOn: last.crewOn,
   });
-  const answer = await DialogV2.wait({
-    window: { title: localize("TraumaTeamCrewTitle"), resizable: true },
-    // Stated width for the reason the cover dialog states one: DialogV2 is fixed-size by default and
-    // its default is narrow enough to wrap a long actor name onto three lines.
-    position: { width: 460 },
-    classes: ["cyberpunk", "cp-tt-crew"],
-    content,
-    rejectClose: false,
-    buttons: [{
-      action: "call", default: true, label: localize("TraumaTeamCrewConfirm"),
-      callback: (event, button, dialog) => {
-        const el = (dialog.element ?? dialog);
-        const actorId = el.querySelector('select[name="cp-tt-actor"]')?.value ?? "";
-        const count = el.querySelector('input[name="cp-tt-count"]')?.value;
-        return { crew: actorId ? { actorId, count: clampCrewCount(count) } : null };
-      },
-    }, { action: "cancel", label: localize("Cancel") }],
+
+  const hookId = Hooks.on("renderDialogV2", (app, html) => {
+    const root = html instanceof HTMLElement ? html : html?.[0];
+    const body = root?.querySelector?.(".cp-tt-crew-body");
+    if (!body || body.dataset.cpWired === "1") return;
+    body.dataset.cpWired = "1";
+    const img = body.querySelector(".cp-tt-av-img");
+    const imgIn = body.querySelector('input[name="cp-tt-img"]');
+    const toggle = body.querySelector('input[name="cp-tt-crew-on"]');
+    const squad = body.querySelector(".cp-tt-squad");
+    const rowsEl = body.querySelector(".cp-tt-rows");
+    const proto = body.querySelector(".cp-tt-row-proto");
+    const seats = body.querySelector(".cp-tt-seats");
+
+    const refresh = () => {
+      const total = [...rowsEl.querySelectorAll(".cp-tt-row")]
+        .filter((r) => r.querySelector(".cp-tt-row-actor")?.value)
+        .reduce((n, r) => n + clampCrewCount(r.querySelector(".cp-tt-row-count")?.value), 0);
+      if (seats) seats.textContent = total
+        ? localizeParam("TraumaTeamCrewSeats", { n: total, marks: TRAUMA_TEAM.figureCount })
+        : localize("TraumaTeamCrewSeatsNone");
+    };
+    const addRow = (actorId = "", count = 1) => {
+      if (!proto || !rowsEl) return null;
+      const row = proto.cloneNode(true);
+      row.classList.remove("cp-tt-row-proto");
+      const sel = row.querySelector(".cp-tt-row-actor");
+      const cnt = row.querySelector(".cp-tt-row-count");
+      if (sel) sel.value = actorId;
+      if (cnt) cnt.value = String(clampCrewCount(count));
+      row.querySelector(".cp-tt-row-remove")?.addEventListener("click", () => { row.remove(); refresh(); });
+      sel?.addEventListener("change", refresh);
+      cnt?.addEventListener("input", refresh);
+      rowsEl.append(row);
+      refresh();
+      return row;
+    };
+    const setCrewOn = (on) => {
+      if (toggle) toggle.checked = !!on;
+      squad?.classList.toggle("cp-hidden", !on);
+    };
+
+    // The picture: the sheet's own picker, the sheet's own bind.
+    img?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const FP = foundry.applications?.apps?.FilePicker?.implementation ?? foundry.applications?.apps?.FilePicker ?? globalThis.FilePicker;
+      const fp = new FP({
+        type: "image",
+        activeSource: "data",
+        current: imgIn?.value || "",
+        callback: (path) => { if (imgIn) imgIn.value = path; if (img) img.src = path; },
+      });
+      fp.render(true);
+    });
+    body.querySelector(".cp-tt-av-clear")?.addEventListener("click", () => {
+      if (imgIn) imgIn.value = "";
+      if (img) img.src = PLACEHOLDER_IMG;
+    });
+
+    toggle?.addEventListener("change", () => setCrewOn(toggle.checked));
+    body.querySelector(".cp-tt-row-add")?.addEventListener("click", () => addRow());
+
+    // An actor dragged from the sidebar, dropped anywhere on the window: a row, or one more of one.
+    body.addEventListener("dragover", (ev) => { ev.preventDefault(); body.classList.add("cp-drop-hot"); });
+    body.addEventListener("dragleave", () => body.classList.remove("cp-drop-hot"));
+    body.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      body.classList.remove("cp-drop-hot");
+      const data = dragDataOf(ev);
+      if (data?.type !== "Actor") return;
+      const doc = data.uuid ? fromUuidSync(data.uuid) : (data.id ? game.actors?.get(data.id) : null);
+      const actor = doc?.id ? game.actors?.get(doc.id) : null;
+      if (!actor) { ui.notifications?.warn?.(localize("TraumaTeamCrewWorldOnly")); return; }
+      setCrewOn(true);
+      const existing = [...rowsEl.querySelectorAll(".cp-tt-row")]
+        .find((r) => r.querySelector(".cp-tt-row-actor")?.value === actor.id);
+      if (existing) {
+        const cnt = existing.querySelector(".cp-tt-row-count");
+        if (cnt) cnt.value = String(clampCrewCount(cnt.value) + 1);
+        refresh();
+      } else addRow(actor.id, 1);
+    });
+
+    for (const r of last.rows) addRow(r.actorId, r.count);
+    refresh();
   });
-  if (!answer || answer === "cancel") return null;
-  return answer;
+
+  try {
+    const answer = await DialogV2.wait({
+      window: { title: localize("TraumaTeamCrewTitle"), resizable: true },
+      // Stated width for the reason the cover dialog states one: DialogV2 is fixed-size by default and
+      // its default is narrow enough to wrap a long actor name onto three lines.
+      position: { width: 480 },
+      classes: ["cyberpunk", "cp-tt-crew"],
+      content,
+      rejectClose: false,
+      buttons: [{
+        action: "call", default: true, label: localize("TraumaTeamCrewConfirm"),
+        callback: (event, button, dialog) => {
+          const el = (dialog.element ?? dialog);
+          const img = el.querySelector('input[name="cp-tt-img"]')?.value?.trim() ?? "";
+          const crewOn = el.querySelector('input[name="cp-tt-crew-on"]')?.checked === true;
+          const rows = [...el.querySelectorAll(".cp-tt-rows .cp-tt-row")]
+            .map((r) => ({
+              actorId: r.querySelector(".cp-tt-row-actor")?.value ?? "",
+              count: clampCrewCount(r.querySelector(".cp-tt-row-count")?.value),
+            }))
+            .filter((r) => r.actorId);
+          _lastCall = { img, crewOn, rows };
+          return { crew: crewOn && rows.length ? rows : null, img };
+        },
+      }, { action: "cancel", label: localize("Cancel") }],
+    });
+    if (!answer || answer === "cancel") return null;
+    return answer;
+  } finally {
+    Hooks.off("renderDialogV2", hookId);
+  }
 }
 
 /**
@@ -245,7 +361,7 @@ export async function onTraumaTeamTool() {
   if (!answer) return { skipped: "cancelled" };
   const point = await armLandingPicker();
   if (!point) return { skipped: "cancelled" };
-  const placed = await landTraumaTeam(point, { crew: answer.crew });
+  const placed = await landTraumaTeam(point, { crew: answer.crew, img: answer.img });
   if (!placed.skipped) ui.notifications?.info?.(localize("TraumaTeamPlaced"));
   return { placed };
 }

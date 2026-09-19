@@ -619,26 +619,34 @@ Those questions now have answers, and the seam is closed rather than deferred:
   ships with this. The module bundles no medical-response NPC, names none, and has no opinion about
   what one should be — the picker offers `game.actors` and nothing else. That is a content-policy line,
   not a convenience.
-- **How many?** A count, clamped to `1 … figureCount` (**5**) — *the marks are the seats*. `crewSpawnPlan`
-  is the pure statement of it, and it takes the beats straight from `figureSchedule` rather than
-  recomputing them, so the token stands exactly where the mark it replaced was drawn. The one conversion
-  in it is centre → top-left corner (half the actor's own prototype footprint off both axes), which is
-  what makes a 2 × 2 figure straddle its mark rather than hang down-and-right of it.
+- **How many, of whom?** ⏪ *Reworked 2026-09-19 (user-ruled).* A LIST of rows, each an actor and a
+  count, in step-off order — a mixed squad (two medtechs, three security) is one call. `crewRows`
+  normalises the answer (the old single pair is still accepted, as one row); `crewSeatPlan` is the pure
+  statement of the seats: one per figure, each carrying ITS OWN actor and footprint. **No ceiling.**
+  `clampCrewCount` floors at one and stops there; the first `figureCount` (5) seats are the drawn marks,
+  and seat six onward continues the same line at the same cadence (`seatSchedule` — the marks stay five,
+  only the tokens go past them). Every corner is then held inside the scene rectangle
+  (`clampSeatToBounds`, "never placed out of the map bounds"), so a landing area marked at an edge
+  still puts every figure on the map. The one conversion is still centre → top-left corner (half the
+  seat's own footprint off both axes), which is what makes a 2 × 2 figure straddle its mark.
 - **Owned by whom, configured how?** The actor's own prototype answers all of it: `getTokenDocument`
   builds the document the platform would build for a drag-and-drop of that actor — art, footprint, link
   state, bars. This file has no opinion of its own about any of them (native-API first).
 - **Written by whom?** ⛔⛔ **The client that confirmed the call, and only it.** The crew never rides
-  the socket announcement: the payload is byte-for-byte the one this file has always sent (`type, id, x,
-  y, sceneId`), so every receiving client draws the same per-client cinematic it always drew and has
-  nothing to act on. The alternative — every client acting on a relayed crew — is N copies of the same
+  the socket announcement: the payload is the one this file has always sent (`type, id, x, y, sceneId`)
+  — plus, since 2026-09-19 and only when a picture was named, `img` and its measured `imgSize` (§2b.5:
+  presentation, which every client must share) — so every receiving client draws the same per-client
+  cinematic it always drew and has nothing to act on. The alternative — every client acting on a relayed crew — is N copies of the same
   five people. The keeper pins the wire's key set by value.
 - **When?** On the unload beats themselves, through the ladder's own timers. So a departure part-way
   through cancels the seats that had not stepped off yet; the ones already written **stay** — they are
   documents now, and the airframe leaving is not a reason to delete somebody.
 - **Cleaned up when?** Never, by us. They are the table's figures from the instant they exist.
 
-**The default is none.** A referee who answers nothing gets exactly the cinematic that shipped, and the
-keeper's negative leg pins the census across a full crewless run. The crew is also **not counted against
+**The default is none.** The call window's crew toggle starts OFF and the squad list starts empty; a
+referee who confirms without touching either gets exactly the cinematic that shipped, and the keeper's
+negative leg pins the census across a full crewless run. The window remembers the last call for the
+session on that client (rows, toggle, picture) — nothing is written anywhere. The crew is also **not counted against
 `maxLive`**: that cap bounds sprites the engine holds, and these are documents the world holds — their
 bound is the seat count, which is a harder one.
 
@@ -704,10 +712,20 @@ three rings were on screen at once and it read as churn rather than as four wave
 
 ### 2b.5 The airframe, and the engine finding that shaped it
 
-There is no aircraft art anywhere available to this module, and this rail does not source art of its
-own (§8 carries the asset ask). So the airframe is an **engine-native shape** — a dark rounded lozenge
-with a lit edge, which is what a top-down camera sees of a planform. With real art it becomes one
-`.file()` call and the shape goes.
+⏪ **2026-09-19 — THE ART SLOT IS THE REFEREE'S, PER CALL.** This module still ships no aircraft art
+and sources none; instead the call window carries the sheet's own portrait idiom (`data-edit="img"`,
+the platform's file browser) and the referee names ANY image in the world's files — the heavy-AV token
+in their vehicle folder, a screenshot, anything. `hullSpec(record)` decides once per record: a named
+picture draws as one `.file(path)` sprite, `.size()`d to the fit in the record; no picture draws the
+**engine-native shape** below — a dark rounded lozenge with a lit edge, which is what a top-down
+camera sees of a planform. The fit is measured ONCE by the calling client (`measureImage` → the
+platform's texture loader, after `srcExists` so a typo is a warning and the shape, not a red console
+line) and `fitImageSquares` sets the picture's LONGER side to `airframeWidthSquares` (4.6) with its
+own proportions kept — a nose-up token stays nose-up and is never stretched into the lozenge's box.
+The path and the fit ride the announcement (§2b.2a), so a receiving client draws without measuring.
+This is the rail's one documented exception to *database keys, never file paths* (§9): the path is the
+referee's own, chosen at the call. The descent, the altitude scale and the station-keeping bob animate
+the sprite container exactly as before, whichever hull is under them.
 
 ⭐ **MEASURED ENGINE FINDING: shapes are drawn from their TOP-LEFT.** The installed build's
 `drawRect(offset.x, offset.y, w, h)` treats the offset as the corner, so an uncorrected body sits a full
@@ -2273,8 +2291,9 @@ is the table, so a sixth condition is a row rather than a change:
 | `lifetimeMs` / `maxLive` | 600000 / 40 | the leak bound and the scene cap |
 | `TRAUMA_TEAM_SOUND.descent` / `.volume` | `fx-scifi-whoosh` / 0.5 | the one shipped cue. **`null` ships it silent** |
 | `LANDING_GHOST.*` | amber, alpha 0.12 | the placement ghost — `module/fx/trauma-team-tool.js` |
-| the crew's seat count | `figureCount` (**5**) | ⭐ *2026-08-28* — the optional crew's clamp is not a knob of its own: `clampCrewCount` reads `figureCount`, because **the marks are the seats**. Moving the figure count moves the ceiling with it |
-| the crew's default count | `figureCount` (**5**) | build-lane pick: the dialog pre-fills the full complement and the referee dials down. **Revert = 1** (one line in `promptTraumaTeamCrew`'s template context) |
+| the crew's seat count | **none** (⏪ was `figureCount`) | ⏪ *2026-09-19, user-ruled "unlimited placements"* — `clampCrewCount` floors at 1 and has no ceiling; the marks stay 5 and seat six onward continues the line (`seatSchedule`), every corner clamped inside the scene. **Revert** = `Math.min(TRAUMA_TEAM.figureCount, …)` in `clampCrewCount`. ⏪ *2026-08-28 (superseded):* the clamp read `figureCount`, because **the marks are the seats**. Moving the figure count moves the ceiling with it |
+| the aircraft image fit | `airframeWidthSquares` (**4.6**) = the picture's longer side | ⭐ *2026-09-19* — `fitImageSquares`; proportions kept. No rotation knob yet: the image is drawn as it is (a nose-up token stays nose-up). **Revert to the shape** = clear the portrait in the window. |
+| the crew's default count | ⏪ retired — rows start empty | ⏪ *2026-09-19*: the window opens with the crew toggle OFF and no rows; a dropped actor arrives at count 1. *(2026-08-28 pick, superseded:* the single row pre-filled `figureCount` and the referee dialled down.) **Revert = 1** (one line in `promptTraumaTeamCrew`'s template context) |
 
 ### The movement echo trail — `AFTERIMAGE` in `module/fx/afterimage.js` ⭐ *new 2026-08-28*
 
@@ -3694,6 +3713,7 @@ each one closed a blind spot in the *keeper* as well as in the product.
 | **FR#25, 2026-08-09** | ⏪ An ammo recolour now reaches the **pellet fan**; the base fan stays untinted | "For incendiary on autoshotgun the little dorito shaped pellets themselves didn't get the same red treatment as the spiky cone and starburst. Make sure when you update the animation for one shotgun ammo type, it's updated for all." Expressed as `tracerColor: null` on the class row — declared repaintable, painted with nothing — so the base look is byte-identical and every recolouring overlay (`api`, `ap`, `dualPurpose`, `rubber`, `stundart`) lands on column and fan alike. ⏪ Supersedes FR#24's "shell pellets are never tinted" for overlays only. |
 | **GROUND MARK, 2026-08-10** | ⏪⏪ The incendiary **ground mark is removed entirely**; the flames are unchanged | *"kill it."* The dark decal the burning ground used to leave under itself is withdrawn — the constant, the draw site and the two fields it reported on `fxGroundFire`'s return shape are all deleted rather than switched off, because a field that is always false is a mechanism a later reader has to disprove. **Revert values, so a restore is a transcription and not a rebuild:** key `jb2a.scorched_earth.black`, **1.5 squares**, opacity **0.7**, lifetime **180000 ms**, fadeIn **600**, fadeOut **3000**, `loopOptions({ loops: 1 })` (load-bearing — the asset is 6250 ms and an effect outliving its clip re-blooms by default), **below** the lighting, **one per payload** at the flames' **centroid**, delayed by the same arrival time the flames take. Two things outlive it: the fire's own 45 s lifetime, which was set on the precedent this element established and is still a cap; and the open decal-persistence question, now carried by the blood splash alone. |
 | **AP FLAG, 2026-09-14** | The weapon's **AP checkbox draws the AP round** when the load is standard | RYNO: *"Fix it so that having the checkbox ticked also shows the AP ammo animation."* Same day the damage math stopped double-dipping the checkbox and the AP modifier (`resolveApProfile`: flag + standard load = one AP round; a named load wins). The picture had lagged the math: `ammoFxKeyOf` read only the payload's id and mechanics, and a flag-AP shot with standard rounds carried multipliers of 1, so it drew as standard. The resolver now applies the same rule last — `standard` + `ap:true` → `ap`; any named load keeps its key. Two keeper legs in the fx-rail suite pin both halves. |
+| **AV CALL WINDOW, 2026-09-19** | The Trauma Team call is now **Call In An AV**: one window with a per-call **aircraft image** (sheet idiom, file browser), a **crew toggle** (tooltip on the label text only), a **squad list** of actor + count rows in step-off order with **no ceiling**, **drag-drop from the sidebar**, and every token **held inside the map** | User-ruled, verbatim spirit: no world setting ("a gesture that is opt-in by nature"), the sheet's own picker, generalise from medical to any AV, the checkbox with its tooltip "just over the text itself", mixed squads as a proof of concept, "allow unlimited placements… keep the philosophy of not hard limiting people", "never placed out of the map bounds", GM-only ("players shouldn't even see this button"). Built: `hullSpec`/`fitImageSquares`/`measureImage` (§2b.5), `seatSchedule`/`crewSeatPlan`/`crewRows`/`clampSeatToBounds` (§2b.2a), the window in `trauma-team-tool.js` + `trauma-team-crew.hbs` (rows cloned from a hidden prototype row — a `<template>` element does not survive DialogV2's render, rig-proven). The demo's own aircraft turned out to be `.from(tile)` in EskieMoh's macro, i.e. the GM's own tile image — which is exactly what this slot is. Keeper 174 legs; §4's plate-before-airframe leg re-pinned from a fixed 150 ms sleep to a bounded first-seen poll (engine create latency measured 212–487 ms that day). |
 | **AUDIO LEGS, 2026-09-15** | The fx-rail keeper **drains the audio phase before counting**; wall-time sprite/audio sync is reported, not judged | Six legs went red the day FX_AUDIO_PHASE shipped (08-27) and were carried as a documented harness defect through three releases. Cause: the recorder on `AudioHelper.play` was read the instant a volley resolved, while every phased play is a `setTimeout` still pending. User, after the mechanism was explained: *"do it."* The keeper now waits for the recorder to reach the drawn-round count, BOUNDED by `FX_AUDIO_PHASE_MAX_MS + rounds × cadence + slack`, so a silent product still fails. The 100 ms wall-time sync leg is re-pinned to the phase's actual contract — every drawn round's audio arrives, and never leads its sprite by more than 100 ms — because on the headless software rasteriser the phase's own timer is starved and the picture leads its report by 250–385 ms (recorded in the FX_AUDIO_PHASE block); the gaps are still printed as numbers for the table listen. No product code changed. |
 
 ---

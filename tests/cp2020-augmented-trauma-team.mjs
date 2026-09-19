@@ -38,6 +38,9 @@ const ENGINE_TEARDOWN_RACE = /Cannot set properties of null \(setting 'volume'\)
 const engineRaces = [];
 page.on("console", m => {
   if (m.type() !== "error" || /compatibility|deprecat|screen resolution/i.test(m.text())) return;
+  // §9 (f2) asks the server for a picture that does not exist, ON PURPOSE, to pin the fallback; the
+  // browser logs the 404 as a resource error of its own. That one line is the leg's, not the module's.
+  if (/404/.test(m.text()) && /does-not-exist\.png/.test(m.location?.()?.url ?? "")) return;
   errors.push(m.text());
 });
 page.on("pageerror", e => {
@@ -268,9 +271,23 @@ const live = await page.evaluate(async (mod) => {
   // The capture seam: run the whole ladder at a twentieth of its own clock so a keeper can watch it.
   M._setTraumaTimeScale(0.05);
   const centre = { x: canvas.dimensions.width / 2, y: canvas.dimensions.height / 2 };
+  const t0 = performance.now();
   const result = await M.landTraumaTeam(centre);
-  await sleep(150);
-  const early = M.liveTraumaFx().map(e => String(e?.data?.name ?? ""));
+  // ⏪ RE-PINNED 2026-09-19: this used to sleep a fixed 150 ms and read what was up. The engine's create
+  // pipeline is scaled by nothing this suite controls (measured today: the plate lands 212–487 ms after
+  // the call, the airframe 625–711 ms) — a fixed sleep against effect creation is the coin flip the
+  // keeper rules forbid. The ORDER is the contract, so the order is what is watched: the first instant
+  // each part is seen, polled and bounded.
+  const firstSeen = {};
+  for (let i = 0; i < 120; i++) {
+    for (const n of M.liveTraumaFx().map(e => String(e?.data?.name ?? ""))) {
+      const part = n.split(".").slice(3).join(".");
+      if (!(part in firstSeen)) firstSeen[part] = Math.round(performance.now() - t0);
+    }
+    if ("airframe" in firstSeen && "zone" in firstSeen) break;
+    await sleep(25);
+  }
+  const early = Object.keys(firstSeen).filter(p => firstSeen[p] <= (firstSeen.airframe ?? Infinity));
   await sleep(900);                                    // past the compressed ladder's own end
   const settled = M.liveTraumaFx().map(e => String(e?.data?.name ?? ""));
   const part = (n) => settled.filter(x => x.includes(`.${n}`)).length;
@@ -280,8 +297,9 @@ const live = await page.evaluate(async (mod) => {
   };
   return {
     result, docsBefore, docsAfter,
-    earlyHasZone: early.some(n => n.endsWith(".zone")),
-    earlyCorners: early.filter(n => n.includes(".corner")).length,
+    firstSeen,
+    earlyHasZone: "zone" in firstSeen && "airframe" in firstSeen && firstSeen.zone <= firstSeen.airframe,
+    earlyCorners: early.filter(n => n.startsWith("corner")).length,
     settledZone: part("zone"), settledCorners: part("corner"), settledAirframe: part("airframe"),
     settledNames: settled,
     active: M.traumaTeamActive(),
@@ -293,7 +311,7 @@ eq("the placement reports the parts it queued, by name", live.result.queued, [
   "pulse", "pulse", "pulse", "pulse", "figure", "figure", "figure", "figure", "figure",
 ]);
 check("it reports nothing skipped", live.result.skipped === null, JSON.stringify(live.result.skipped));
-check("the ground plate is up before the airframe arrives", live.earlyHasZone);
+check("the ground plate is up before the airframe arrives", live.earlyHasZone, JSON.stringify(live.firstSeen));
 eq("all four caution marks are up with it", live.earlyCorners, 4);
 eq("the plate is still there when the sequence has run", live.settledZone, 1);
 eq("so are its four caution marks", live.settledCorners, 4);
@@ -475,8 +493,10 @@ const crewPure = await page.evaluate(async (mod) => {
   const G = 100;
   const centre = { x: 1000, y: 1000 };
   const marks = M.figureSchedule(centre, G);
+  const seats9 = M.seatSchedule(centre, G, 9);
+  const bounds = { x: 0, y: 0, width: 1200, height: 1200 };
   return {
-    marks,
+    marks, seats9,
     plan3: M.crewSpawnPlan(centre, G, 3),
     plan3Again: M.crewSpawnPlan(centre, G, 3),
     planBig: M.crewSpawnPlan(centre, G, 2, { width: 2, height: 2 }),
@@ -488,6 +508,29 @@ const crewPure = await page.evaluate(async (mod) => {
     seats: M.crewSpawnPlan(centre, G, 99).length,
     scaled: M.crewSpawnPlan(centre, 200, 1)[0],
     markScaled: M.figureSchedule(centre, 200)[0],
+    // ⭐ 2026-09-19: mixed rows — per-seat actor + footprint, in row order
+    mixed: M.crewSeatPlan(centre, G, [
+      { actorId: "A", size: { width: 1, height: 1 } },
+      { actorId: "A", size: { width: 1, height: 1 } },
+      { actorId: "B", size: { width: 2, height: 2 } },
+    ], null),
+    rowsFromPair: M.crewRows({ actorId: "A", count: 2 }),
+    rowsFromList: M.crewRows([{ actorId: "A", count: 2 }, { actorId: "", count: 4 }, { actorId: "B", count: 0 }]),
+    rowsFromNothing: M.crewRows(null),
+    // ⭐ 2026-09-19: never off the map — a line marked at the bottom edge is held inside the bounds
+    edge: M.crewSeatPlan({ x: 1000, y: 1150 }, G, Array.from({ length: 9 }, () => ({ actorId: "A", size: { width: 1, height: 1 } })), bounds),
+    edgeFree: M.crewSeatPlan({ x: 1000, y: 1150 }, G, Array.from({ length: 9 }, () => ({ actorId: "A", size: { width: 1, height: 1 } })), null),
+    clampCorner: M.clampSeatToBounds({ x: -40, y: 1180 }, { w: 100, h: 100 }, bounds),
+    clampInside: M.clampSeatToBounds({ x: 300, y: 300 }, { w: 100, h: 100 }, bounds),
+    clampNoBounds: M.clampSeatToBounds({ x: -40, y: 1180 }, { w: 100, h: 100 }, null),
+    // ⭐ 2026-09-19: the hull — an image fitted to the long side, or the shape
+    fitWide: M.fitImageSquares({ width: 400, height: 200 }),
+    fitTall: M.fitImageSquares({ width: 264, height: 400 }),
+    fitNone: M.fitImageSquares(null),
+    hullFile: M.hullSpec({ img: "modules/x/av.png", imgSize: { width: 4.6, height: 2.3 } }),
+    hullNoSize: M.hullSpec({ img: "modules/x/av.png", imgSize: null }).kind,
+    hullNone: M.hullSpec({ img: "" }).kind,
+    longSide: M.TRAUMA_TEAM.airframeWidthSquares,
   };
 }, MOD);
 eq("a crew of three takes the first three unload beats, by time",
@@ -503,10 +546,44 @@ eq("the conversion scales with the scene's own square",
   [crewPure.scaled.x, crewPure.scaled.y], [crewPure.markScaled.x - 100, crewPure.markScaled.y - 100]);
 eq("the count clamps up to one seat", crewPure.clampLow, 1);
 eq("a negative count clamps to one seat", crewPure.clampNeg, 1);
-eq("and down to the marks that exist — the marks are the seats", crewPure.clampHigh, 5);
+eq("⭐ NO CEILING (2026-09-19): ninety-nine asked for is ninety-nine", crewPure.clampHigh, 99);
 eq("a non-number clamps to one seat", crewPure.clampJunk, 1);
 eq("an exact count is left alone", crewPure.clampExact, 5);
-eq("so the plan can never be longer than the beats", crewPure.seats, crewPure.marks.length);
+eq("so the plan is as long as the count", crewPure.seats, 99);
+eq("the first five seats ARE the drawn marks — same instants, same places",
+  crewPure.seats9.slice(0, 5), crewPure.marks);
+check("seat six onward continues the line: later, further along, further out",
+  crewPure.seats9.slice(5).every((s, i) => {
+    const prev = crewPure.seats9[4 + i];
+    return s.atMs > prev.atMs && s.x > prev.x && s.y > prev.y;
+  }), JSON.stringify(crewPure.seats9.slice(4)));
+eq("mixed rows: each seat carries its own actor, in row order",
+  crewPure.mixed.map(s => s.actorId), ["A", "A", "B"]);
+eq("mixed rows: each seat is offset by ITS OWN footprint",
+  crewPure.mixed.map(s => [s.x, s.y]),
+  [[crewPure.marks[0].x - 50, crewPure.marks[0].y - 50], [crewPure.marks[1].x - 50, crewPure.marks[1].y - 50],
+   [crewPure.marks[2].x - 100, crewPure.marks[2].y - 100]]);
+eq("the old single-pair answer is one row", crewPure.rowsFromPair, [{ actorId: "A", count: 2 }]);
+eq("a list keeps only rows that name an actor, counts clamped",
+  crewPure.rowsFromList, [{ actorId: "A", count: 2 }, { actorId: "B", count: 1 }]);
+eq("NEGATIVE: no answer is no rows", crewPure.rowsFromNothing, []);
+check("⭐ NEVER OFF THE MAP: with bounds, every corner of a nine-seat line at the bottom edge stays inside",
+  crewPure.edge.every(s => s.x >= 0 && s.y >= 0 && s.x + 100 <= 1200 && s.y + 100 <= 1200),
+  JSON.stringify(crewPure.edge.map(s => [s.x, s.y])));
+check("and without bounds the same line does run past the edge — so the clamp is what holds it",
+  crewPure.edgeFree.some(s => s.y + 100 > 1200), JSON.stringify(crewPure.edgeFree.map(s => [s.x, s.y])));
+eq("a corner past two edges is pulled to both", crewPure.clampCorner, { x: 0, y: 1100 });
+eq("a corner inside is left alone", crewPure.clampInside, { x: 300, y: 300 });
+eq("no bounds, no clamp", crewPure.clampNoBounds, { x: -40, y: 1180 });
+eq("a wide picture is fitted by its width, height following", crewPure.fitWide, { width: crewPure.longSide, height: crewPure.longSide / 2 });
+check("a tall picture is fitted by its HEIGHT — proportions kept, nothing stretched into the box",
+  crewPure.fitTall && Math.abs(crewPure.fitTall.height - crewPure.longSide) < 1e-9
+  && Math.abs(crewPure.fitTall.width - crewPure.longSide * 264 / 400) < 1e-9, JSON.stringify(crewPure.fitTall));
+eq("NEGATIVE: a picture with no size fits to nothing", crewPure.fitNone, null);
+eq("a record with an image and its fit draws the FILE at that size",
+  crewPure.hullFile, { kind: "file", file: "modules/x/av.png", width: 4.6, height: 2.3 });
+eq("NEGATIVE: an image with no measured fit draws the shape", crewPure.hullNoSize, "shape");
+eq("NEGATIVE: no image draws the shape", crewPure.hullNone, "shape");
 
 /* ─────────────────── §9 the crew, live — the one document write on this rail ─────────────────── */
 console.log("\n§9 crew, live");
@@ -515,7 +592,7 @@ const crewLive = await page.evaluate(async (mod) => {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const scene = canvas.scene;
   const out = {};
-  let actor = null;
+  let actor = null, actor2 = null;
   const madeTokenIds = [];
   try {
     // ⭐ The prototype is deliberately LINKED: the leg below demands the crew spawns unlinked ANYWAY
@@ -569,18 +646,94 @@ const crewLive = await page.evaluate(async (mod) => {
     await M.endTraumaTeam();
     for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
 
-    /* (d) the clamp reaches the live path too: nine asked, five seats written. */
+    /* (d) ⭐ NO CEILING (2026-09-19): nine asked, nine written — and every one inside the scene. */
     const before2 = new Set(scene.tokens.map(t => t.id));
     const over = await M.landTraumaTeam(centre, { crew: { actorId: actor.id, count: 9 } });
     out.overCrewCount = over.crew?.count ?? null;
     let fresh2 = [];
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 80; i++) {
       await sleep(150);
       fresh2 = scene.tokens.filter(t => !before2.has(t.id) && t.actorId === actor.id);
-      if (fresh2.length >= 5) break;
+      if (fresh2.length >= 9) break;
     }
     fresh2.forEach(t => madeTokenIds.push(t.id));
     out.overSpawned = fresh2.length;
+    const sr = canvas.dimensions.sceneRect;
+    out.overInside = fresh2.every(t => t.x >= sr.x && t.y >= sr.y
+      && t.x + t.width * gridPx <= sr.x + sr.width && t.y + t.height * gridPx <= sr.y + sr.height);
+    await M.endTraumaTeam();
+    for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
+
+    /* (d2) the edge case the clamp exists for: a landing area marked at the map's bottom edge. */
+    const before3 = new Set(scene.tokens.map(t => t.id));
+    const edgeCentre = { x: sr.x + sr.width / 2, y: sr.y + sr.height - gridPx };
+    await M.landTraumaTeam(edgeCentre, { crew: { actorId: actor.id, count: 7 } });
+    let fresh3 = [];
+    for (let i = 0; i < 80; i++) {
+      await sleep(150);
+      fresh3 = scene.tokens.filter(t => !before3.has(t.id) && t.actorId === actor.id);
+      if (fresh3.length >= 7) break;
+    }
+    fresh3.forEach(t => madeTokenIds.push(t.id));
+    out.edgeSpawned = fresh3.length;
+    out.edgeInside = fresh3.every(t => t.x >= sr.x && t.y >= sr.y
+      && t.x + t.width * gridPx <= sr.x + sr.width && t.y + t.height * gridPx <= sr.y + sr.height);
+    out.edgeWouldOverrun = M.crewSeatPlan(edgeCentre, gridPx,
+      Array.from({ length: 7 }, () => ({ actorId: actor.id, size: { width: 1, height: 1 } })), null)
+      .some(s => s.y + gridPx > sr.y + sr.height);
+    await M.endTraumaTeam();
+    for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
+
+    /* (e) ⭐ THE MIXED SQUAD (2026-09-19): two actors in one call, in row order, each its own copy. */
+    actor2 = await Actor.create({ name: "__PW__TT Crew B", type: "character", prototypeToken: { width: 2, height: 2 } });
+    const before4 = new Set(scene.tokens.map(t => t.id));
+    const mixed = await M.landTraumaTeam(centre, { crew: [{ actorId: actor.id, count: 2 }, { actorId: actor2.id, count: 3 }] });
+    out.mixedReported = mixed.crew ?? null;
+    let fresh4 = [];
+    for (let i = 0; i < 80; i++) {
+      await sleep(150);
+      fresh4 = scene.tokens.filter(t => !before4.has(t.id) && (t.actorId === actor.id || t.actorId === actor2.id));
+      if (fresh4.length >= 5) break;
+    }
+    fresh4.forEach(t => madeTokenIds.push(t.id));
+    const wantedMixed = M.crewSeatPlan(centre, gridPx, [
+      { actorId: actor.id, size: { width: 1, height: 1 } }, { actorId: actor.id, size: { width: 1, height: 1 } },
+      { actorId: actor2.id, size: { width: 2, height: 2 } }, { actorId: actor2.id, size: { width: 2, height: 2 } },
+      { actorId: actor2.id, size: { width: 2, height: 2 } },
+    ], canvas.dimensions.sceneRect);
+    const byPos = (a, b) => a.x - b.x || a.y - b.y;
+    out.mixedSpawned = fresh4.length;
+    out.mixedA = fresh4.filter(t => t.actorId === actor.id).length;
+    out.mixedB = fresh4.filter(t => t.actorId === actor2.id).length;
+    out.mixedAt = fresh4.map(t => ({ actorId: t.actorId, x: t.x, y: t.y })).sort(byPos);
+    out.mixedWanted = wantedMixed.map(s => ({ actorId: s.actorId, x: s.x, y: s.y })).sort(byPos);
+    out.mixedSizes = fresh4.filter(t => t.actorId === actor2.id).map(t => [t.width, t.height]);
+    out.mixedUnlinked = fresh4.every(t => t.actorLink === false);
+    await M.endTraumaTeam();
+    for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
+
+    /* (f) ⭐ THE PICTURE RIDES THE WIRE (2026-09-19): a call with an image announces it, measured. */
+    const wire2 = [];
+    game.socket.emit = function (...args) { wire2.push(args[1]); return realEmit.apply(this, args); };
+    let pictured;
+    try {
+      pictured = await M.landTraumaTeam(centre, { img: "modules/cp2020-augmented/img/chip.png" });
+    } finally { game.socket.emit = realEmit; }
+    out.wire2Keys = wire2.map(m => Object.keys(m ?? {}).sort());
+    out.wire2Fit = wire2[0]?.imgSize ?? null;
+    out.wire2Img = wire2[0]?.img ?? null;
+    out.picturedHull = M.hullSpec(M.traumaTeamState()).kind;
+    await sleep(200);
+    out.picturedQueuedAirframe = pictured.queued.includes("airframe");
+    await M.endTraumaTeam();
+    for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
+    /* (f2) NEGATIVE: an image that cannot be read draws the shape and announces no picture. */
+    const wire3 = [];
+    game.socket.emit = function (...args) { wire3.push(args[1]); return realEmit.apply(this, args); };
+    try { await M.landTraumaTeam(centre, { img: "modules/cp2020-augmented/img/does-not-exist.png" }); }
+    finally { game.socket.emit = realEmit; }
+    out.wire3Keys = wire3.map(m => Object.keys(m ?? {}).sort());
+    out.unreadableHull = M.hullSpec(M.traumaTeamState()).kind;
     await M.endTraumaTeam();
     for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
   } catch (err) {
@@ -591,9 +744,10 @@ const crewLive = await page.evaluate(async (mod) => {
     // suite set already carries a repair note for.
     try { await scene.deleteEmbeddedDocuments("Token", madeTokenIds.filter(id => scene.tokens.get(id))); } catch (_e) { /* already gone */ }
     try { await actor?.delete(); } catch (_e) { /* already gone */ }
+    try { await actor2?.delete(); } catch (_e) { /* already gone */ }
     M._setTraumaTimeScale(null);
-    out.leftBehind = scene.tokens.filter(t => t.name === "__PW__TT Crew").length;
-    out.actorsLeft = game.actors.filter(a => a.name === "__PW__TT Crew").length;
+    out.leftBehind = scene.tokens.filter(t => /^__PW__TT Crew/.test(t.name)).length;
+    out.actorsLeft = game.actors.filter(a => /^__PW__TT Crew/.test(a.name)).length;
   }
   return out;
 }, MOD);
@@ -612,39 +766,56 @@ check("⭐ crew figures spawn UNLINKED even from a LINKED prototype — mooks, e
 eq("the airframe leaving does not take them with it", crewLive.survivedDeparture, 3);
 eq("NEGATIVE: a call with no crew named writes no document at all",
   crewLive.censusAfterNoCrew, crewLive.censusBeforeNoCrew);
-eq("nine asked for clamps to the five marks — reported", crewLive.overCrewCount, 5);
-eq("nine asked for clamps to the five marks — written", crewLive.overSpawned, 5);
+eq("⭐ NO CEILING: nine asked for is nine — reported", crewLive.overCrewCount, 9);
+eq("nine asked for is nine — written", crewLive.overSpawned, 9);
+check("and every one of the nine stands inside the scene", crewLive.overInside === true);
+eq("a line marked at the map's bottom edge still writes every seat", crewLive.edgeSpawned, 7);
+check("⭐ NEVER OFF THE MAP: every edge-marked seat stands inside the scene", crewLive.edgeInside === true);
+check("and the unclamped line WOULD have run past the edge — the clamp is what held it", crewLive.edgeWouldOverrun === true);
+eq("⭐ MIXED SQUAD: two rows report as two rows, five seats", crewLive.mixedReported?.count ?? null, 5);
+eq("five token documents written for the two-actor call", crewLive.mixedSpawned, 5);
+eq("two of the first actor", crewLive.mixedA, 2);
+eq("three of the second", crewLive.mixedB, 3);
+eq("each on its own seat, in row order, offset by its own footprint", crewLive.mixedAt, crewLive.mixedWanted);
+eq("the second actor's figures keep their 2×2 footprint", crewLive.mixedSizes, [[2, 2], [2, 2], [2, 2]]);
+check("every figure of the mixed squad is unlinked", crewLive.mixedUnlinked === true);
+eq("⭐ THE PICTURE RIDES THE WIRE: a call with an image announces the path and its measured fit",
+  crewLive.wire2Keys, [["id", "img", "imgSize", "sceneId", "type", "x", "y"]]);
+eq("the announced path is the one given", crewLive.wire2Img, "modules/cp2020-augmented/img/chip.png");
+check("the fit is measured off the file — long side = the airframe's width, the other side follows",
+  crewLive.wire2Fit && Math.abs(Math.max(crewLive.wire2Fit.width, crewLive.wire2Fit.height) - 4.6) < 1e-9
+  && Math.min(crewLive.wire2Fit.width, crewLive.wire2Fit.height) > 0, JSON.stringify(crewLive.wire2Fit));
+eq("and the live record draws the FILE as its hull", crewLive.picturedHull, "file");
+check("the airframe part was still queued", crewLive.picturedQueuedAirframe === true);
+eq("NEGATIVE: an unreadable image announces no picture — the payload is the classic one",
+  crewLive.wire3Keys, [["id", "sceneId", "type", "x", "y"]]);
+eq("NEGATIVE: and the hull is the shape", crewLive.unreadableHull, "shape");
 eq("the fixture tokens are gone", crewLive.leftBehind, 0);
-eq("and so is the fixture actor", crewLive.actorsLeft, 0);
+eq("and so are the fixture actors", crewLive.actorsLeft, 0);
 
-/* ─────────────────── §9b the crew question, driven as a real gesture ───────────────────
+/* ─────────────────── §9b the call window, driven as real gestures ───────────────────
  *
  * ⛔ THE WIRING LEG (regression-coverage policy §1). Everything above proves the mechanism the tool
- * hands to the rail; NONE of it proves the tool reads what the template renders. The handler looks up
- * `select[name="cp-tt-actor"]` and `input[name="cp-tt-count"]` on the rendered dialog — rename either
- * in the .hbs and every leg above stays green while a referee's answer is silently dropped. So this
- * section renders the real dialog, sets both controls through real DOM events, presses the real button
- * and asserts what came back by value; then presses the other button and asserts the refusal. */
-console.log("\n§9b the crew question — real dialog, real clicks");
+ * hands to the rail; NONE of it proves the tool reads what the template renders. This section renders
+ * the real window and drives it the way a referee does: drops an actor from the sidebar (a real
+ * DragEvent carrying the platform's own drag payload), types a count, names a picture, presses the
+ * real buttons — and asserts what came back by value. Reworked 2026-09-19 with the window. */
+console.log("\n§9b the call window — real dialog, real gestures");
 const crewDialog = await page.evaluate(async (tool) => {
   const T = await import(tool);
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const out = {};
-  let actor = null;
+  let actor = null, actor2 = null;
   const openDialog = async () => {
     for (let i = 0; i < 40; i++) {
       const el = document.querySelector(".application.cp-tt-crew");
-      if (el) return el;
+      if (el?.querySelector(".cp-tt-crew-body[data-cp-wired='1']")) return el;
       await sleep(100);
     }
     return null;
   };
-  // ⛔ AND EACH ACT WAITS FOR THE PREVIOUS DIALOG TO BE GONE FIRST. Learned the expensive way: an
-  // application's element outlives its own close for the length of the close animation, so a second
-  // act that grabs `.cp-tt-crew` straight away gets the CORPSE of the first — and every button on it
-  // is detached, so the press lands on nothing and the second promise never settles. This is the
-  // suite set's own "second-act rule" with a DOM twist: the transition is the thing under test, and
-  // the harness has to see the transition finish before it drives the next one.
+  // ⛔ AND EACH ACT WAITS FOR THE PREVIOUS DIALOG TO BE GONE FIRST (the close animation outlives the
+  // close; a second act that grabs `.cp-tt-crew` straight away gets the corpse of the first).
   const waitGone = async () => {
     for (let i = 0; i < 60; i++) {
       if (!document.querySelector(".application.cp-tt-crew")) return true;
@@ -652,10 +823,8 @@ const crewDialog = await page.evaluate(async (tool) => {
     }
     return false;
   };
-  // ⛔ EVERY WAIT ON THE DIALOG'S OWN PROMISE IS BOUNDED. A driven dialog that does not settle is not
-  // a slow test, it is a HUNG one: the evaluate never returns, the harness never reports, and the run
-  // has to be killed from outside (which is exactly what the first draft of this section did). A
-  // bounded wait turns that whole class into an ordinary red with a name on it.
+  // ⛔ EVERY WAIT ON THE DIALOG'S OWN PROMISE IS BOUNDED — a hung dialog is a red with a name, not a
+  // run that has to be killed from outside.
   const settled = (p, tag) => Promise.race([
     Promise.resolve(p).then(v => ({ ok: true, v })),
     sleep(8000).then(() => ({ ok: false, v: `TIMED OUT waiting for ${tag}` })),
@@ -666,45 +835,103 @@ const crewDialog = await page.evaluate(async (tool) => {
     btn.click();
     return true;
   };
+  // The sidebar drag, as the platform builds it: a DragEvent whose dataTransfer carries the document's
+  // own drag data as text/plain JSON — exactly what Actor#toDragData puts there.
+  const dropActor = (target, a) => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", JSON.stringify(a.toDragData()));
+    target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt }));
+    target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt }));
+  };
+  const setInput = (input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true })); };
+  const IMG = "modules/cp2020-augmented/img/chip.png";
   try {
     actor = await Actor.create({ name: "__PW__TT Dialog", type: "character" });
+    actor2 = await Actor.create({ name: "__PW__TT Dialog B", type: "character" });
 
-    /* (a) answered: the chosen actor and a hand-typed count come back as the call's crew */
+    /* (a) the window: fresh state, the placeholder, the toggle's tooltip on the text alone */
     const answered = T.promptTraumaTeamCrew();
     const el = await openDialog();
     out.rendered = !!el;
-    const sel = el?.querySelector('select[name="cp-tt-actor"]') ?? null;
-    const cnt = el?.querySelector('input[name="cp-tt-count"]') ?? null;
-    out.selectorsMatch = !!sel && !!cnt;
-    out.defaultActor = sel?.value ?? null;
-    out.offersChosenActor = !!sel?.querySelector(`option[value="${actor.id}"]`);
-    out.countMax = cnt?.max ?? null;
-    out.countDefault = cnt?.value ?? null;
+    const body = el?.querySelector(".cp-tt-crew-body");
+    const img = body?.querySelector('img.cp-tt-av-img[data-edit="img"]') ?? null;
+    const imgIn = body?.querySelector('input[name="cp-tt-img"]') ?? null;
+    const toggle = body?.querySelector('input[name="cp-tt-crew-on"]') ?? null;
+    const tip = body?.querySelector("label.cp-tt-crew-toggle span.cp-tt-tip") ?? null;
+    const squad = body?.querySelector(".cp-tt-squad") ?? null;
+    out.selectorsMatch = !!img && !!imgIn && !!toggle && !!tip && !!squad && !!body?.querySelector(".cp-tt-row-add") && !!body?.querySelector(".cp-tt-row-proto-holder.cp-hidden .cp-tt-row-proto");
+    out.placeholderShown = /av-lozenge\.svg$/.test(img?.getAttribute("src") ?? "");
+    out.imgStartsEmpty = imgIn?.value ?? null;
+    out.toggleStartsOff = toggle?.checked === false;
+    out.squadStartsHidden = squad?.classList.contains("cp-hidden") === true;
+    out.tipOnTextOnly = !!tip?.getAttribute("data-tooltip") && !toggle?.hasAttribute("data-tooltip")
+      && !body?.querySelector("label.cp-tt-crew-toggle")?.hasAttribute("data-tooltip");
+    out.rowsStartEmpty = body?.querySelectorAll(".cp-tt-rows .cp-tt-row").length ?? -1;
     out.noRawKeys = !/CYBERPUNK\./.test(el?.textContent ?? "CYBERPUNK.");
-    // Diagnostic, printed only when a press leg reds: what the footer actually offers.
     out.footer = [...(el?.querySelectorAll("button") ?? [])]
       .map(b => `${b.tagName.toLowerCase()}[type=${b.type};action=${b.dataset.action ?? ""}]`);
-    if (sel) { sel.value = actor.id; sel.dispatchEvent(new Event("change", { bubbles: true })); }
-    if (cnt) { cnt.value = "2"; cnt.dispatchEvent(new Event("change", { bubbles: true })); }
+
+    /* the drop: an actor from the sidebar becomes a row and switches the crew on; a second drop of the
+       same actor is one more of it; a different actor is a second row */
+    dropActor(body, actor);
+    await sleep(50);
+    out.toggleAfterDrop = toggle?.checked === true;
+    out.squadShownAfterDrop = squad?.classList.contains("cp-hidden") === false;
+    out.rowsAfterDrop = [...body.querySelectorAll(".cp-tt-rows .cp-tt-row")].map(r => [r.querySelector(".cp-tt-row-actor").value, r.querySelector(".cp-tt-row-count").value]);
+    dropActor(body, actor);
+    await sleep(50);
+    out.rowsAfterSecondDrop = [...body.querySelectorAll(".cp-tt-rows .cp-tt-row")].map(r => [r.querySelector(".cp-tt-row-actor").value, r.querySelector(".cp-tt-row-count").value]);
+    dropActor(body, actor2);
+    await sleep(50);
+    out.rowsAfterOtherDrop = [...body.querySelectorAll(".cp-tt-rows .cp-tt-row")].map(r => [r.querySelector(".cp-tt-row-actor").value, r.querySelector(".cp-tt-row-count").value]);
+    out.seatsText = body.querySelector(".cp-tt-seats")?.textContent ?? "";
+    /* a hand-typed count, well past the marks */
+    setInput(body.querySelectorAll(".cp-tt-rows .cp-tt-row")[1].querySelector(".cp-tt-row-count"), "7");
+    out.seatsTextAfterType = body.querySelector(".cp-tt-seats")?.textContent ?? "";
+    /* the picture: the portrait opens the platform's file browser; the path lands in the hidden field */
+    const appsBefore = new Set([...foundry.applications.instances.keys()]);
+    img.click();
+    await sleep(400);
+    const picker = [...foundry.applications.instances.values()].find(a => !appsBefore.has(a.id) && /FilePicker/.test(a.constructor?.name ?? ""));
+    out.pickerOpened = !!picker;
+    out.pickerType = picker?.options?.type ?? picker?.type ?? null;
+    try { await picker?.close(); } catch (_e) { /* fine */ }
+    setInput(imgIn, IMG);
+    img.src = IMG;
     out.pressedCall = press(el, "call");
     const a = await settled(answered, "the answered call");
     out.answeredSettled = a.ok;
-    out.answered = a.ok ? a.v : a.v;
-    out.answeredMatchesActor = a.ok && a.v?.crew?.actorId === actor.id;
+    out.answered = a.v;
 
-    /* (b) confirmed untouched: the default is none, which is the cinematic that shipped */
+    /* (b) the second call remembers the first; the toggle off is the cinematic alone, the picture kept */
     out.firstDialogClosed = await waitGone();
-    const untouched = T.promptTraumaTeamCrew();
+    const second = T.promptTraumaTeamCrew();
     const el2 = await openDialog();
+    const body2 = el2?.querySelector(".cp-tt-crew-body");
+    out.remembersRows = [...(body2?.querySelectorAll(".cp-tt-rows .cp-tt-row") ?? [])].map(r => [r.querySelector(".cp-tt-row-actor").value, r.querySelector(".cp-tt-row-count").value]);
+    out.remembersImg = body2?.querySelector('input[name="cp-tt-img"]')?.value ?? null;
+    out.remembersImgShown = body2?.querySelector("img.cp-tt-av-img")?.getAttribute("src") ?? null;
+    out.remembersToggle = body2?.querySelector('input[name="cp-tt-crew-on"]')?.checked ?? null;
+    const t2 = body2?.querySelector('input[name="cp-tt-crew-on"]');
+    t2.checked = false; t2.dispatchEvent(new Event("change", { bubbles: true }));
+    out.squadHiddenAfterUntick = body2?.querySelector(".cp-tt-squad")?.classList.contains("cp-hidden") === true;
     press(el2, "call");
-    const u = await settled(untouched, "the untouched call");
+    const u = await settled(second, "the toggled-off call");
     out.untouchedSettled = u.ok;
     out.untouched = u.v;
 
-    /* (c) refused: the second button backs the whole call out */
+    /* (c) the built-in shape is one click away; a removed row is gone; the refusal backs out */
     out.secondDialogClosed = await waitGone();
     const refused = T.promptTraumaTeamCrew();
     const el3 = await openDialog();
+    const body3 = el3?.querySelector(".cp-tt-crew-body");
+    body3?.querySelector(".cp-tt-av-clear")?.click();
+    out.clearedImg = body3?.querySelector('input[name="cp-tt-img"]')?.value ?? null;
+    out.clearedShown = /av-lozenge\.svg$/.test(body3?.querySelector("img.cp-tt-av-img")?.getAttribute("src") ?? "");
+    body3?.querySelector(".cp-tt-rows .cp-tt-row .cp-tt-row-remove")?.click();
+    out.rowsAfterRemove = body3?.querySelectorAll(".cp-tt-rows .cp-tt-row").length ?? -1;
+    body3?.querySelector(".cp-tt-row-add")?.click();
+    out.rowsAfterAdd = body3?.querySelectorAll(".cp-tt-rows .cp-tt-row").length ?? -1;
     out.hasCancel = !!el3?.querySelector('button[data-action="cancel"]');
     press(el3, "cancel");
     const rf = await settled(refused, "the refusal");
@@ -712,46 +939,63 @@ const crewDialog = await page.evaluate(async (tool) => {
     out.refused = rf.v;
     out.thirdDialogClosed = await waitGone();
     out.leftOpen = document.querySelectorAll(".application.cp-tt-crew").length;
+    out.pickersLeft = [...foundry.applications.instances.values()].filter(a => /FilePicker/.test(a.constructor?.name ?? "")).length;
   } catch (err) {
-    out.threw = String(err?.message ?? err);
+    out.threw = String(err?.message ?? err) + " " + String(err?.stack ?? "").split("\n").slice(0, 2).join(" | ");
   } finally {
-    // Close anything still standing BEFORE the fixture goes: a dialog left open is what made the
-    // fixture survive its own delete on the first attempt.
     for (const app of [...foundry.applications.instances.values()]) {
-      if (app?.element?.classList?.contains("cp-tt-crew")) { try { await app.close(); } catch (_e) { /* gone */ } }
+      if (app?.element?.classList?.contains("cp-tt-crew") || /FilePicker/.test(app?.constructor?.name ?? "")) { try { await app.close(); } catch (_e) { /* gone */ } }
     }
-    for (const stray of game.actors.filter(a => a.name === "__PW__TT Dialog")) {
+    for (const stray of game.actors.filter(a => /^__PW__TT Dialog/.test(a.name))) {
       try { await stray.delete(); } catch (e) { out.cleanupError = String(e?.message ?? e); }
     }
-    out.actorsLeft = game.actors.filter(a => a.name === "__PW__TT Dialog").length;
+    out.actorsLeft = game.actors.filter(a => /^__PW__TT Dialog/.test(a.name)).length;
   }
   return out;
 }, TOOL);
-check("the crew dialog section ran without throwing", !crewDialog.threw, String(crewDialog.threw ?? ""));
-check("the dialog renders", crewDialog.rendered === true);
+check("the call window section ran without throwing", !crewDialog.threw, String(crewDialog.threw ?? ""));
+check("the window renders and is wired", crewDialog.rendered === true);
 check("the handler's own selectors match the rendered nodes", crewDialog.selectorsMatch === true);
-eq("it opens on none — the default is the cinematic that shipped", crewDialog.defaultActor, "");
-check("the world's own actors are offered", crewDialog.offersChosenActor === true);
-eq("the count field is bounded by the marks", crewDialog.countMax, "5");
-eq("and pre-filled with the full complement", crewDialog.countDefault, "5");
+check("the portrait shows the built-in shape until a picture is chosen", crewDialog.placeholderShown === true);
+eq("and the image field starts empty", crewDialog.imgStartsEmpty, "");
+check("the crew toggle starts OFF — the default is the cinematic alone", crewDialog.toggleStartsOff === true);
+check("and the squad list starts hidden", crewDialog.squadStartsHidden === true);
+check("⭐ the toggle's tooltip is on the TEXT SPAN only — not the checkbox, not the label", crewDialog.tipOnTextOnly === true);
+eq("no rows before anyone is added", crewDialog.rowsStartEmpty, 0);
 check("every visible string is localized", crewDialog.noRawKeys === true);
-check("the confirm button is present and pressable", crewDialog.pressedCall === true,
-  `footer: ${(crewDialog.footer ?? []).join(", ")}`);
+check("⭐ DROP: an actor dragged from the sidebar switches the crew on", crewDialog.toggleAfterDrop === true);
+check("and shows the squad list", crewDialog.squadShownAfterDrop === true);
+check("and becomes one row at count one", Array.isArray(crewDialog.rowsAfterDrop) && crewDialog.rowsAfterDrop.length === 1 && crewDialog.rowsAfterDrop[0][1] === "1", JSON.stringify(crewDialog.rowsAfterDrop));
+check("dropping the same actor again is one more of it, not a second row", Array.isArray(crewDialog.rowsAfterSecondDrop) && crewDialog.rowsAfterSecondDrop.length === 1 && crewDialog.rowsAfterSecondDrop[0][1] === "2", JSON.stringify(crewDialog.rowsAfterSecondDrop));
+check("dropping a different actor is a second row", Array.isArray(crewDialog.rowsAfterOtherDrop) && crewDialog.rowsAfterOtherDrop.length === 2 && crewDialog.rowsAfterOtherDrop[1][1] === "1", JSON.stringify(crewDialog.rowsAfterOtherDrop));
+check("the seat readout counts the squad (3)", /\b3\b/.test(crewDialog.seatsText), crewDialog.seatsText);
+check("a hand-typed count past the marks is counted, not refused (2 + 7 = 9)", /\b9\b/.test(crewDialog.seatsTextAfterType), crewDialog.seatsTextAfterType);
+check("⭐ the portrait opens the platform's own file browser", crewDialog.pickerOpened === true);
+eq("browsing images", crewDialog.pickerType, "image");
+check("the confirm button is present and pressable", crewDialog.pressedCall === true, `footer: ${(crewDialog.footer ?? []).join(", ")}`);
 check("pressing it settles the call", crewDialog.answeredSettled === true, String(crewDialog.answered));
-eq("a chosen actor and a typed count come back as the call's crew",
-  crewDialog.answered?.crew?.count ?? null, 2);
-check("and it is the actor that was picked", crewDialog.answeredMatchesActor === true);
-check("the untouched confirm settles too", crewDialog.untouchedSettled === true, String(crewDialog.untouched));
-eq("NEGATIVE: confirming untouched asks for no crew at all", crewDialog.untouched, { crew: null });
+eq("the answer is the squad, in row order, with the counts typed", crewDialog.answered?.crew?.map(r => r.count) ?? null, [2, 7]);
+eq("and the picture that was named", crewDialog.answered?.img ?? null, "modules/cp2020-augmented/img/chip.png");
+check("the second window remembers the first call's rows", JSON.stringify(crewDialog.remembersRows) === JSON.stringify(crewDialog.rowsAfterOtherDrop?.map((r, i) => [r[0], i === 1 ? "7" : r[1]])), JSON.stringify(crewDialog.remembersRows));
+eq("and its picture", crewDialog.remembersImg, "modules/cp2020-augmented/img/chip.png");
+eq("shown in the portrait", crewDialog.remembersImgShown, "modules/cp2020-augmented/img/chip.png");
+check("and that the crew was on", crewDialog.remembersToggle === true);
+check("unticking the toggle hides the squad list", crewDialog.squadHiddenAfterUntick === true);
+check("the toggled-off confirm settles", crewDialog.untouchedSettled === true, String(crewDialog.untouched));
+eq("NEGATIVE: with the toggle off, no crew is asked for — the picture still is", crewDialog.untouched, { crew: null, img: "modules/cp2020-augmented/img/chip.png" });
+eq("the built-in shape is one click away — the field clears", crewDialog.clearedImg, "");
+check("and the portrait shows the shape again", crewDialog.clearedShown === true);
+eq("a removed row is gone", crewDialog.rowsAfterRemove, 1);
+eq("the add control appends an empty row", crewDialog.rowsAfterAdd, 2);
 check("the refusal button is offered", crewDialog.hasCancel === true);
 check("the refusal settles too", crewDialog.refusedSettled === true, String(crewDialog.refused));
 eq("NEGATIVE: refusing backs the whole call out", crewDialog.refused, null);
 check("each act's dialog closes before the next is driven",
-  crewDialog.firstDialogClosed === true && crewDialog.secondDialogClosed === true
-  && crewDialog.thirdDialogClosed === true,
+  crewDialog.firstDialogClosed === true && crewDialog.secondDialogClosed === true && crewDialog.thirdDialogClosed === true,
   `${crewDialog.firstDialogClosed}/${crewDialog.secondDialogClosed}/${crewDialog.thirdDialogClosed}`);
 eq("no dialog is left standing", crewDialog.leftOpen, 0);
-eq("the dialog fixture actor is gone", crewDialog.actorsLeft, 0);
+eq("no file browser is left standing", crewDialog.pickersLeft, 0);
+eq("the dialog fixture actors are gone", crewDialog.actorsLeft, 0);
 
 /* ─────────────────── §10 console ─────────────────── */
 console.log("\n§10 client health");

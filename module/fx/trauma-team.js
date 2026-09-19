@@ -310,12 +310,25 @@ export function pulseSchedule() {
  * the one before, so a viewer reads a file of people leaving rather than a row of lights coming on.
  */
 export function figureSchedule(centre = { x: 0, y: 0 }, gridPx = 100) {
+  return seatSchedule(centre, gridPx, TRAUMA_TEAM.figureCount);
+}
+
+/**
+ * THE SAME LINE, FOR ANY NUMBER OF SEATS (user ruling 2026-09-19: "let's allow unlimited placements…
+ * keep the philosophy of not hard limiting people"). The first `figureCount` seats ARE the drawn marks —
+ * same instants, same places, the formula is centred on the marks so nothing about them moves. Seat
+ * six onward keeps walking the same file at the same cadence: one square further along and a little
+ * further out each, so a big squad reads as a longer line leaving the aircraft, not a heap on the last
+ * mark. The marks stay five; only the tokens go past them.
+ */
+export function seatSchedule(centre = { x: 0, y: 0 }, gridPx = 100, count = TRAUMA_TEAM.figureCount) {
   const g = Number(gridPx) > 0 ? Number(gridPx) : 100;
   const rect = landingRect(centre, g);
-  const n = TRAUMA_TEAM.figureCount;
+  const marks = TRAUMA_TEAM.figureCount;
+  const n = clampCrewCount(count);
   return Array.from({ length: n }, (_v, i) => ({
     atMs: TRAUMA_TEAM.unloadAtMs + i * TRAUMA_TEAM.unloadGapMs,
-    x: rect.x + (i - (n - 1) / 2) * TRAUMA_TEAM.figureStepSquares * g,
+    x: rect.x + (i - (marks - 1) / 2) * TRAUMA_TEAM.figureStepSquares * g,
     y: rect.y + rect.h / 2
        + (TRAUMA_TEAM.figureWalkSquares + i * TRAUMA_TEAM.figureWalkGrowthSquares) * g,
   }));
@@ -343,13 +356,42 @@ export function figureSchedule(centre = { x: 0, y: 0 }, gridPx = 100) {
  */
 
 /**
- * THE SEATS ARE THE MARKS. At most as many figures as there are unload beats, at least one — a crew of
- * NONE is expressed by choosing no actor at all, never by a zero, so this function never returns one.
+ * AT LEAST ONE, NO CEILING. A crew of NONE is expressed by choosing no actor at all, never by a zero, so
+ * this function never returns one. ⏪ Until 2026-09-19 the marks were the seats and this clamped to
+ * `figureCount` (5); the user's ruling that day removed the ceiling — seats past the marks continue
+ * the line (`seatSchedule`). REVERT = `Math.min(TRAUMA_TEAM.figureCount, …)` around the return.
  */
 export function clampCrewCount(n) {
   const v = Math.floor(Number(n));
   if (!Number.isFinite(v)) return 1;
-  return Math.min(TRAUMA_TEAM.figureCount, Math.max(1, v));
+  return Math.max(1, v);
+}
+
+/**
+ * THE ONE PLACE A TOKEN CAN GO WRONG: off the map. A seat past the marks walks the line further out, and
+ * a landing area marked near an edge would send it past the scene's own rectangle, where a token cannot
+ * be reached. The corner is clamped inside the bounds (user ruling 2026-09-19: "never placed out of the
+ * map bounds"). Pure; `bounds` is the scene rectangle in pixels, and no bounds means no clamp.
+ */
+export function clampSeatToBounds(corner, footprintPx, bounds) {
+  if (!bounds) return { x: corner.x, y: corner.y };
+  const bx = Number(bounds.x) || 0, by = Number(bounds.y) || 0;
+  const bw = Number(bounds.width) || 0, bh = Number(bounds.height) || 0;
+  const maxX = Math.max(bx, bx + bw - footprintPx.w);
+  const maxY = Math.max(by, by + bh - footprintPx.h);
+  return {
+    x: Math.min(maxX, Math.max(bx, corner.x)),
+    y: Math.min(maxY, Math.max(by, corner.y)),
+  };
+}
+
+/** The scene's own rectangle (the map, without its padding), or the whole canvas when unknown. */
+function sceneBounds() {
+  const d = canvas?.dimensions;
+  if (!d) return null;
+  const r = d.sceneRect ?? null;
+  if (r && Number.isFinite(r.x) && Number.isFinite(r.width)) return { x: r.x, y: r.y, width: r.width, height: r.height };
+  return { x: 0, y: 0, width: Number(d.width) || 0, height: Number(d.height) || 0 };
 }
 
 /**
@@ -367,17 +409,43 @@ export function clampCrewCount(n) {
  * @param {{width:number,height:number}} size  the chosen actor's own prototype footprint, in squares
  */
 export function crewSpawnPlan(centre = { x: 0, y: 0 }, gridPx = 100, count = 1, size = {}) {
+  const seats = Array.from({ length: clampCrewCount(count) }, () => ({ actorId: "", size }));
+  return crewSeatPlan(centre, gridPx, seats, null);
+}
+
+/**
+ * THE MIXED SQUAD (user ruling 2026-09-19, proof of concept): one seat per entry, each with ITS OWN
+ * actor and footprint, in the order given — row order is step-off order. The first `figureCount` seats
+ * stand on the drawn marks; the rest continue the line (`seatSchedule`); every corner is then held
+ * inside `bounds`. Pure.
+ * @param {{actorId:string,size:{width:number,height:number}}[]} seats
+ * @param {{x:number,y:number,width:number,height:number}|null} bounds  scene rectangle, px
+ */
+export function crewSeatPlan(centre = { x: 0, y: 0 }, gridPx = 100, seats = [], bounds = null) {
   const g = Number(gridPx) > 0 ? Number(gridPx) : 100;
-  const w = Number(size?.width) > 0 ? Number(size.width) : 1;
-  const h = Number(size?.height) > 0 ? Number(size.height) : 1;
-  return figureSchedule(centre, g)
-    .slice(0, clampCrewCount(count))
-    .map((mark, index) => ({
-      index,
-      atMs: mark.atMs,
-      x: mark.x - (w * g) / 2,
-      y: mark.y - (h * g) / 2,
-    }));
+  const list = Array.isArray(seats) ? seats : [];
+  if (!list.length) return [];
+  const beats = seatSchedule(centre, g, list.length);
+  return list.map((seat, index) => {
+    const w = Number(seat?.size?.width) > 0 ? Number(seat.size.width) : 1;
+    const h = Number(seat?.size?.height) > 0 ? Number(seat.size.height) : 1;
+    const mark = beats[index];
+    const corner = clampSeatToBounds({ x: mark.x - (w * g) / 2, y: mark.y - (h * g) / 2 }, { w: w * g, h: h * g }, bounds);
+    return { index, actorId: String(seat?.actorId ?? ""), atMs: mark.atMs, x: corner.x, y: corner.y };
+  });
+}
+
+/**
+ * THE REFEREE'S ANSWER, NORMALISED: a list of {actorId, count} rows. The old single-pair shape
+ * (`{actorId, count}`) is still accepted — the API and older macros hand that in — and becomes a
+ * one-row list. Rows without an actor are dropped; counts are clamped. Pure.
+ */
+export function crewRows(crew) {
+  if (!crew) return [];
+  const rows = Array.isArray(crew) ? crew : [crew];
+  return rows
+    .map((r) => ({ actorId: String(r?.actorId ?? "").trim(), count: clampCrewCount(r?.count) }))
+    .filter((r) => r.actorId);
 }
 
 /** When the SEQUENCE is over — which is not when the airframe leaves, because it does not. */
@@ -597,6 +665,60 @@ function drawCorner(record, index) {
  * centre-drawn. Half the body, negative, in grid units, is the correction, and it is what makes this
  * shape's location mean what every other element's location means.
  */
+/**
+ * WHAT THE HULL IS DRAWN FROM — decided once per record, read by both draws. A call that named an image
+ * (user ruling 2026-09-19: "assign any image you want", per call, the sheet's own picker) gets a sprite
+ * fitted to the airframe's LONG dimension with its own proportions kept (`fitImageSquares`); a call
+ * that named none gets the engine-native lozenge below. This is the rail's one documented exception to
+ * "database keys, never file paths": the path is the referee's own, chosen at the call, and travels
+ * with the announcement so every client draws the same aircraft.
+ */
+export function hullSpec(record) {
+  const file = String(record?.img ?? "").trim();
+  const size = record?.imgSize ?? null;
+  if (file && Number(size?.width) > 0 && Number(size?.height) > 0) {
+    return { kind: "file", file, width: Number(size.width), height: Number(size.height) };
+  }
+  return { kind: "shape", shape: airframeShape() };
+}
+
+/**
+ * FIT AN IMAGE TO THE AIRFRAME. The longer side of the picture becomes `longSquares` (the airframe's
+ * width, 4.6) and the other side follows its own ratio — a nose-up token stays nose-up and is not
+ * stretched into the lozenge's box. Pure; a picture with no size answers null and the shape is drawn.
+ */
+export function fitImageSquares(natural, longSquares = TRAUMA_TEAM.airframeWidthSquares) {
+  const w = Number(natural?.width), h = Number(natural?.height);
+  if (!(w > 0) || !(h > 0)) return null;
+  const scale = Number(longSquares) / Math.max(w, h);
+  return { width: w * scale, height: h * scale };
+}
+
+/** Read a picture's own pixel size off the platform's texture loader; null when it cannot be read. */
+async function measureImage(path) {
+  const load = foundry.canvas?.loadTexture ?? globalThis.loadTexture ?? null;
+  if (!load) return null;
+  try {
+    // Asked of the server first: the texture loader logs an error of its own for a missing file, and a
+    // referee's typo is not a client error worth a red console line — it is a shape drawn instead.
+    const exists = foundry.utils?.srcExists ? await foundry.utils.srcExists(path) : true;
+    if (!exists) { console.warn(`${SCOPE} | arrival aircraft image not found`, path); return null; }
+    const tex = await load(path);
+    const w = Number(tex?.width ?? tex?.baseTexture?.width), h = Number(tex?.height ?? tex?.baseTexture?.height);
+    return w > 0 && h > 0 ? { width: w, height: h } : null;
+  } catch (err) {
+    console.warn(`${SCOPE} | arrival aircraft image could not be read`, path, err);
+    return null;
+  }
+}
+
+/** Give a section its hull — file or shape — per `hullSpec`. */
+function hull(fx, record) {
+  const spec = hullSpec(record);
+  if (spec.kind === "file") return fx.file(spec.file).size({ width: spec.width, height: spec.height }, { gridUnits: true });
+  return fx.shape("roundedRect", spec.shape);
+}
+
 function airframeShape() {
   return {
     width: TRAUMA_TEAM.airframeWidthSquares,
@@ -629,8 +751,7 @@ function drawAirframe(record) {
   const rise = entryRisePx(g);
   const bobPx = TRAUMA_TEAM.bobSquares * g;
   const seq = new globalThis.Sequence();
-  const fx = section(seq, name)
-    .shape("roundedRect", airframeShape())
+  const fx = hull(section(seq, name), record)
     .atLocation({ x: record.centre.x, y: record.centre.y })
     .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
     .duration(TRAUMA_TEAM.lifetimeMs)
@@ -733,16 +854,17 @@ function drawFigure(record, index, point) {
  * documents the world holds. Their own bound is the seat count (five), which is a much harder one.
  */
 function crewPlanFor(crew, centre, gridPx) {
-  if (!crew) return null;
-  const actorId = String(crew.actorId ?? "").trim();
-  if (!actorId) return null;
-  const actor = game.actors?.get(actorId) ?? null;
-  if (!actor) return null;
-  const plan = crewSpawnPlan(centre, gridPx, crew.count, {
-    width: actor.prototypeToken?.width ?? 1,
-    height: actor.prototypeToken?.height ?? 1,
-  });
-  return plan.length ? { actorId, plan } : null;
+  const rows = crewRows(crew);
+  const seats = [];
+  for (const row of rows) {
+    const actor = game.actors?.get(row.actorId) ?? null;
+    if (!actor) continue;                       // a row naming nothing real is a row that asked for nothing
+    const size = { width: actor.prototypeToken?.width ?? 1, height: actor.prototypeToken?.height ?? 1 };
+    for (let i = 0; i < row.count; i++) seats.push({ actorId: row.actorId, size });
+  }
+  if (!seats.length) return null;
+  const plan = crewSeatPlan(centre, gridPx, seats, sceneBounds());
+  return plan.length ? { rows, plan } : null;
 }
 
 /**
@@ -767,7 +889,7 @@ function crewPlanFor(crew, centre, gridPx) {
 async function writeCrewFigure(record, entry) {
   try {
     if (game.user?.isGM !== true) return null;
-    const actor = game.actors?.get(record?.crew?.actorId ?? "");
+    const actor = game.actors?.get(entry?.actorId ?? "");
     if (!actor) return null;
     const scene = canvas?.scene;
     if (!scene || scene.id !== record.sceneId) return null;
@@ -823,7 +945,7 @@ function planFor(record) {
  * DRAW ONE PLACEMENT on this client. Returns what it queued, by value, so the whole mechanism is
  * assertable from a keeper — and returns the SAME shape whether it drew everything or nothing.
  */
-function drawLanding({ id, x, y, sceneId, crew = null }) {
+function drawLanding({ id, x, y, sceneId, crew = null, img = "", imgSize = null }) {
   // ⭐ `crew` is null on every return below and on every relayed call, because the relay never carries
   // it. The two refusals in `landTraumaTeam` keep their own older shape (they never got as far as a
   // plan, so there is nothing to report) — this is the shape a client that actually drew something
@@ -839,7 +961,10 @@ function drawLanding({ id, x, y, sceneId, crew = null }) {
   if (_active) clearLanding();
 
   const gridPx = Number(canvas?.dimensions?.size) || 100;
-  const record = { id, centre: { x, y }, gridPx, sceneId: sceneId ?? canvas.scene?.id ?? null, timers: [] };
+  const record = {
+    id, centre: { x, y }, gridPx, sceneId: sceneId ?? canvas.scene?.id ?? null, timers: [],
+    img: String(img ?? "").trim(), imgSize: imgSize ?? null,
+  };
   const plan = planFor(record);
   record.plan = plan;
   // The crew is resolved ONCE here, into the record, exactly as the asset gates are — the ladder below
@@ -899,7 +1024,7 @@ function drawLanding({ id, x, y, sceneId, crew = null }) {
       at(record, entry.atMs, "crew figure", () => { void writeCrewFigure(record, entry); });
       out.queued.push("crew");
     });
-    out.crew = { actorId: record.crew.actorId, count: record.crew.plan.length };
+    out.crew = { rows: record.crew.rows, count: record.crew.plan.length };
   }
   return out;
 }
@@ -928,8 +1053,7 @@ function drawDeparture(record) {
   const name = traumaFxNameFor(record.id, "exit");
   const g = record.gridPx;
   const seq = new globalThis.Sequence();
-  const fx = section(seq, name)
-    .shape("roundedRect", airframeShape())
+  const fx = hull(section(seq, name), record)
     .atLocation({ x: record.centre.x, y: record.centre.y })
     .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
     .duration(_scaled(TRAUMA_TEAM.ascentMs))
@@ -978,7 +1102,10 @@ export function traumaTeamActive() {
 /** What is on station, by value — for a macro that wants to ask before it acts. */
 export function traumaTeamState() {
   if (!_active) return null;
-  return { id: _active.id, sceneId: _active.sceneId, x: _active.centre.x, y: _active.centre.y };
+  return {
+    id: _active.id, sceneId: _active.sceneId, x: _active.centre.x, y: _active.centre.y,
+    img: _active.img || "", imgSize: _active.imgSize ? { ..._active.imgSize } : null,
+  };
 }
 
 /**
@@ -993,10 +1120,15 @@ export function traumaTeamState() {
  * nothing else. The crew is handed to the LOCAL draw only, which is what makes the document write the
  * calling referee's own and stops N connected clients writing N crews for one call.
  *
+ * ⭐ THE AIRCRAFT IMAGE DOES RIDE IT (2026-09-19). Unlike the crew, the picture is presentation, and
+ * every client must draw the same one — so the path AND its measured fit go in the announcement, and a
+ * receiving client draws without measuring anything. No image means the two fields are absent and the
+ * payload is byte-for-byte the one this file always sent.
+ *
  * @param {{x:number,y:number}} centre
- * @param {{sceneId?:string|null, crew?:{actorId:string,count:number}|null}} [options]
+ * @param {{sceneId?:string|null, crew?:Array<{actorId:string,count:number}>|{actorId:string,count:number}|null, img?:string}} [options]
  */
-export async function landTraumaTeam(centre = {}, { sceneId = null, crew = null } = {}) {
+export async function landTraumaTeam(centre = {}, { sceneId = null, crew = null, img = "" } = {}) {
   if (game.user?.isGM !== true) return { queued: [], skipped: "permission" };
   if (!combatFxEnabled()) return { queued: [], skipped: "disabled" };
   const scene = sceneId ?? canvas?.scene?.id ?? null;
@@ -1004,14 +1136,19 @@ export async function landTraumaTeam(centre = {}, { sceneId = null, crew = null 
   const y = Number(centre?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return { queued: [], skipped: "position" };
   const id = foundry.utils.randomID();
+  // The picture is measured ONCE, here, by the calling client; a picture that cannot be read draws as
+  // the shape rather than as nothing.
+  const path = String(img ?? "").trim();
+  const imgSize = path ? fitImageSquares(await measureImage(path)) : null;
+  const picture = path && imgSize ? { img: path, imgSize } : {};
   // Announce first, draw second: the emit never echoes to its sender, so this client's own copy comes
   // from the local call and every other client's from the announcement — one code path, one picture.
   try {
-    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_LAND, id, x, y, sceneId: scene });
+    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_LAND, id, x, y, sceneId: scene, ...picture });
   } catch (err) {
     console.warn(`${SCOPE} | arrival sequence announcement failed`, err);
   }
-  return drawLanding({ id, x, y, sceneId: scene, crew });
+  return drawLanding({ id, x, y, sceneId: scene, crew, ...picture });
 }
 
 /** Send it away — on every client, the same way it arrived. */
@@ -1116,7 +1253,10 @@ export function registerTraumaTeam() {
     if (data?.type === MSG_LAND) {
       if (!combatFxEnabled()) return;
       try {
-        drawLanding({ id: data.id, x: Number(data.x), y: Number(data.y), sceneId: data.sceneId ?? null });
+        drawLanding({
+          id: data.id, x: Number(data.x), y: Number(data.y), sceneId: data.sceneId ?? null,
+          img: data.img ?? "", imgSize: data.imgSize ?? null,
+        });
       } catch (err) {
         console.warn(`${SCOPE} | arrival sequence relay failed`, err);
       }

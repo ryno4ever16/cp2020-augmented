@@ -1,26 +1,53 @@
-{{!-- The optional half of the medical-extraction call (user ruling 2026-08-28): name a world actor and
-      a count, and the unload beats write that many tokens where the marks are drawn.
+{{!-- THE CALL WINDOW (reworked 2026-09-19, user-ruled): one window for the whole call.
 
-      ⛔ THE LIST IS THE WORLD'S OWN ACTORS. This module bundles no medical-response NPC and names none —
-      the referee supplies the figure, which is what keeps the feature clear of shipped stat blocks.
+      ⭐ THE AIRCRAFT IMAGE is the sheet's own idiom — the profile-img element, data-edit="img", the
+      platform's file browser — chosen PER CALL (no world setting: the gesture is opt-in by nature). The
+      hidden input carries the chosen path to the confirm; the picture shows the built-in shape until
+      one is picked. `cp-tt-av-clear` puts the shape back.
 
-      ⭐ THE DEFAULT IS THE EMPTY OPTION, so confirming without touching anything is the pure cinematic
-      that has always shipped. The count is read only when an actor is chosen; the hint says so rather
-      than the field being greyed, because greying it would need live render wiring for one sentence. --}}
+      ⭐ THE CREW TOGGLE gates the squad list. Its tooltip sits on the TEXT SPAN ONLY (user ruling:
+      "the tooltip shows when hovering the text, not the checkbox … just over the text itself").
+
+      ⭐ THE SQUAD LIST is rows of actor + count, in step-off order. Rows are cloned from the hidden
+      PROTOTYPE ROW below by the tool's render wiring (initial rows included), so the row's markup lives
+      HERE and nowhere in JS. (A <template> element was the first draft; the dialog's render strips it,
+      rig-proven 2026-09-19, so the prototype is an ordinary hidden node outside the rows list.)
+      Dropping an actor from the sidebar anywhere on this window adds a row.
+
+      ⛔ THE LIST IS THE WORLD'S OWN ACTORS. This module bundles no NPC and names none — the referee
+      supplies the figures, which is what keeps the feature clear of shipped stat blocks. --}}
 <div class="cp-tt-crew-body">
-    <p class="cp-tt-crew-hint">{{CPLocal "TraumaTeamCrewHint"}}</p>
-    <p class="cp-tt-crew-hint">{{CPLocal "TraumaTeamCrewNoneHint"}}</p>
-    <div class="field">
-        <label for="cp-tt-actor" data-tooltip="{{CPLocal 'TraumaTeamCrewActorTip'}}">{{CPLocal "TraumaTeamCrewActorLabel"}}</label>
-        <select name="cp-tt-actor" class="cp2020ae-install-picker" data-tooltip="{{CPLocal 'TraumaTeamCrewActorTip'}}">
-            <option value="" selected>{{CPLocal "TraumaTeamCrewNone"}}</option>
-            {{#each actors}}
-            <option value="{{id}}">{{name}}</option>
-            {{/each}}
-        </select>
+    <div class="cp-tt-av flexrow">
+        <img class="profile-img cp-tt-av-img" src="{{img}}" data-edit="img" alt="{{CPLocal 'TraumaTeamImageLabel'}}" data-tooltip="{{CPLocal 'TraumaTeamImageTip'}}"/>
+        <input type="hidden" name="cp-tt-img" value="{{imgValue}}"/>
+        <div class="cp-tt-av-text">
+            <span class="cp-tt-av-label">{{CPLocal "TraumaTeamImageLabel"}}</span>
+            <p class="cp-tt-crew-hint">{{CPLocal "TraumaTeamImageHint"}}</p>
+            <button type="button" class="cp-tt-av-clear">{{CPLocal "TraumaTeamImageClear"}}</button>
+        </div>
     </div>
-    <div class="field">
-        <label for="cp-tt-count" data-tooltip="{{CPLocal 'TraumaTeamCrewCountTip'}}">{{CPLocal "TraumaTeamCrewCountLabel"}}</label>
-        <input type="number" name="cp-tt-count" value="{{defaultCount}}" min="1" max="{{maxCount}}" step="1" data-tooltip="{{CPLocal 'TraumaTeamCrewCountTip'}}"/>
+    <label class="cp-tt-crew-toggle">
+        <input type="checkbox" name="cp-tt-crew-on" {{#if crewOn}}checked{{/if}}/>
+        <span class="cp-tt-tip" data-tooltip="{{CPLocal 'TraumaTeamCrewOnTip'}}">{{CPLocal "TraumaTeamCrewOnLabel"}}</span>
+    </label>
+    <div class="cp-tt-squad{{#unless crewOn}} cp-hidden{{/unless}}">
+        <p class="cp-tt-crew-hint">{{CPLocal "TraumaTeamCrewHint"}}</p>
+        <div class="cp-tt-rows"></div>
+        <div class="cp-tt-squad-foot flexrow">
+            <button type="button" class="cp-tt-row-add">{{CPLocal "TraumaTeamCrewAddRow"}}</button>
+            <span class="cp-tt-seats"></span>
+        </div>
+    </div>
+    <div class="cp-tt-row-proto-holder cp-hidden">
+        <div class="cp-tt-row cp-tt-row-proto flexrow">
+            <select class="cp-tt-row-actor cp2020ae-install-picker" data-tooltip="{{CPLocal 'TraumaTeamCrewActorTip'}}">
+                <option value="">{{CPLocal "TraumaTeamCrewPick"}}</option>
+                {{#each actors}}
+                <option value="{{id}}">{{name}}</option>
+                {{/each}}
+            </select>
+            <input type="number" class="cp-tt-row-count" value="1" min="1" step="1" data-tooltip="{{CPLocal 'TraumaTeamCrewCountTip'}}"/>
+            <button type="button" class="cp-tt-row-remove" data-tooltip="{{CPLocal 'TraumaTeamCrewRemoveRow'}}">✕</button>
+        </div>
     </div>
 </div>
