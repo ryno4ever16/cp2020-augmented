@@ -160,14 +160,38 @@ export async function mirrorDotStatus(actor, statusId, active) {
  * The flag is mirrored onto core's `corrode` on the way in (mirrorDotStatus); the per-turn tick in
  * damage-hooks.js takes it off again when the last marker expires.
  */
-export async function applyAcidDotState(target, location, turnsLeft, formula) {
+export async function applyAcidDotState(target, location, turnsLeft, formula, { hitDamage = 0, stoppedByArmor = true } = {}) {
   const mode = dotStackMode();
-  const newEntry = { location, turnsLeft: Number(turnsLeft), formula: String(formula || "1d6") };
+  // ⭐ THE ACID IS ROLLED ONCE AND THE NUMBER IS KEPT (Core p.107 worked example, user-ruled
+  // 2026-09-19 "the die gets rolled once and reused"): Ripperjack's two pellets roll 7, and 7 is what
+  // comes off the armour every round. A stated formula is rolled here, now; a BLANK formula means the
+  // hit's own damage roll at the location is the acid — the squirtgun's case, where the acid IS the
+  // damage. The marker carries the number, and the tick (damage-hooks.js) never rolls again.
+  // ⏪ Until 2026-09-19 the marker carried only the formula and the tick re-rolled it every turn.
+  const stated = String(formula ?? "").trim();
+  let perRound = 0;
+  if (stated) {
+    try {
+      const roll = await new Roll(stated).evaluate();
+      perRound = Math.max(0, Math.floor(Number(roll.total) || 0));
+      await roll.toMessage({
+        speaker: ChatMessage.getSpeaker({ actor: target }),
+        flavor: localizeParam("AcidRollFlavor", { name: target?.name ?? "", location, turns: Number(turnsLeft) }),
+      });
+    } catch (_e) { perRound = 0; }
+  } else {
+    perRound = Math.max(0, Math.floor(Number(hitDamage) || 0));
+  }
+  if (perRound <= 0 || !(Number(turnsLeft) > 0)) return false;
+  // `stoppedByArmor`: whether the hit's acid was held off the body by armour. Only then does the acid
+  // still owe its damage — the tick sears the remainder through the turn the armour is gone. A hit
+  // that penetrated already delivered its damage; its marker eats armour and nothing more.
+  const newEntry = { location, turnsLeft: Number(turnsLeft), perRound, formula: stated, stoppedByArmor: !!stoppedByArmor };
 
   if (mode === "reset") {
     await target.setFlag("cp2020-augmented", "dotState", [newEntry]);
     await mirrorDotStatus(target, "corrode", true);
-    return;
+    return true;
   }
 
   const raw = target.getFlag?.("cp2020-augmented", "dotState");
@@ -176,7 +200,12 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
   if (mode === "stack") {
     const idx = states.findIndex(s => s.location === location);
     if (idx >= 0) {
-      states[idx] = { location, turnsLeft: states[idx].turnsLeft + Number(turnsLeft), formula: String(formula || "1d6") };
+      // More acid on the same place: the timer extends and the stronger dose is the one that eats.
+      // The book prices a location by what is on it, not by how many times it was hit.
+      const prior = Number(states[idx].perRound);
+      states[idx] = { ...newEntry, turnsLeft: Number(states[idx].turnsLeft) + Number(turnsLeft),
+        perRound: Number.isFinite(prior) ? Math.max(prior, perRound) : perRound,
+        stoppedByArmor: states[idx].stoppedByArmor === true || !!stoppedByArmor };
     } else {
       states.push(newEntry);
     }
@@ -186,6 +215,29 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
   }
   await target.setFlag("cp2020-augmented", "dotState", states);
   await mirrorDotStatus(target, "corrode", true);
+  return true;
+}
+
+/**
+ * EVERY OVER-TIME STATEMENT A PAYLOAD MAKES, as one list. Two sources, both honoured: the loaded round's
+ * single statement (`dotEnabled`/`dotTurns`/`dotType`/`dotDamageFormula`/`dotFlat` — the shape every
+ * ammo item and every relay has always carried) and the weapon's own list (`overTime`, 2026-09-19).
+ * Pure: rows are normalised, unknown types and zero durations are dropped, nothing is written.
+ * @returns {{type:string, turns:number, formula:string, flat:boolean}[]}
+ */
+export function overTimeEntries(src) {
+  const out = [];
+  if (!src) return out;
+  if (src.dotEnabled && Number(src.dotTurns) > 0) {
+    out.push({ type: String(src.dotType || "acid"), turns: Number(src.dotTurns), formula: String(src.dotDamageFormula || ""), flat: !!src.dotFlat });
+  }
+  for (const row of (Array.isArray(src.overTime) ? src.overTime : [])) {
+    const type = String(row?.type ?? "").trim().toLowerCase();
+    const turns = Math.floor(Number(row?.turns) || 0);
+    if (!["acid", "fire"].includes(type) || turns <= 0) continue;
+    out.push({ type, turns, formula: String(row?.formula ?? "").trim(), flat: !!row?.flat });
+  }
+  return out;
 }
 
 /**
@@ -315,27 +367,25 @@ export async function applyWordConditionFromPayload(target, word, src = {}) {
  * when the payload has no active DOT or no hit location. Centralizes the per-site routing so
  * every damage-application path behaves identically.
  */
-export async function applyDotFromPayload(target, location, src, penetrated = true) {
+export async function applyDotFromPayload(target, location, src, penetrated = true, hitDamage = 0) {
   if (!target || !location || !src) return;
-  if (!src.dotEnabled || Number(src.dotTurns) <= 0) return;
-
-  const turns   = Number(src.dotTurns);
-  const formula = String(src.dotDamageFormula || "1d6");
-  const dotType = String(src.dotType || "acid");
-
-  if (dotType === "fire") {
-    // Incendiary only ignites the target when the round gets through armor (RAW: "if the bullet
-    // penetrates"). An unarmored target always counts as penetrated, so they always catch fire.
-    if (!penetrated) return;
-    // ⏪ `fireDotEnabled` RETIRED 2026-08-29 (settings-trim): OFF bought the dead state — an incendiary
-    // round that lands and burns nothing. The round declaring `dotEnabled` (checked above) is the consent.
-    // The round's own ladder rides through with its formula and its duration. A payload from before the
-    // field existed passes undefined, which coerces to the halving that has always been the default.
-    await applyFireDotState(target, location, turns, formula, Boolean(src.dotFlat));
-  } else {
-    // ⏪ `acidArmorDotEnabled` RETIRED 2026-08-29 (settings-trim): the `dotEnabled` guard above is the
-    // consent, and no shipped ammo item sets it — a GM authors the round by hand.
-    await applyAcidDotState(target, location, turns, formula);
+  // ⭐ ONE LIST, EVERY SOURCE (2026-09-19): the round's statement and the weapon's rows, each applied
+  // on its own engine. `hitDamage` is the hit's rolled damage at this location BEFORE armour — the
+  // acid a blank-formula row eats with (Core p.107-108: the acid that hit is the acid that eats).
+  for (const e of overTimeEntries(src)) {
+    if (e.type === "fire") {
+      // Incendiary only ignites the target when the round gets through armor (RAW: "if the bullet
+      // penetrates"). An unarmored target always counts as penetrated, so they always catch fire.
+      if (!penetrated) continue;
+      // ⏪ `fireDotEnabled` RETIRED 2026-08-29 (settings-trim): OFF bought the dead state — an incendiary
+      // round that lands and burns nothing. The row declaring the burn is the consent. A blank formula
+      // burns for the incendiary load's own 1d6.
+      await applyFireDotState(target, location, e.turns, e.formula || "1d6", e.flat);
+    } else {
+      // ⏪ `acidArmorDotEnabled` RETIRED 2026-08-29 (settings-trim): the row is the consent. The acid
+      // still owes its damage only where armour held it off the body (see applyAcidDotState).
+      await applyAcidDotState(target, location, e.turns, e.formula, { hitDamage, stoppedByArmor: !penetrated });
+    }
   }
 }
 

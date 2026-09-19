@@ -192,6 +192,27 @@ again sends the aircraft away.
 - **Other players' screens.** Everyone sees the same arrival and the same aircraft image; only your
   client writes the tokens, so one call is one squad.
 
+## 11. Over-time effects on weapons (acid, fire)
+
+Any weapon can carry effects that keep working after the hit: an acid-tipped monokatana, a squirtgun
+of acid, an incendiary blade. On the weapon sheet, under **Over-time effects**, press **+ Add
+effect** for a row. Each row is one effect: its type, how many rounds it lasts, and its roll. A
+weapon can carry more than one row, and a loaded round's own effect still applies on top.
+
+- **Acid** works the way Core p.107 prints it. The acid is rolled **once**, when the hit lands, and
+  that number comes off the armor at the hit location **every round** for the rounds stated. The
+  round the armor runs out, whatever is left of that round's acid sears into the body as damage and
+  the effect is spent. Leave the roll blank and the weapon's own damage at the location is the acid,
+  which is the book's squirtgun (two pellets, 2D6, that number per round for 3 rounds). Type a roll,
+  say 1d6, for a blade whose cut is one thing and its acid another. A hit that got through the armor
+  on its own already did its damage; its acid eats the armor and does not sear again.
+- **Fire** burns hit points at the location each round, halving every round unless the row is marked
+  **flat**. A blank roll burns for 1d6, the incendiary load's own figure. Fire lights only when the hit
+  penetrated, as the book has it.
+- Choosing a type resets the row's numbers to that effect's figures, so you never need to know
+  them: acid is 3 rounds of the weapon's own roll, fire 2 rounds of 1d6. Edit either afterwards.
+- Both conditions show on the token as before, and the round-by-round narration lands in chat.
+
 ## 11. Settings reference (stub — regenerate at release; every setting, its default, and who it's for)
 
 > **2026-08-29 settings trim:** ~23 world switches were retired or merged in one pass. The

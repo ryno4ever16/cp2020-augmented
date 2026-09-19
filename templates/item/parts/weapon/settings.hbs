@@ -4,7 +4,10 @@
     {{> (template "fields/number") label="Accuracy" edit="system.accuracy"}}
     {{> (template "fields/number") label="Range" edit="system.range"}}
 
-    {{> (template "fields/select") label="Reliability" edit="system.reliability" choices=reliabilities}}
+    {{!-- allowBlank (2026-09-19): a stored value outside the enum (blank, or the book's own "ST"/"VR"
+          abbreviations) used to render as the FIRST option — "Very Reliable" — and would then be SAVED
+          as VeryReliable on the next submit. Same treatment as Concealability / Availability below. --}}
+    {{> (template "fields/select") label="Reliability" edit="system.reliability" choices=reliabilities allowBlank=true}}
 </div>
 
 {{!-- Ammo-related fields: only for ranged weapons --}}
@@ -69,4 +72,33 @@
     {{else}}
         {{> (template "fields/string") label="AmmoType" edit="system.ammoType"}}
     {{/if}}
+</div>
+
+{{!-- ===== Over-time effects on the weapon itself (user-ruled 2026-09-19) =====
+      A LIST of rows: acid eats the location's armour by the hit's own acid roll each round and sears
+      the rest through when the armour is gone (Core p.107-108); fire burns hit points. Rows are
+      name-bound as system.overTime.N.* so the sheet's ordinary submit writes the array; add/remove
+      are explicit writes in item-sheet.js (_cpActivateWeaponOverTimeControls). A weapon with no rows
+      is a weapon as it always was. --}}
+<div class="field-list cp-weapon-overtime">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "WeaponOverTimeSection"}}</label>
+        <span class="flex-pad"></span>
+        {{#if editable}}<button type="button" class="cp-ot-add" data-tooltip="{{CPLocal 'WeaponOverTimeAddTip'}}">{{CPLocal "WeaponOverTimeAdd"}}</button>{{/if}}
+    </div>
+    <p class="cp-ot-hint span-two-cells">{{CPLocal "WeaponOverTimeHint"}}</p>
+    {{#each system.overTime as |row i|}}
+    <div class="field span-two-cells cp-ot-row" data-index="{{i}}">
+        <select name="system.overTime.{{i}}.type" class="cp-ot-type" data-tooltip="{{CPLocal 'WeaponOverTimeTypeTip'}}">
+            <option value="acid" {{#if (equals row.type "acid")}}selected{{/if}}>{{CPLocal "OverTimeAcid"}}</option>
+            <option value="fire" {{#if (equals row.type "fire")}}selected{{/if}}>{{CPLocal "OverTimeFire"}}</option>
+        </select>
+        <label class="cp-ot-lbl">{{CPLocal "WeaponOverTimeTurns"}}</label>
+        <input type="number" name="system.overTime.{{i}}.turns" value="{{row.turns}}" min="0" step="1" class="cp-ot-turns" data-tooltip="{{CPLocal 'WeaponOverTimeTurnsTip'}}"/>
+        <label class="cp-ot-lbl">{{CPLocal "WeaponOverTimeFormula"}}</label>
+        <input type="text" name="system.overTime.{{i}}.formula" value="{{row.formula}}" placeholder="{{CPLocal 'WeaponOverTimeFormulaBlank'}}" class="cp-ot-formula" data-tooltip="{{CPLocal 'WeaponOverTimeFormulaTip'}}"/>
+        <label class="cp-ot-lbl cp-ot-flat" data-tooltip="{{CPLocal 'WeaponOverTimeFlatTip'}}"><input type="checkbox" name="system.overTime.{{i}}.flat" {{#if row.flat}}checked{{/if}}/>{{CPLocal "WeaponOverTimeFlat"}}</label>
+        {{#if ../editable}}<button type="button" class="cp-ot-remove" data-index="{{i}}" data-tooltip="{{CPLocal 'WeaponOverTimeRemoveTip'}}">✕</button>{{/if}}
+    </div>
+    {{/each}}
 </div>

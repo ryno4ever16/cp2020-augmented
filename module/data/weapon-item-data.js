@@ -27,7 +27,23 @@ const WEAPON_AUGMENT_FIELDS = {
   effectTypes: (f) => new f.ArrayField(new f.StringField({ required: true, blank: false }), { initial: [] }),
   blastRadius: (f) => new f.NumberField({ initial: 0 }),
   dotTurns:    (f) => new f.NumberField({ initial: 0 }),
-  stunSaveMod: (f) => new f.NumberField({ initial: 0 })
+  stunSaveMod: (f) => new f.NumberField({ initial: 0 }),
+  // ── Over-time effects ON THE WEAPON (user-ruled 2026-09-19) ────────────────────────────────
+  // A LIST, because a weapon may carry more than one (an acid-tipped blade that is also on fire is
+  // two rows), each row one statement the damage pipeline already understands: `type` routes it
+  // (acid eats armour, fire burns HP — save-rolls.js applyDotFromPayload), `turns` is its duration,
+  // `formula` its per-application roll — BLANK means "the weapon's own damage roll at the location"
+  // (the Core p.107-108 airgun/Powersquirt reading: the acid that hit is the acid that eats) — and
+  // `flat` is fire's opt-out from the halving ladder (the ammo model's `dotFlat`). Additive with an
+  // empty default → no migration; a weapon with no rows is a weapon as it always was. The rows ride
+  // the weaponFired payload as `overTime` (seam-shim.js AMMO_EFFECT_FIELDS) beside — never instead
+  // of — a loaded round's own single statement.
+  overTime: (f) => new f.ArrayField(new f.SchemaField({
+    type:    new f.StringField({ initial: "acid", blank: false }),
+    turns:   new f.NumberField({ initial: 3, integer: true, min: 0 }),
+    formula: new f.StringField({ initial: "" }),
+    flat:    new f.BooleanField({ initial: false }),
+  }), { initial: [] })
 };
 
 /**

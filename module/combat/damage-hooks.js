@@ -31,7 +31,7 @@ import { onChatCardRender } from "../chat-render-compat.js";
 // a pattern whose card is still unresolved is a decision somebody has not made yet, and no expiry
 // clock may take that decision away from them (see _spreadZoneCardPending).
 import { markCardResolved, isCardResolved } from "../card-lock.js";
-import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
+import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES, _deriveLiveSP } from "./DamageApplicator.js";
 // The per-application severity cadence — one progression card and one mortal prompt per body per
 // application, whatever the application is made of (a burst's rounds, a corridor's shells, a blast and
 // the fragments it throws). See combat/severity-batch.js for who owns the wound-track prompt.
@@ -1701,49 +1701,63 @@ async function _runOverTimeTick(combat) {
     const dotStates = Array.isArray(rawDot) ? rawDot : (rawDot ? [rawDot] : []);
     if (dotStates.length > 0) {
       const surviving = [];
+      const acidBtm = Number(actor.system?.stats?.bt?.modifier) || 0;
       for (const ds of dotStates) {
-        const { location, turnsLeft, formula } = ds;
+        const { location, turnsLeft } = ds;
         if (!location || turnsLeft <= 0) continue;
-        let spReduction = 0;
-        try {
-          const roll = await new Roll(formula || "1d6").evaluate();
-          spReduction = roll.total;
-          await roll.toMessage({
-            speaker: ChatMessage.getSpeaker({ actor }),
-            flavor: `Acid DOT — SP degradation at ${location} (${turnsLeft} turn${turnsLeft !== 1 ? "s" : ""} remaining)`,
-          });
-        } catch {
-          spReduction = 3;
+        // ⭐ THE NUMBER IS THE MARKER'S (Core p.107 worked example, user-ruled 2026-09-19): rolled once
+        // when the hit landed (save-rolls.js applyAcidDotState) and reused every round. A marker from
+        // before that day carries only a formula — it is rolled ONCE here, the first time it ticks, and
+        // keeps the number from then on. ⏪ Until 2026-09-19 every tick re-rolled.
+        let perRound = Math.floor(Number(ds.perRound));
+        if (!Number.isFinite(perRound)) {
+          try { perRound = Math.max(0, Math.floor(Number((await new Roll(ds.formula || "1d6").evaluate()).total) || 0)); }
+          catch { perRound = 3; }
         }
-        if (spReduction > 0) {
+        // What the location still has against acid — a fully-typed garment of another type contributes
+        // nothing here and is left untouched, exactly as ablateLocationByAmount treats it below.
+        const spBefore = Math.max(0, Number(_deriveLiveSP(actor, location, "acid")) || 0);
+        const eaten = Math.max(0, Math.min(spBefore, perRound));
+        if (eaten > 0) {
           // ⛔ THE TYPE ARGUMENT IS LOAD-BEARING, exactly as it is on the heat tick below
           // (`ablateLocationOnce(actor, location, "fire")`). Omitted, it defaults to `""` in
           // DamageApplicator, and the layer walk's filter `typedLayerSP(item, sp, "") <= 0` reads a
           // FULLY-TYPED garment (mechTypedSP.sp === 0 with a type set) as contributing nothing — so
           // the whole layer was skipped and a matching garment never eroded.
-          //
-          // The literal is this branch's own type. `applyDotFromPayload` (save-rolls.js) routes
-          // every non-"fire" dotType into the marker this tick reads, and the ammo model's own
-          // `dotType` initial is "acid", so "acid" IS what the marker means — the marker itself
-          // records only location/turnsLeft/formula, which is why the type is stated here rather
-          // than carried.
-          //
-          // ⭐ THE ONE OPEN EDGE, and it is the model's answer, not a new rule: a garment typed
-          // against a DIFFERENT single type (a fire coat, mechTypedSP {fire, 0}) still reads 0 under
-          // this tick and is left untouched — it stopped nothing here, which is the same treatment
-          // the heat tick gives a corrosive-typed garment. A DUAL-VALUE typed layer (sp > 0, e.g.
-          // the radiation suit) falls back to its conventional SP and erodes normally.
-          await ablateLocationByAmount(actor, location, spReduction, "acid");
-          actor.sheet?.render(false);
+          await ablateLocationByAmount(actor, location, eaten, "acid");
         }
-        const newTurnsLeft = turnsLeft - 1;
-        if (newTurnsLeft <= 0) {
+        // ⭐ BURN-THROUGH (the example's third turn: "6 points get through the armor and sear into the
+        // target's skin"). Only a marker whose hit was HELD OFF by armour still owes its damage; a
+        // marker written before the field existed never sears (its hit resolved the old way), and a
+        // hit that penetrated delivered its damage on the day. The acid is spent once it reaches flesh.
+        const through = ds.stoppedByArmor === true ? Math.max(0, perRound - eaten) : 0;
+        let spent = false;
+        if (through > 0) {
+          const dmg = Math.max(1, through - acidBtm);
+          const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: through, penetrates: true, token, fxSilent: true });
           await postSavePromptCard({
-            body: localizeParam("AcidExpiredBody", { name: actor.name, location }),
+            body: localizeParam("AcidBurnThroughBody", { name: actor.name, location, eaten, through: dmg }),
             speaker: ChatMessage.getSpeaker({ actor }),
           });
+          if (!outcome.cyberlimb) await postStunSavePrompt(actor, token);
+          spent = true;
         } else {
-          surviving.push({ location, turnsLeft: newTurnsLeft, formula });
+          await postSavePromptCard({
+            body: localizeParam("AcidTickBody", { name: actor.name, location, eaten, turns: turnsLeft - 1 }),
+            speaker: ChatMessage.getSpeaker({ actor }),
+          });
+        }
+        actor.sheet?.render(false);
+        const newTurnsLeft = spent ? 0 : turnsLeft - 1;
+        if (newTurnsLeft <= 0) {
+          if (!spent) {
+            await postSavePromptCard({
+              body: localizeParam("AcidExpiredBody", { name: actor.name, location }),
+              speaker: ChatMessage.getSpeaker({ actor }),
+            });
+          }
+        } else {
+          surviving.push({ ...ds, perRound, turnsLeft: newTurnsLeft });
         }
       }
       // ⭐ THE CORE CONDITION GOES WITH THE LAST MARKER, AND ONLY WITH THE LAST ONE. The flag is
@@ -2376,7 +2390,7 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
  * ignores it (they always did), so nothing downstream changes by carrying the rows beside it. */
 async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null, coverSP = 0) {
   const { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
-          stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula, dotFlat } = payload;
+          stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula, dotFlat, overTime } = payload;
   if (!tok?.actor || dmg <= 0) return { total: 0, hits: [] };
   const loc = (await rollLocation(tok.actor, null)).areaHit;
   // ⭐ THE IMPACT AUDIO, ONCE PER ROUND — NOT ONCE ON ARRIVAL AND AGAIN ON CONFIRM. When the pattern
@@ -2421,6 +2435,8 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
                   // Same defensive coercion as the rest: a caller that never carried it passes false,
                   // which is the halving the tick has always applied.
                   dotFlat: Boolean(dotFlat),
+                  // The weapon's own over-time rows (2026-09-19) travel with the round's statement.
+                  overTime: Array.isArray(overTime) ? overTime : [],
                   weaponName: String(weaponName || "") };
   // A shock rider counts only where the round got through and did not land in a limb's own structure —
   // the same reading the single-target flow applies (RAW: no shock through a cyberlimb).
@@ -2431,7 +2447,7 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
   }
   // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js. The location
   // is this shell's own rolled one, which is what the single-target flow passes as well.
-  await applyDotFromPayload(tok.actor, hits[0]?.location ?? loc, rider, hits.some(h => h.penetrates));
+  await applyDotFromPayload(tok.actor, hits[0]?.location ?? loc, rider, hits.some(h => h.penetrates), Number(hits[0]?.rawDamage) || 0);
   const total = hits.reduce((s, h) => s + h.netDamage, 0);
   // The shell's own stun prompt is per damage event, as the book has it; the death prompt is offered
   // once per application batch when the caller named one (a burst of shells is one moment of the fight).
@@ -2750,6 +2766,7 @@ async function _placeExplosion(payload) {
         stunSaveOnHit: Boolean(payload.stunSaveOnHit), stunSaveMod: Number(payload.stunSaveMod ?? 0),
         dotEnabled: Boolean(payload.dotEnabled), dotTurns: Number(payload.dotTurns ?? 0),
         dotType: String(payload.dotType || "acid"), dotDamageFormula: String(payload.dotDamageFormula || "1d6"),
+        overTime: Array.isArray(payload.overTime) ? payload.overTime : [],
         // The fifth statement about the same burn — whether its multiplier diminishes. Stored for the
         // reason the four above it are: the area OUTLIVES the payload, and the figures caught at
         // confirm time seed their burn from what the area recorded. An area placed before this field
@@ -3536,6 +3553,7 @@ export async function _placeSpreadZone(payload) {
         stunSaveOnHit: Boolean(payload.stunSaveOnHit), stunSaveMod: Number(payload.stunSaveMod ?? 0),
         dotEnabled: Boolean(payload.dotEnabled), dotTurns: Number(payload.dotTurns ?? 0),
         dotType: String(payload.dotType || "acid"), dotDamageFormula: String(payload.dotDamageFormula || "1d6"),
+        overTime: Array.isArray(payload.overTime) ? payload.overTime : [],
         // The fifth statement about the same burn — whether its multiplier diminishes. Stored for the
         // reason the four above it are: the pattern OUTLIVES the payload, and the shells that land at
         // confirm time seed their burn from what the region recorded. A corridor placed before this
@@ -4662,7 +4680,7 @@ function _hookSocketRelay() {
         }
 
         // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js.
-        await applyDotFromPayload(target, data.firstHitLocation ?? null, data, (data.resolvedHits ?? []).some(h => h.penetrates));
+        await applyDotFromPayload(target, data.firstHitLocation ?? null, data, (data.resolvedHits ?? []).some(h => h.penetrates), Number(data.firstHitDamage) || 0);
 
         if (totalApplied > 0) {
           // Reuse liveToken (resolved above from data.targetTokenId) — re-deriving by actor id would drop

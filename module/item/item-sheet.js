@@ -868,6 +868,8 @@ async _prepareCyberware(sheet) {
     this._cpActivateCyberwareInstall(root);
     this._cpActivateVehicleWeaponShellControls(root);
     this._cpActivateAmmoControls(root);
+    // Over-time effect rows on a weapon (add / remove / seed-on-type; 2026-09-19).
+    this._cpActivateWeaponOverTimeControls(root);
     this._cpActivateMechConsumableControls(root);
     this._cpActivateArmorRestoreControl(root);
   }
@@ -2272,6 +2274,54 @@ async _prepareCyberware(sheet) {
   }
 
   /** Ammo item controls: blast multipliers, quantity lock, buy-box, modifier load, effect-type menu. */
+  /**
+   * The weapon's over-time effect rows (user-ruled 2026-09-19). The row FIELDS are name-bound
+   * (`system.overTime.N.*`) and travel on the sheet's ordinary submit — the platform's ArrayField casts
+   * the numbered object back to an array. What needs a hand is the shape of the list: ADD appends a
+   * row, REMOVE splices one, and choosing a TYPE seeds that row's numbers so the referee never has to
+   * know them (acid: 3 turns, the weapon's own roll — Core p.107; fire: 2 turns of 1d6 — the
+   * incendiary load's own figure). Bound once on the persistent root, like the ammo controls above.
+   */
+  _cpActivateWeaponOverTimeControls(root) {
+    if (!root?.addEventListener) return;
+    if (this.item.type !== "weapon") return;
+    const editable = this.isEditable ?? this.options?.editable ?? false;
+    if (!editable) return;
+    if (root.dataset.cpWeaponOtBound === "1") return;
+    root.dataset.cpWeaponOtBound = "1";
+    const rows = () => (Array.isArray(this.item.system?.overTime) ? this.item.system.overTime : [])
+      .map((r) => ({ type: String(r?.type ?? "acid"), turns: Number(r?.turns) || 0, formula: String(r?.formula ?? ""), flat: !!r?.flat }));
+    const seed = (type) => (type === "fire" ? { type: "fire", turns: 2, formula: "1d6", flat: false } : { type: "acid", turns: 3, formula: "", flat: false });
+
+    root.addEventListener("click", async (event) => {
+      const add = event.target?.closest?.(".cp-ot-add");
+      if (add && root.contains(add)) {
+        event.preventDefault(); event.stopPropagation();
+        await this.item.update({ "system.overTime": [...rows(), seed("acid")] });
+        return;
+      }
+      const remove = event.target?.closest?.(".cp-ot-remove");
+      if (remove && root.contains(remove)) {
+        event.preventDefault(); event.stopPropagation();
+        const idx = Number(remove.dataset.index);
+        const next = rows().filter((_r, n) => n !== idx);
+        await this.item.update({ "system.overTime": next });
+      }
+    });
+    // Choosing a type re-seeds THAT row's numbers, written explicitly so the form's own submit cannot
+    // race a stale snapshot over the seed (the ammo modifier select's idiom).
+    root.addEventListener("change", async (event) => {
+      const sel = event.target?.closest?.("select.cp-ot-type");
+      if (!sel || !root.contains(sel)) return;
+      event.preventDefault(); event.stopPropagation();
+      const idx = Number(sel.closest(".cp-ot-row")?.dataset.index);
+      const next = rows();
+      if (!Number.isInteger(idx) || !next[idx]) return;
+      next[idx] = seed(String(sel.value));
+      await this.item.update({ "system.overTime": next });
+    }, { capture: true });
+  }
+
   _cpActivateAmmoControls(root) {
     if (!root?.addEventListener) return;
     if (this.item.type !== "ammo") return;

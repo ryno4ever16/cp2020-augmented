@@ -504,6 +504,10 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         // what arrives here. A relay emitted before this field existed reads false on arrival, which is
         // the halving that shipped before.
         dotFlat:          Boolean(this.payload.dotFlat),
+        // The weapon's own over-time rows and the first hit's rolled damage (2026-09-19): the GM side
+        // seeds the acid marker from what arrives here, and a blank-formula row eats with that roll.
+        overTime:         Array.isArray(this.payload.overTime) ? this.payload.overTime : [],
+        firstHitDamage:   Number(rawHits[0]?.rawDamage) || 0,
         weaponName:       String(this.payload.weaponName      || ""),
         firstHitLocation: rawHits[0]?.location ?? null,
       });
@@ -552,7 +556,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js.
-    await applyDotFromPayload(this.target, rawHits[0]?.location ?? null, this.payload, resolvedHits.some(h => h.penetrates));
+    await applyDotFromPayload(this.target, rawHits[0]?.location ?? null, this.payload, resolvedHits.some(h => h.penetrates), Number(rawHits[0]?.rawDamage) || 0);
 
     // Gate the stun/death prompt on FLESH HP actually written — a hit fully soaked by a cyberlimb's
     // SDP raises no consciousness check (H7: was `totalApplied`, which counted cyberlimb-soaked damage).

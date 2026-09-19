@@ -4315,6 +4315,19 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-tt-crew-body .cp-tt-seats { flex: 1 1 auto; min-width: 0; font-size: 0.9em; opacity: 0.85; }
 .cp-tt-crew-body.cp-drop-hot { outline: 1px dashed #b8916a; outline-offset: 2px; background: rgba(138,109,59,0.12); }
 
+/* Weapon sheet — over-time effect rows (2026-09-19). One flex line per row inside the sheet's own
+   two-column field-list (span-two-cells): the type select shares the leftover width (install-picker
+   idiom), the numbers stay at their own size, the remove button at its own. */
+.cp-weapon-overtime .cp-ot-hint { font-size: 0.85em; opacity: 0.8; margin: 0 0 4px 0; }
+.cp-weapon-overtime .cp-ot-add,
+.cp-weapon-overtime .cp-ot-remove { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; line-height: 1.6; padding: 0 8px; }
+.cp-weapon-overtime .cp-ot-row { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.cp-weapon-overtime .cp-ot-type { flex: 1 1 0; min-width: 6em; height: 24px; min-height: 24px; }
+.cp-weapon-overtime .cp-ot-lbl { flex: 0 0 auto; font-size: 0.85em; opacity: 0.85; white-space: nowrap; }
+.cp-weapon-overtime .cp-ot-turns { flex: 0 0 3.5em; width: 3.5em; height: 24px; text-align: center; }
+.cp-weapon-overtime .cp-ot-formula { flex: 0 0 5em; width: 5em; height: 24px; }
+.cp-weapon-overtime .cp-ot-flat { display: flex; align-items: center; gap: 3px; cursor: help; }
+
 /* Goon Factory — the live formula check's invalid state (npcgen-app _onRender; user-ordered
    2026-08-28). The warn colour matches .cp-goon-warn; the border is the field marking itself. */
 .cp-goon .cp-goon-field-invalid { border-color: #c0791a; outline: 1px solid #c0791a; }

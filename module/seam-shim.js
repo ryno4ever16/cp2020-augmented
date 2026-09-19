@@ -205,6 +205,14 @@ const AMMO_EFFECT_FIELDS = [
   // document — the tick reads its state, the state is seeded from the payload, and the payload is built
   // from exactly this list — so a round that states it would burn on the halving ladder anyway.
   "dotFlat",
+  // ⭐ THE WEAPON'S OWN LIST OF OVER-TIME EFFECTS (2026-09-19). The five `dot*` fields above are ONE
+  // statement, and they belong to the loaded round. This is the weapon's, and it is a LIST: an
+  // acid-tipped monokatana, a squirtgun of acid, a burning big-knuck — melee and martial payloads
+  // reach the pipeline with no ammo item at all, and this is the only way a blade can say "acid".
+  // Ammo items do not carry it, so the second pass below (the weapon's own system) is where it is
+  // read; the round's single statement and the weapon's list BOTH apply (save-rolls.js
+  // applyDotFromPayload) — two facts about one hit, not one fact stated twice.
+  "overTime",
 ];
 
 /** Effect fields for the fired weapon, read from its loaded ammo (system.*) first, then the weapon
