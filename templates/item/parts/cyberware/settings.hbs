@@ -332,7 +332,10 @@
 
     <div class="field span-two-cells">
     <div class="field-list cw-weapon-grid">
-        {{> (template "fields/select") label="WeaponType" edit="system.CyberWorkType.Weapon.weaponType" choices=weaponTypes}}
+{{!-- allowBlank (2026-09-19 select sweep): a stored value outside the enum used to render as the FIRST
+      option and be SAVED as that on the next submit — the mechanism that rewrote 1.0.x-era weapons'
+      reliability / attack type / concealability across users' worlds. Blank is honest; first-option is a lie. --}}
+        {{> (template "fields/select") label="WeaponType" edit="system.CyberWorkType.Weapon.weaponType" choices=weaponTypes allowBlank=true}}
         {{> (template "fields/select") label="AttackType" edit="system.CyberWorkType.Weapon.attackType" choices=attackTypes allowBlank=true}}
 
         {{> (template "fields/string") label="Damage" edit="system.CyberWorkType.Weapon.damage"}}
@@ -340,7 +343,7 @@
 
         {{> (template "fields/number") label="Range" edit="system.CyberWorkType.Weapon.range"}}
 
-        {{> (template "fields/select") label="Reliability" edit="system.CyberWorkType.Weapon.reliability" choices=reliabilities}}
+        {{> (template "fields/select") label="Reliability" edit="system.CyberWorkType.Weapon.reliability" choices=reliabilities allowBlank=true}}
 
         {{#unless cwWeaponIsMelee}}
           {{> (template "fields/number") label="ShotsLeft" edit="system.CyberWorkType.Weapon.shotsLeft"}}

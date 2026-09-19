@@ -4331,3 +4331,9 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 /* Goon Factory — the live formula check's invalid state (npcgen-app _onRender; user-ordered
    2026-08-28). The warn colour matches .cp-goon-warn; the border is the field marking itself. */
 .cp-goon .cp-goon-field-invalid { border-color: #c0791a; outline: 1px solid #c0791a; }
+
+/* Data-review notice card (module/data-review.js, 2026-09-19): a compact table in a chat card. */
+.cp-data-review h3 { margin: 0 0 4px 0; }
+.cp-data-review-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin: 4px 0; }
+.cp-data-review-table th, .cp-data-review-table td { padding: 2px 4px; border-bottom: 1px solid rgba(192,160,98,0.3); text-align: left; vertical-align: top; }
+.cp-data-review-foot { font-size: 0.8em; opacity: 0.8; margin: 4px 0 0 0; }

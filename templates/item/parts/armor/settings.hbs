@@ -3,7 +3,10 @@
     {{> (template "fields/number") label="Encumbrance" edit="system.encumbrance"}}
     {{!-- Hard/soft classification (drives the edged/mono SP multipliers). Blank = "Auto" (the
           name/encumbrance heuristic in getArmorHardness); "soft"/"hard" force it. --}}
-    {{> (template "fields/select") label="ArmorType" edit="system.armorType" choices=armorTypeChoices}}
+{{!-- allowBlank (2026-09-19 select sweep): a stored value outside the enum used to render as the FIRST
+      option and be SAVED as that on the next submit — the mechanism that rewrote 1.0.x-era weapons'
+      reliability / attack type / concealability across users' worlds. Blank is honest; first-option is a lie. --}}
+    {{> (template "fields/select") label="ArmorType" edit="system.armorType" choices=armorTypeChoices allowBlank=true}}
 </div>
 {{!-- Armor degradation writes the reduced stopping power straight into the coverage boxes above, so
       a worn garment's original rating survives nowhere on the actor. This puts it back from the

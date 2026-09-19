@@ -20,6 +20,16 @@ after the current rework wave. Feature behavior described here matches the post-
 - A **Setup & What's New** dialog appears at first load and after updates; it re-surfaces when a
   new version changes things worth knowing.
 
+### A one-time notice about older weapons (added 2026-09-19)
+
+Weapons dragged from the system's 2025 compendia carried a few values the sheets did not recognise,
+and an older sheet could quietly replace such a value with the first choice in its list the next time
+the item was edited: Very Reliable, Auto, Pocket. The module now repairs the spellings it can
+recognise on load, once, and posts one GM-only chat card naming any weapon written by an older
+system build whose reliability, attack type or concealability no longer matches the compendium entry
+of the same name. Nothing on that card has been changed; check each row against the book. Re-post it
+any time from the console with `game.cpAugmented.migrations.weaponReview()`.
+
 ## 2. Combat automation (stub — expand after wave)
 
 Fire from a weapon's sheet or macro → the shot resolves, draws, and sounds → the **Apply Damage**

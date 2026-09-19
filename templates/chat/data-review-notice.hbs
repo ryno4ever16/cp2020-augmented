@@ -1,0 +1,16 @@
+{{!-- The one-time GM notice from module/data-review.js: weapons written by a pre-1.1.0 system build whose
+      reliability / attack type / concealability disagree with the current compendium entry of the same
+      name. Nothing here is written by the module; the GM checks each row against the book. --}}
+<div class="cp-data-review">
+    <h3>{{CPLocal "DataReviewTitle"}}</h3>
+    <p>{{CPLocal "DataReviewIntro" count=count}}</p>
+    <table class="cp-data-review-table">
+        <thead><tr><th>{{CPLocal "DataReviewActor"}}</th><th>{{CPLocal "DataReviewItem"}}</th><th>{{CPLocal "DataReviewField"}}</th><th>{{CPLocal "DataReviewStored"}}</th><th>{{CPLocal "DataReviewPack"}}</th></tr></thead>
+        <tbody>
+        {{#each rows as |r|}}
+            <tr><td>{{r.actorName}}</td><td>{{r.itemName}}</td><td>{{r.fieldLabel}}</td><td>{{r.stored}}</td><td>{{r.pack}}</td></tr>
+        {{/each}}
+        </tbody>
+    </table>
+    <p class="cp-data-review-foot">{{CPLocal "DataReviewFoot"}}</p>
+</div>

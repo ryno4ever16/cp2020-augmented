@@ -24,7 +24,10 @@
 <p class="cp-field-note">{{CPLocal "SkillIpMultiplierFromTable" mult=ipMultiplierFromTable}}</p>
 {{/if}}
 <div class="field-list">
-    {{>(template "fields/select") label="Stat" edit="system.stat" choices=stats noTranslateOptions=true}}
+{{!-- allowBlank (2026-09-19 select sweep): a stored value outside the enum used to render as the FIRST
+      option and be SAVED as that on the next submit — the mechanism that rewrote 1.0.x-era weapons'
+      reliability / attack type / concealability across users' worlds. Blank is honest; first-option is a lie. --}}
+    {{>(template "fields/select") label="Stat" edit="system.stat" choices=stats noTranslateOptions=true allowBlank=true}}
     {{>(template "fields/boolean") label="IsRoleSkill" edit="system.isRoleSkill"}}
 </div>
 

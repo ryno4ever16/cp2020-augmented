@@ -443,7 +443,7 @@ const RULE_PACKS = new Set(["cyberpunk2020.pistols-add", "cyberpunk2020.rifles-a
 const AVAILABILITY_PLACEHOLDERS = new Set(["undefined", "null"]);
 
 /** Non-canonical reliability spellings → the enum value legal items store. Keyed lower-case. */
-const RELIABILITY_CANONICAL = {
+export const RELIABILITY_CANONICAL = {
   "very reliable": "VeryReliable",
   "standard":      "Standard",
   "unreliable":    "Unreliable",

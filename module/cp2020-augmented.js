@@ -72,6 +72,7 @@ import { registerBookLegality } from "./combat/book-legality.js";
 import { registerRadiation } from "./radiation/radiation.js";
 import { registerRadiationZones, migrateLegacyRadZones } from "./radiation/radiation-zones.js";
 import { registerVehicleHullMigration, migrateVehicleHullFrames } from "./vehicle/vehicle-hull-migration.js";
+import { migrateReliabilitySpelling, reviewSuspectWeapons } from "./data-review.js";
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
 import { registerRadiationZoneBehavior, registerRadiationZoneVisibilityDefault } from "./radiation/radiation-zone-behavior.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
@@ -471,6 +472,10 @@ Hooks.once("init", function () {
       fleshLimbStatus: (opts) => migrateFleshLimbStatus({ force: true, ...(opts ?? {}) }),
       legacyRadZones: (opts) => migrateLegacyRadZones({ force: true, ...(opts ?? {}) }),
       vehicleHullFrames: (opts) => migrateVehicleHullFrames({ force: true, ...(opts ?? {}) }),
+      // 2026-09-19: the out-of-enum select rewrite (module/data-review.js) — the spelling repair, and
+      // the GM notice naming what could not be repaired. `weaponReview()` re-posts the notice.
+      reliabilitySpelling: (opts) => migrateReliabilitySpelling({ force: true, ...(opts ?? {}) }),
+      weaponReview: (opts) => reviewSuspectWeapons({ force: true, ...(opts ?? {}) }),
     },
   };
   const mod = game.modules.get(SCOPE);
@@ -735,6 +740,13 @@ Hooks.once("ready", function () {
   // which is also what stops a pre-split vehicle driving with its longest face leading. Stamp-gated
   // and self-healing; the GM applies.
   if (game.user?.isGM) migrateVehicleHullFrames().catch((e) => console.warn(`${SCOPE} | vehicle hull/frame migration failed`, e));
+  // 2026-09-19: canonicalise out-of-enum reliability spellings before any sheet can rewrite them, then
+  // name (once, to the GM) the pre-1.1.0 weapons whose values may already have been rewritten.
+  if (game.user?.isGM) {
+    migrateReliabilitySpelling()
+      .then(() => reviewSuspectWeapons())
+      .catch((e) => console.warn(`${SCOPE} | data review failed`, e));
+  }
 
   // P3 light emitters + P4 vision devices: item toggles drive the bearer's token light/sight
   // (the active GM applies the token writes).

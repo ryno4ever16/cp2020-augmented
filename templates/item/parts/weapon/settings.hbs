@@ -26,7 +26,10 @@
 {{!-- What kind of thing is this weapon, how it's used --}}
 <div class="field-list">
     {{!-- When changing weapon type, the weapon's attack type will not update correspondingly until the sheet is closed --}}
-    {{> (template "fields/select") label="WeaponType" edit="system.weaponType" choices=weaponTypes}}
+{{!-- allowBlank (2026-09-19 select sweep): a stored value outside the enum used to render as the FIRST
+      option and be SAVED as that on the next submit — the mechanism that rewrote 1.0.x-era weapons'
+      reliability / attack type / concealability across users' worlds. Blank is honest; first-option is a lie. --}}
+    {{> (template "fields/select") label="WeaponType" edit="system.weaponType" choices=weaponTypes allowBlank=true}}
     {{> (template "fields/select") label="AttackType" edit="system.attackType" choices=attackTypes allowBlank=true}}
     {{!-- Custom, as all the translate keys start with Skill, but they don't in the character --}}
     {{!-- This might not need to be custom anymore, as regular selects can deal with choices that supply their own translateKeys --}}
