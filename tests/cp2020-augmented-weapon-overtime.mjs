@@ -175,6 +175,10 @@ const acid = await page.evaluate(async ({ SAVES, APPL }) => {
       // the flag write is the tick's LAST act (after the damage, the cards and the stun prompt): wait
       // for the marker to move on from what it was before the round, bounded
       for (let i = 0; i < 40; i++) { const m = (a.getFlag("cp2020-augmented", "dotState") ?? [])[0] ?? null; if ((m?.turnsLeft ?? null) !== before.turns) break; await sleep(150); }
+      // the corrode condition is mirrored off AFTER the last marker's flag write (a separate document
+      // op) — polled, bounded, or the read lands between the two (one red, 2026-09-19)
+      const gone = !((a.getFlag("cp2020-augmented", "dotState") ?? [])[0]);
+      if (gone) for (let i = 0; i < 40 && a.statuses?.has("corrode"); i++) await sleep(100);
       return { sp: torsoSP(a), dmg: dmg(a), marker: (a.getFlag("cp2020-augmented", "dotState") ?? [])[0] ?? null, corrode: a.statuses?.has("corrode") === true };
     };
     out.r1 = await step(a1);
@@ -256,11 +260,15 @@ const squirt = await page.evaluate(async ({ SAVES, APPL }) => {
     const rip = [];
     for (let r = 0; r < 4; r++) {
       const sp0 = A.effectiveArmorSP(a1, "Torso"), d0 = Number(a1.system?.damage) || 0;
+      const t0 = (a1.getFlag("cp2020-augmented", "dotState") ?? [])[0]?.turnsLeft ?? null;
       await combat.nextTurn();
       for (let i = 0; i < 40; i++) { await sleep(150); if (combat.combatant?.actorId === a1.id) break; }
       if (combat.combatant?.actorId !== a1.id) { await combat.nextTurn(); }
       for (let i = 0; i < 40; i++) { await sleep(150); if (A.effectiveArmorSP(a1, "Torso") !== sp0 || (Number(a1.system?.damage) || 0) !== d0) break; }
-      await sleep(400);
+      // the marker's flag write is the tick's LAST act (after the damage and the cards): poll for it
+      // to move on from what it was before the round, bounded (one red read it mid-tick, 2026-09-19)
+      for (let i = 0; i < 40; i++) { const m = (a1.getFlag("cp2020-augmented", "dotState") ?? [])[0] ?? null; if ((m?.turnsLeft ?? null) !== t0) break; await sleep(150); }
+      await sleep(200);
       rip.push({ sp: A.effectiveArmorSP(a1, "Torso"), dmg: Number(a1.system?.damage) || 0, marker: !!(a1.getFlag("cp2020-augmented", "dotState") ?? [])[0] });
       if (!rip[rip.length - 1].marker) break;
     }
