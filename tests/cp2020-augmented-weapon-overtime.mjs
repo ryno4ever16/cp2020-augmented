@@ -124,6 +124,8 @@ const pure = await page.evaluate(async (SAVES) => {
     junk: V.overTimeEntries({ overTime: [{ type: "plasma", turns: 3 }, { type: "acid", turns: 0 }, { type: "FIRE", turns: 1.9, formula: " 2d6 " }] }),
     off: V.overTimeEntries({ dotEnabled: false, dotTurns: 3, dotType: "acid" }),
     nothing: V.overTimeEntries(null),
+    twoAcid: V.overTimeEntries({ overTime: [{ type: "acid", turns: 3, formula: "1d6" }, { type: "acid", turns: 9, formula: "3d6" }, { type: "fire", turns: 2, formula: "1d6" }] }),
+    roundAndRow: V.overTimeEntries({ dotEnabled: true, dotTurns: 2, dotType: "acid", dotDamageFormula: "2d6", overTime: [{ type: "acid", turns: 3, formula: "1d6" }] }),
   };
 }, SAVES);
 eq("the round's single statement is one entry", pure.legacyOnly, [{ type: "fire", turns: 2, formula: "1d6", flat: true }]);
@@ -133,6 +135,9 @@ eq("junk is dropped: unknown type, zero turns; a type is case-folded, turns floo
   [{ type: "fire", turns: 1, formula: "2d6", flat: false }]);
 eq("NEGATIVE: a round with the statement OFF is no entry", pure.off, []);
 eq("NEGATIVE: nothing is nothing", pure.nothing, []);
+eq("one row per type: the FIRST acid row is honoured, the second dropped, the fire row kept", pure.twoAcid,
+  [{ type: "acid", turns: 3, formula: "1d6", flat: false }, { type: "fire", turns: 2, formula: "1d6", flat: false }]);
+eq("the round's own statement and the weapon's row of the same type are two sources, both kept", pure.roundAndRow.map(e => e.formula), ["2d6", "1d6"]);
 
 /* ─────────────────── §4 acid, the book's way ─────────────────── */
 console.log("\n§4 acid — rolled once, reused, sears through");
@@ -377,12 +382,34 @@ const sheet = await page.evaluate(async () => {
     out.afterAdd = rowsOf();
     root = app.element.querySelector(".cp-weapon-overtime");
     out.rowRendered = root?.querySelectorAll(".cp-ot-row").length ?? -1;
+    out.noHintParagraph = !root?.querySelector(".cp-ot-hint");
+    out.acidRowHasNoFlat = !!root && !root.querySelector(".cp-ot-row .cp-ot-flat");
+    out.acidTip = root?.querySelector("select.cp-ot-type")?.dataset.tooltip ?? "";
+    out.addStillOffered = !!root?.querySelector(".cp-ot-add");
     // choose fire: the row is re-seeded with fire's numbers
     const sel = root?.querySelector("select.cp-ot-type");
     if (sel) { sel.value = "fire"; sel.dispatchEvent(new Event("change", { bubbles: true })); }
     for (let i = 0; i < 40; i++) { if (w._source.system.overTime?.[0]?.type === "fire") break; await sleep(100); }
     await sleep(500);
     out.afterType = rowsOf();
+    root = app.element.querySelector(".cp-weapon-overtime");
+    out.fireRowHasFlat = !!root?.querySelector(".cp-ot-row .cp-ot-flat input[type=checkbox]");
+    out.fireTip = root?.querySelector("select.cp-ot-type")?.dataset.tooltip ?? "";
+    // the roll box: a non-formula is refused at submit and the stored roll kept; a real one lands
+    const fbox = root?.querySelector("input.cp-ot-formula");
+    if (fbox) { fbox.value = "abc"; fbox.dispatchEvent(new Event("input", { bubbles: true })); }
+    out.markedWhileTyping = fbox?.classList.contains("cp-field-invalid") === true;
+    if (fbox) fbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(800);
+    out.afterBadFormula = rowsOf();
+    out.boxResetToStored = app.element.querySelector(".cp-weapon-overtime input.cp-ot-formula")?.value;
+    const fbox2 = app.element.querySelector(".cp-weapon-overtime input.cp-ot-formula");
+    if (fbox2) { fbox2.value = "2d6+1"; fbox2.dispatchEvent(new Event("input", { bubbles: true })); }
+    out.unmarkedWhenReadable = fbox2?.classList.contains("cp-field-invalid") === false;
+    if (fbox2) fbox2.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 40; i++) { if (w._source.system.overTime?.[0]?.formula === "2d6+1") break; await sleep(100); }
+    await sleep(300);
+    out.afterGoodFormula = rowsOf();
     // type a number of rounds: the sheet's own submit writes it, the other columns untouched
     root = app.element.querySelector(".cp-weapon-overtime");
     const turns = root?.querySelector("input.cp-ot-turns");
@@ -390,10 +417,22 @@ const sheet = await page.evaluate(async () => {
     for (let i = 0; i < 40; i++) { if (w._source.system.overTime?.[0]?.turns === 5) break; await sleep(100); }
     await sleep(500);
     out.afterTurns = rowsOf();
-    // a second row, then remove the first: the second survives with its values
+    // a second row: Add now supplies the MISSING type (acid, since the row is fire), then is gone
     root = app.element.querySelector(".cp-weapon-overtime");
     root?.querySelector(".cp-ot-add")?.click();
     await waitRows(2); await sleep(500);
+    out.afterSecondAdd = rowsOf();
+    root = app.element.querySelector(".cp-weapon-overtime");
+    out.addGoneWithBoth = !root?.querySelector(".cp-ot-add");
+    // the other row's type is disabled on each select, and picking it anyway is refused
+    const sels = [...(root?.querySelectorAll("select.cp-ot-type") ?? [])];
+    out.takenOptionDisabled = sels.length === 2
+      && sels[0].querySelector('option[value="acid"]')?.disabled === true && sels[0].querySelector('option[value="fire"]')?.disabled === false
+      && sels[1].querySelector('option[value="fire"]')?.disabled === true && sels[1].querySelector('option[value="acid"]')?.disabled === false;
+    if (sels[1]) { sels[1].value = "fire"; sels[1].dispatchEvent(new Event("change", { bubbles: true })); }
+    await sleep(800);
+    out.afterRefusedSwitch = rowsOf();
+    // remove the first: the second survives with its values
     root = app.element.querySelector(".cp-weapon-overtime");
     root?.querySelector('.cp-ot-remove[data-index="0"]')?.click();
     out.removedPersisted = await waitRows(1);
@@ -410,11 +449,26 @@ check("the sheet section ran", !sheet.threw, String(sheet.threw ?? ""));
 check("the block renders on a weapon sheet", sheet.blockRendered === true);
 check("every visible string is localized", sheet.noRawKeys === true);
 eq("no rows on a weapon that has none", sheet.rowsBefore, 0);
-check("+ Add writes one row, seeded as acid, 3 rounds, the weapon's own roll", sheet.addedPersisted === true && JSON.stringify(sheet.afterAdd) === JSON.stringify([["acid", 3, "", false]]), JSON.stringify(sheet.afterAdd));
+check("+ Add writes one row, seeded as acid, 3 rounds of 1d6 (the book's per-pellet figure)", sheet.addedPersisted === true && JSON.stringify(sheet.afterAdd) === JSON.stringify([["acid", 3, "1d6", false]]), JSON.stringify(sheet.afterAdd));
 eq("and the row renders", sheet.rowRendered, 1);
+check("no paragraph under the header: the explanation is the type select's tooltip", sheet.noHintParagraph === true);
+check("an acid row draws no flat box (acid never halves)", sheet.acidRowHasNoFlat === true);
+check("the acid row's tooltip is the acid text", /^Acid/.test(sheet.acidTip), sheet.acidTip.slice(0, 40));
+check("Add is still offered while a type is missing", sheet.addStillOffered === true);
 eq("choosing fire re-seeds the row with fire's own figures", sheet.afterType, [["fire", 2, "1d6", false]]);
-eq("a typed number of rounds persists through the sheet's own submit, the rest untouched", sheet.afterTurns, [["fire", 5, "1d6", false]]);
-check("removing the first of two leaves the second, seeded, in place", sheet.removedPersisted === true && JSON.stringify(sheet.afterRemove) === JSON.stringify([["acid", 3, "", false]]), JSON.stringify(sheet.afterRemove));
+check("a fire row draws the flat box", sheet.fireRowHasFlat === true);
+check("the fire row's tooltip is the fire text", /^Fire/.test(sheet.fireTip), sheet.fireTip.slice(0, 40));
+check("the roll box marks itself while its text is not a dice formula", sheet.markedWhileTyping === true);
+eq("...and the submit refuses it: the stored roll is kept", sheet.afterBadFormula, [["fire", 2, "1d6", false]]);
+eq("...and the box is reset to the stored roll", sheet.boxResetToStored, "1d6");
+check("a real formula is not marked", sheet.unmarkedWhenReadable === true);
+eq("...and lands through the sheet's own submit", sheet.afterGoodFormula, [["fire", 2, "2d6+1", false]]);
+eq("a typed number of rounds persists through the sheet's own submit, the rest untouched", sheet.afterTurns, [["fire", 5, "2d6+1", false]]);
+eq("a second Add supplies the MISSING type (acid beside the fire row), seeded", sheet.afterSecondAdd, [["fire", 5, "2d6+1", false], ["acid", 3, "1d6", false]]);
+check("Add is gone once both types exist", sheet.addGoneWithBoth === true);
+check("each select disables the type the other row holds", sheet.takenOptionDisabled === true);
+eq("NEGATIVE: switching a row to the other row's type is refused, nothing written", sheet.afterRefusedSwitch, [["fire", 5, "2d6+1", false], ["acid", 3, "1d6", false]]);
+check("removing the first of two leaves the second, seeded, in place", sheet.removedPersisted === true && JSON.stringify(sheet.afterRemove) === JSON.stringify([["acid", 3, "1d6", false]]), JSON.stringify(sheet.afterRemove));
 
 /* ─────────────────── §8 ─────────────────── */
 console.log("\n§8 client health");

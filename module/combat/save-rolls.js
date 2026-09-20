@@ -231,10 +231,19 @@ export function overTimeEntries(src) {
   if (src.dotEnabled && Number(src.dotTurns) > 0) {
     out.push({ type: String(src.dotType || "acid"), turns: Number(src.dotTurns), formula: String(src.dotDamageFormula || ""), flat: !!src.dotFlat });
   }
+  // ONE ROW PER TYPE from the weapon (RYNO's review, 2026-09-19 night): the first acid row and the first
+  // fire row are honoured, later duplicates dropped. Two rows of one type were one longer etch under the
+  // stack mode, the last row alone under reset, and a double erosion under "separate" — none of it a
+  // thing a referee means. The sheet no longer lets a second row of a type be made; this is where a
+  // stored one from before is made harmless. The ROUND's own statement above is a different source and
+  // still stands beside the weapon's row of the same type.
+  const seen = new Set();
   for (const row of (Array.isArray(src.overTime) ? src.overTime : [])) {
     const type = String(row?.type ?? "").trim().toLowerCase();
     const turns = Math.floor(Number(row?.turns) || 0);
     if (!["acid", "fire"].includes(type) || turns <= 0) continue;
+    if (seen.has(type)) continue;
+    seen.add(type);
     out.push({ type, turns, formula: String(row?.formula ?? "").trim(), flat: !!row?.flat });
   }
   return out;

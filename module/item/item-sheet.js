@@ -15,7 +15,7 @@ import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRi
 import { findDeployedVehicleActor, deployRequestPending } from "../vehicle/vehicle-deploy-request.js";
 import { FACES, FACE_MM, FACE_ACPA, facePatch, resolveVehicleItemFace } from "../vehicle/vehicle-face.js";
 import { mmEnabled } from "../settings.js";
-import { refuseUnreadableNumberFields } from "../form-number-guard.js";
+import { refuseUnreadableNumberFields, refuseUnreadableFormulaFields, isReadableFormula } from "../form-number-guard.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 const { ItemSheetV2 } = foundry.applications.sheets;
@@ -80,6 +80,18 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
       || game.settings.get("cyberpunk2020", "playersCanEditCyberwareHumanity");
     // P3/P4 special-mechanics fields live on misc gear + cyberware only (the shared footer partial
     // gates on this). Vision-mode options are built here — JS owns data, labels localized.
+    // The weapon's over-time rows, one per type at most (RYNO's review, 2026-09-19 night): each row knows
+    // whether it is fire — the flat opt-out is drawn only then, acid never halves — and which type the
+    // other row already holds, so that option is disabled. Add is offered only while a type is missing.
+    // A stored duplicate from before the rule renders (so it can be removed) but is not honoured at
+    // hit time (save-rolls.js overTimeEntries keeps the first row of each type).
+    if (this.item.type === "weapon") {
+      const rows = (Array.isArray(this.item.system?.overTime) ? this.item.system.overTime : [])
+        .map((r, i) => ({ i, type: String(r?.type ?? "acid") === "fire" ? "fire" : "acid", turns: Number(r?.turns) || 0, formula: String(r?.formula ?? ""), flat: !!r?.flat }));
+      const hasAcid = rows.some((r) => r.type === "acid"), hasFire = rows.some((r) => r.type === "fire");
+      data.overTimeRows = rows.map((r) => ({ ...r, isFire: r.type === "fire", acidTaken: r.type !== "acid" && hasAcid, fireTaken: r.type !== "fire" && hasFire }));
+      data.overTimeCanAdd = !(hasAcid && hasFire);
+    }
     data.mechFieldsEligible = this.item.type === "misc" || this.item.type === "cyberware";
     if (data.mechFieldsEligible) {
       const current = this.item.system?.mechVision?.mode ?? "lowlight";
@@ -2275,12 +2287,17 @@ async _prepareCyberware(sheet) {
 
   /** Ammo item controls: blast multipliers, quantity lock, buy-box, modifier load, effect-type menu. */
   /**
-   * The weapon's over-time effect rows (user-ruled 2026-09-19). The row FIELDS are name-bound
-   * (`system.overTime.N.*`) and travel on the sheet's ordinary submit — the platform's ArrayField casts
-   * the numbered object back to an array. What needs a hand is the shape of the list: ADD appends a
-   * row, REMOVE splices one, and choosing a TYPE seeds that row's numbers so the referee never has to
-   * know them (acid: 3 turns, the weapon's own roll — Core p.107; fire: 2 turns of 1d6 — the
-   * incendiary load's own figure). Bound once on the persistent root, like the ammo controls above.
+   * The weapon's over-time effect rows (user-ruled 2026-09-19; RYNO's review the same night). The row
+   * FIELDS are name-bound (`system.overTime.N.*`) and travel on the sheet's ordinary submit — the
+   * platform's ArrayField casts the numbered object back to an array. What needs a hand is the shape of
+   * the list: ADD appends the type the weapon does not have yet (acid first, then fire; the button is
+   * not drawn once both exist), REMOVE splices one, and choosing a TYPE seeds that row's numbers so the
+   * referee never has to know them (acid: 3 rounds of 1d6 — Core p.107's per-pellet figure; fire:
+   * 2 rounds of 1d6 — the incendiary load's own). One row per type: a second row of a type the weapon
+   * already carries is refused here and ignored at hit time (save-rolls.js overTimeEntries), because
+   * two acid rows are one longer etch under the stack mode and a double erosion under "separate" —
+   * nothing a referee means by it. The roll box marks itself while its text is not a dice formula
+   * (the submit-time refusal is in _processFormData). Bound once on the persistent root.
    */
   _cpActivateWeaponOverTimeControls(root) {
     if (!root?.addEventListener) return;
@@ -2290,14 +2307,18 @@ async _prepareCyberware(sheet) {
     if (root.dataset.cpWeaponOtBound === "1") return;
     root.dataset.cpWeaponOtBound = "1";
     const rows = () => (Array.isArray(this.item.system?.overTime) ? this.item.system.overTime : [])
-      .map((r) => ({ type: String(r?.type ?? "acid"), turns: Number(r?.turns) || 0, formula: String(r?.formula ?? ""), flat: !!r?.flat }));
-    const seed = (type) => (type === "fire" ? { type: "fire", turns: 2, formula: "1d6", flat: false } : { type: "acid", turns: 3, formula: "", flat: false });
+      .map((r) => ({ type: String(r?.type ?? "acid") === "fire" ? "fire" : "acid", turns: Number(r?.turns) || 0, formula: String(r?.formula ?? ""), flat: !!r?.flat }));
+    const seed = (type) => (type === "fire" ? { type: "fire", turns: 2, formula: "1d6", flat: false } : { type: "acid", turns: 3, formula: "1d6", flat: false });
+    const missingType = (list) => (list.some((r) => r.type === "acid") ? (list.some((r) => r.type === "fire") ? null : "fire") : "acid");
 
     root.addEventListener("click", async (event) => {
       const add = event.target?.closest?.(".cp-ot-add");
       if (add && root.contains(add)) {
         event.preventDefault(); event.stopPropagation();
-        await this.item.update({ "system.overTime": [...rows(), seed("acid")] });
+        const cur = rows();
+        const type = missingType(cur);
+        if (!type) return;
+        await this.item.update({ "system.overTime": [...cur, seed(type)] });
         return;
       }
       const remove = event.target?.closest?.(".cp-ot-remove");
@@ -2309,7 +2330,8 @@ async _prepareCyberware(sheet) {
       }
     });
     // Choosing a type re-seeds THAT row's numbers, written explicitly so the form's own submit cannot
-    // race a stale snapshot over the seed (the ammo modifier select's idiom).
+    // race a stale snapshot over the seed (the ammo modifier select's idiom). A type the other row
+    // already holds is refused (its option is disabled in the template; this is the belt to that brace).
     root.addEventListener("change", async (event) => {
       const sel = event.target?.closest?.("select.cp-ot-type");
       if (!sel || !root.contains(sel)) return;
@@ -2317,9 +2339,18 @@ async _prepareCyberware(sheet) {
       const idx = Number(sel.closest(".cp-ot-row")?.dataset.index);
       const next = rows();
       if (!Number.isInteger(idx) || !next[idx]) return;
-      next[idx] = seed(String(sel.value));
+      const type = String(sel.value) === "fire" ? "fire" : "acid";
+      if (next.some((r, n) => n !== idx && r.type === type)) { sel.value = next[idx].type; return; }
+      next[idx] = seed(type);
       await this.item.update({ "system.overTime": next });
     }, { capture: true });
+    // The roll box says so while its text is not a dice formula — the NPC generator's at-the-field
+    // check, reused. Blank is a meaning of its own (the weapon's own damage) and is never marked.
+    root.addEventListener("input", (event) => {
+      const box = event.target?.closest?.("input.cp-formula-field");
+      if (!box || !root.contains(box)) return;
+      box.classList.toggle("cp-field-invalid", !isReadableFormula(box.value));
+    });
   }
 
   _cpActivateAmmoControls(root) {
@@ -2770,6 +2801,7 @@ async _prepareCyberware(sheet) {
   _processFormData(event, form, formData) {
     const data = super._processFormData(event, form, formData);
     refuseUnreadableNumberFields(data, form, this.document);
+    refuseUnreadableFormulaFields(data, form, this.document);
 
     if (this.item.type === "cyberware") {
       const pickLastString = (v) => {

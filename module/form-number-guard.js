@@ -266,3 +266,47 @@ export function refuseOutOfRangeNumberFields(submitData, form, doc) {
   ui.notifications?.warn?.(localizeParam("NumberFieldOutOfRange", { fields: labels.join(", ") }));
   return refused;
 }
+
+/* ═══════════════ DICE-FORMULA FIELDS ═══════════════
+ * A box that holds a roll ("1d6", "2d6+1") is `type="text"` by necessity — a formula needs its letters —
+ * so the browser keeps nothing out of it, and the platform stores whatever was typed. At hit time
+ * `new Roll("abc")` throws and the effect silently does nothing (an acid row that never eats). The same
+ * shape of guard as the number one above: the check is made against the live element at submit, the
+ * stored text is kept when the box is unreadable, and the referee is told at the field. A formula box
+ * declares itself with the class `cp-formula-field`. BLANK IS LEFT ALONE, as above: on the over-time row
+ * a blank roll means the weapon's own damage.
+ */
+
+/** True when `text` is blank or a formula the platform's own parser accepts (`Roll.validate`). */
+export function isReadableFormula(text) {
+  const s = String(text ?? "").trim();
+  if (s === "") return true;
+  try { return Roll.validate(s) === true; } catch { return false; }
+}
+
+/**
+ * Refuse every declared formula field the platform cannot parse: the submit data gets the stored text
+ * back (or loses the key when nothing was stored), the box is reset to it, and one warning names the
+ * fields. Returns the refused field names.
+ * @param {object} submitData
+ * @param {HTMLFormElement} form
+ * @param {foundry.abstract.Document} doc
+ * @returns {string[]}
+ */
+export function refuseUnreadableFormulaFields(submitData, form, doc) {
+  const boxes = form?.querySelectorAll ? [...form.querySelectorAll("input.cp-formula-field[name]")] : [];
+  const bad = boxes.filter((el) => !el.disabled && !el.readOnly && !isReadableFormula(el.value));
+  if (!bad.length) return [];
+  const refused = [], labels = [];
+  for (const el of bad) {
+    const stored = storedValueOf(doc, el.name);
+    if (stored === undefined) deleteExpandedPath(submitData, el.name);
+    else foundry.utils.setProperty(submitData, el.name, stored);
+    refused.push(el.name);
+    labels.push(String(el.value ?? "").trim());
+    el.value = (stored === undefined || stored === null) ? "" : String(stored);
+    el.classList.remove("cp-field-invalid");
+  }
+  ui.notifications?.warn?.(localizeParam("FormulaFieldUnreadable", { fields: labels.join(", ") }));
+  return refused;
+}
