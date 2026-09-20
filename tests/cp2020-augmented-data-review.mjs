@@ -299,6 +299,18 @@ const notice = await page.evaluate(async (MOD) => {
       finally { if (realIsGM) Object.defineProperty(game.user, "isGM", realIsGM); else Object.defineProperty(game.user, "isGM", { value: true, configurable: true }); }
       out.refusedLeft = w1._source.system.reliability;
       out.badField = await M.applySuspectValue({ uuid: w1.uuid, field: "damage", value: "9d6" });
+      // SKILLS ARE NOT REVIEWED, AND HERE IS WHY (2026-09-20): the base 1.1.1 skill model's own migrateData
+      // rewrites a blank stat to "cool" on read, so a special ability's blank never reaches a sheet and an
+      // Apply could never restore it. The per-type machinery stays; no skill field is declared.
+      const [sk] = await act.createEmbeddedDocuments("Item", [{ name: "__PW__DR Credibility", type: "skill", system: { stat: "", level: 3 } }]);
+      out.blankStatReadsAs = sk.system.stat;
+      const skillPacks = new Map([["skill:pwdrcredibility", { stat: "" }], ["weapon:pwdrcredibility", { reliability: "Standard" }]]);
+      out.skillRows = M.suspectWeaponRows([{ type: "skill", actorName: act.name, actorUuid: act.uuid, itemName: sk.name, uuid: sk.uuid, stats: { systemVersion: "1.0.3" }, system: { stat: "int" } }], skillPacks).length;
+      out.skillRefusesWeaponField = (await M.applySuspectValue({ uuid: sk.uuid, field: "reliability", value: "Standard" })).skipped;
+      out.skillRefusesStat = (await M.applySuspectValue({ uuid: sk.uuid, field: "stat", value: "" })).skipped;
+      // the type-qualified pack key: a weapon of a skill's name does not answer for it, and vice versa
+      out.typedKeyRows = M.suspectWeaponRows([{ type: "weapon", actorName: act.name, itemName: w1.name, uuid: w1.uuid, stats: { systemVersion: "1.0.3" }, system: { reliability: "VeryReliable" } }],
+        new Map([["weapon:pwdrsuspectone", { reliability: "Standard" }], ["skill:pwdrsuspectone", { stat: "" }]])).map(r => [r.field, r.pack]);
       for (const m of game.messages.contents.filter(m => !before3.has(m.id))) await m.delete().catch(() => {});
       await game.settings.set("cp2020-augmented", "weaponReviewMessageId", "");   // the card above was deleted by hand here
 
@@ -384,6 +396,11 @@ eq("Apply all presses every row still standing", [notice.afterAll?.one, notice.a
 eq("NEGATIVE: a non-GM is refused at the action layer", notice.refused?.skipped, "permission");
 eq("…and nothing was written", notice.refusedLeft, "Standard");
 eq("NEGATIVE: a field the notice never names is refused", notice.badField?.skipped, "field");
+eq("the base skill model reads a blank stat as cool (its own migrateData) - the reason skills are not reviewed", notice.blankStatReadsAs, "cool");
+eq("NEGATIVE: a skill record makes no row", notice.skillRows, 0);
+eq("NEGATIVE: a weapon field is refused on a skill", notice.skillRefusesWeaponField, "field");
+eq("NEGATIVE: the stat field is refused on a skill too (no skill field is declared)", notice.skillRefusesStat, "field");
+eq("the pack key is type-qualified: the weapon entry answers for the weapon", notice.typedKeyRows, [["reliability", "Standard"]]);
 eq("⭐ THE LONG CARD: 30 weapons over two actors make 60 rows (two fields each; a blank compendium attack type is no row)", notice.manyRows, 60);
 eq("the pure grouping: two actors, thirty values each, rows kept", notice.groupsPure, [["__PW__DR Owner", 30, 30], ["__PW__DR Owner Two", 30, 30]]);
 check("⭐ PER-ACTOR HEADERS: one per actor, in order, with the count and the actor's uuid", Array.isArray(notice.heads) && notice.heads.length === 2 && notice.heads[0][0] === "__PW__DR Owner" && notice.heads[1][0] === "__PW__DR Owner Two" && notice.heads.every(h => h[1] === "30 value(s)" && /^Actor\./.test(h[2])), JSON.stringify(notice.heads));
@@ -402,7 +419,7 @@ console.log("\n§4 the selects no longer lie");
 const sel = await page.evaluate(async () => {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const out = {};
-  let w = null, c = null;
+  let w = null, c = null, pr = null, ar = null;
   try {
     w = await Item.create({ name: "__PW__DR Select", type: "weapon", system: { weaponType: "melee", reliability: "sometimes", cost: 1 } });
     await w.sheet.render(true);
@@ -410,6 +427,8 @@ const sel = await page.evaluate(async () => {
     const rel = root.querySelector('select[name="system.reliability"]'), wt = root.querySelector('select[name="system.weaponType"]');
     out.relShown = rel?.value; out.wtShown = wt?.value;
     out.relFirst = rel?.options?.[0]?.value; out.hasBlank = rel?.options?.[0]?.value === "";
+    out.relOddLabel = rel?.selectedOptions?.[0]?.textContent?.trim() ?? "";
+    out.relOddIsLast = rel ? rel.options[rel.options.length - 1]?.value === "sometimes" : false;
     // a submit through another field: the first option is NOT written
     const cost = root.querySelector('input[name="system.cost"]');
     if (cost) { cost.value = "2"; cost.dispatchEvent(new Event("change", { bubbles: true })); }
@@ -423,19 +442,47 @@ const sel = await page.evaluate(async () => {
     out.cyberRelShown = croot?.querySelector('select[name="system.CyberWorkType.Weapon.reliability"]')?.value ?? "(no select)";
     out.cyberWtShown = croot?.querySelector('select[name="system.CyberWorkType.Weapon.weaponType"]')?.value ?? "(no select)";
     await c.sheet.close();
+    // the program type dropdown offers a blank, and a submit through another field keeps a blank type
+    pr = await Item.create({ name: "__PW__DR Program", type: "program", system: { programType: "", cost: 1 } });
+    await pr.sheet.render(true);
+    let proot = null; for (let i = 0; i < 40 && !proot; i++) { proot = pr.sheet.element?.querySelector?.('select[name="system.programType"]') ? pr.sheet.element : null; await sleep(100); }
+    const psel = proot?.querySelector('select[name="system.programType"]');
+    out.programHasBlank = psel?.options?.[0]?.value === "";
+    out.programShown = psel?.value;
+    const pcost = proot?.querySelector('input[name="system.cost"]');
+    if (pcost) { pcost.value = "2"; pcost.dispatchEvent(new Event("change", { bubbles: true })); }
+    for (let i = 0; i < 30; i++) { await sleep(100); if (pr._source.system.cost === 2) break; }
+    await sleep(300);
+    out.programStoredAfter = pr._source.system.programType; out.programCost = pr._source.system.cost;
+    await pr.sheet.close();
+    // armor: our own pack's "Soft" reads as "soft" and the dropdown shows it; a submit keeps it
+    ar = await Item.create({ name: "__PW__DR Armor", type: "armor", system: { armorType: "Soft", cost: 1 } });
+    out.armorRead = ar.system.armorType; out.armorSource = ar._source.system.armorType;
+    await ar.sheet.render(true);
+    let aroot = null; for (let i = 0; i < 40 && !aroot; i++) { aroot = ar.sheet.element?.querySelector?.('select[name="system.armorType"]') ? ar.sheet.element : null; await sleep(100); }
+    out.armorShown = aroot?.querySelector('select[name="system.armorType"]')?.value;
+    const acost = aroot?.querySelector('input[name="system.cost"]');
+    if (acost) { acost.value = "2"; acost.dispatchEvent(new Event("change", { bubbles: true })); }
+    for (let i = 0; i < 30; i++) { await sleep(100); if (ar._source.system.cost === 2) break; }
+    await sleep(300);
+    out.armorStoredAfter = ar._source.system.armorType;
+    await ar.sheet.close();
   } catch (e) { out.threw = String(e?.message ?? e) + " " + String(e?.stack ?? "").split("\n")[1]; }
-  finally { try { await w?.delete(); } catch (_e) {} try { await c?.delete(); } catch (_e) {} }
+  finally { for (const d of [w, c, pr, ar]) { try { await d?.delete(); } catch (_e) {} } }
   return out;
 });
 check("the select section ran", !sel.threw, String(sel.threw ?? ""));
-eq("an out-of-enum reliability renders BLANK — not the first option", sel.relShown, "");
-check("and the first option IS the blank one", sel.hasBlank === true, String(sel.relFirst));
-eq("an out-of-enum weapon type renders blank too", sel.wtShown, "");
-check("⭐ a submit through another field no longer writes Very Reliable / Exotic over the stored value",
-  sel.costStored === 2 && sel.relStoredAfterSubmit !== "VeryReliable" && sel.wtStoredAfterSubmit !== "Exotic",
+eq("⭐ an unrecognised stored reliability is SHOWN as its own entry, not hidden behind a blank (user ruling 2026-09-20)", sel.relShown, "sometimes");
+check("...labelled as not a listed choice, appended after the real choices", /not a listed choice/.test(sel.relOddLabel) && sel.relOddIsLast === true, JSON.stringify([sel.relOddLabel, sel.relOddIsLast]));
+check("and the blank option is still there for a deliberate clearing", sel.hasBlank === true, String(sel.relFirst));
+eq("an unrecognised weapon type is shown the same way", sel.wtShown, "melee");
+check("⭐ a submit through another field KEEPS the odd values exactly - nothing rewritten, nothing blanked",
+  sel.costStored === 2 && sel.relStoredAfterSubmit === "sometimes" && sel.wtStoredAfterSubmit === "melee",
   JSON.stringify([sel.relStoredAfterSubmit, sel.wtStoredAfterSubmit, sel.costStored]));
+check("the program type dropdown offers a blank and a blank program stays blank through a submit", sel.programHasBlank === true && sel.programShown === "" && sel.programStoredAfter === "" && sel.programCost === 2, JSON.stringify([sel.programHasBlank, sel.programShown, sel.programStoredAfter, sel.programCost]));
+check("armor: our pack's 'Soft' reads as 'soft', the dropdown shows soft, and a submit keeps soft", sel.armorRead === "soft" && sel.armorShown === "soft" && sel.armorStoredAfter === "soft", JSON.stringify([sel.armorRead, sel.armorSource, sel.armorShown, sel.armorStoredAfter]));
 eq("the cyberweapon reliability select shows Standard for a stored 'st' — read as the enum, not blank, not Very Reliable", sel.cyberRelShown, "Standard");
-eq("and its weapon type", sel.cyberWtShown, "");
+eq("and its unrecognised weapon type 'pistol' is shown as its own entry", sel.cyberWtShown, "pistol");
 
 console.log("\n§5 client health");
 eq("0 console errors", errors.slice(0, 4), []);

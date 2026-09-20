@@ -26,7 +26,11 @@ const WEAPON_AUGMENT_FIELDS = {
   // heavy pack's thrown Gas Grenade fired without ever raising its cloud. Same four fields the
   // cloud hook prices off a payload (damage-hooks.js _placeGasCloud: radius / duration / save
   // penalty), populated on the base item by the corrections layer (data-corrections.js, heavy).
-  effectTypes: (f) => new f.ArrayField(new f.StringField({ required: true, blank: false }), { initial: [] }),
+  // ⛔ ARRAY DEFAULTS ARE FUNCTIONS (lorekeeper finding, rig-proven 2026-09-20): core hands a literal
+  // `initial: []` out UNCLONED, so every document whose stored source lacks the key — every weapon written
+  // before the field existed — shared ONE array in `_source`. A push into it put a phantom row on all of
+  // them, and the update that followed diffed to nothing and was silently dropped.
+  effectTypes: (f) => new f.ArrayField(new f.StringField({ required: true, blank: false }), { initial: () => [] }),
   blastRadius: (f) => new f.NumberField({ initial: 0 }),
   dotTurns:    (f) => new f.NumberField({ initial: 0 }),
   stunSaveMod: (f) => new f.NumberField({ initial: 0 }),
@@ -45,7 +49,7 @@ const WEAPON_AUGMENT_FIELDS = {
     turns:   new f.NumberField({ initial: 3, integer: true, min: 0 }),
     formula: new f.StringField({ initial: "" }),
     flat:    new f.BooleanField({ initial: false }),
-  }), { initial: [] })
+  }), { initial: () => [] })
 };
 
 /**

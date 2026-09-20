@@ -67,6 +67,21 @@ const model = await page.evaluate(async () => {
     await w.update({ "system.overTime": { 0: { type: "fire", turns: 1, formula: "2d6", flat: false }, 1: { type: "acid", turns: 3, formula: "", flat: false } } });
     out.fromObject = foundry.utils.deepClone(w._source.system.overTime);
     out.empty = (await Item.create({ name: "__PW__OT Plain", type: "weapon", system: { weaponType: "melee" } }))._source.system.overTime;
+    // THE DEFAULT IS NOT SHARED (lorekeeper finding, 2026-09-20): a source with no overTime key - every
+    // weapon written before the field existed - used to receive ONE literal array; a push into it put a
+    // phantom row on all of them and the next update diffed to nothing. Two such sources, two arrays.
+    const M = CONFIG.Item.dataModels.weapon;
+    const x = new M({}), y = new M({});
+    out.defaultShared = x._source.overTime === y._source.overTime;
+    x._source.overTime.push({ type: "acid", turns: 3, formula: "1d6", flat: false });
+    out.phantomOnOther = y._source.overTime.length;
+    out.phantomOnThird = new M({})._source.overTime.length;
+    // and an update on a legacy-shaped item (key absent in the stored source) persists under the default diff
+    const legacy = await Item.create({ name: "__PW__OT Legacy", type: "weapon", system: { weaponType: "melee" } });
+    delete legacy._source.system.overTime;   // the pre-field shape, client-side
+    legacy.reset();
+    await legacy.update({ "system.overTime": [{ type: "acid", turns: 3, formula: "1d6", flat: false }] });
+    out.legacyPersisted = (await fromUuid(legacy.uuid))?._source.system.overTime?.length ?? -1;
   } catch (e) { out.threw = String(e?.message ?? e); }
   finally { for (const it of game.items.filter(i => /^__PW__OT/.test(i.name))) await it.delete().catch(() => {}); }
   return out;
@@ -80,6 +95,10 @@ eq("an update replaces the list", model.updated, [{ type: "acid", turns: 5, form
 eq("the sheet's numbered-object write casts back to an ordered array", model.fromObject,
   [{ type: "fire", turns: 1, formula: "2d6", flat: false }, { type: "acid", turns: 3, formula: "", flat: false }]);
 eq("NEGATIVE: a weapon with no rows stores an empty list — a weapon as it always was", model.empty, []);
+check("⭐ the empty default is NOT one shared array: two key-less sources get two arrays", model.defaultShared === false, String(model.defaultShared));
+eq("...a push into one puts no phantom row on another", model.phantomOnOther, 0);
+eq("...nor on one built afterwards", model.phantomOnThird, 0);
+eq("...and an update on a pre-field weapon persists under the default diff", model.legacyPersisted, 1);
 
 /* ─────────────────── §2 the seam ─────────────────── */
 console.log("\n§2 the seam carries the rows");

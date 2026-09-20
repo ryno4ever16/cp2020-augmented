@@ -11,7 +11,7 @@
     "equipped": false,
     "source": "Chromebook 1 p.16",
     "lastOwnerId": "",
-    "armorType": "Hard",
+    "armorType": "hard",
     "coverage": {
       "Head": {
         "stoppingPower": "14",

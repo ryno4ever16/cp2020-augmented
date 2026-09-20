@@ -26,7 +26,7 @@
       }
     },
     "encumbrance": 0,
-    "armorType": "Soft",
+    "armorType": "soft",
     "clothingWeight": ""
   },
   "effects": [],

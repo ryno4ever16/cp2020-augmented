@@ -10,7 +10,7 @@
     "weight": 0,
     "equipped": false,
     "source": "Chromebook 1",
-    "armorType": "Soft",
+    "armorType": "soft",
     "coverage": {
       "Head": {
         "stoppingPower": "0",

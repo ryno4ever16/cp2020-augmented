@@ -303,7 +303,7 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
   }
 
   _prepareSkill(sheet) {
-    sheet.stats = getStatNames();
+    sheet.stats = withStoredValue(getStatNames(), this.item.system?.stat);
     // Action keys for the per-style bonus editor (shown when the skill is a martial art). Our net-new.
     sheet.martialBonusActions = MARTIAL_BONUS_ACTIONS;
     // The Difficulty Mod box binds the stored `system.diffMod`, which every built-in martial style
@@ -492,13 +492,14 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
   }
 
   _prepareWeapon(sheet) {
-    sheet.weaponTypes = Object.values(weaponTypes).sort();
+    const sys = this.item.system ?? {};
+    sheet.weaponTypes = withStoredValue(Object.values(weaponTypes).sort(), sys.weaponType);
     const isMelee = this.item.system.weaponType === weaponTypes.melee;
     sheet.isMelee = isMelee;
-    sheet.attackTypes = isMelee ? Object.values(meleeAttackTypes).sort() : Object.values(rangedAttackTypes).sort();
-    sheet.concealabilities = Object.values(concealability);
-    sheet.availabilities = Object.values(availability);
-    sheet.reliabilities = Object.values(reliability);
+    sheet.attackTypes = withStoredValue(isMelee ? Object.values(meleeAttackTypes).sort() : Object.values(rangedAttackTypes).sort(), sys.attackType);
+    sheet.concealabilities = withStoredValue(Object.values(concealability), sys.concealability);
+    sheet.availabilities = withStoredValue(Object.values(availability), sys.availability);
+    sheet.reliabilities = withStoredValue(Object.values(reliability), sys.reliability);
 
     if (this.item.system?.ammoItemId == null) {
       this.item.updateSource({ "system.ammoItemId": "" });
@@ -552,11 +553,11 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     // Hard/soft classification select. Value "" = "Auto" (getArmorHardness falls back to its
     // name/encumbrance heuristic); "soft"/"hard" force the classification. Labels localized here so
     // the shared select partial renders them directly (JS owns data, labels are i18n).
-    sheet.armorTypeChoices = [
+    sheet.armorTypeChoices = withStoredValue([
       { value: "",     label: localize("ArmorTypeAuto") },
       { value: "soft", label: localize("ArmorTypeSoft") },
       { value: "hard", label: localize("ArmorTypeHard") }
-    ];
+    ], this.item.system?.armorType);
     // Catalog-restore control: offered only to a GM, and only on a copy whose pack entry still
     // resolves — hand-made armor has no catalog to restore from and gets no control at all. The
     // check is a registry/index read, not a document fetch; the numbers are read when it is pressed.
@@ -724,14 +725,14 @@ async _prepareCyberware(sheet) {
   ];
   sheet.cw.bodyZones = bodyAll;
 
-  sheet.weaponTypes = Object.values(weaponTypes).sort();
   const cwW = this.item.system?.CyberWorkType?.Weapon || {};
+  sheet.weaponTypes = withStoredValue(Object.values(weaponTypes).sort(), cwW.weaponType);
   const isMelee = cwW.weaponType === weaponTypes.melee;
   sheet.cwWeaponIsMelee = isMelee;
-  sheet.attackTypes = isMelee ? Object.values(meleeAttackTypes).sort() : Object.values(rangedAttackTypes).sort();
-  sheet.concealabilities = Object.values(concealability);
-  sheet.availabilities = Object.values(availability);
-  sheet.reliabilities = Object.values(reliability);
+  sheet.attackTypes = withStoredValue(isMelee ? Object.values(meleeAttackTypes).sort() : Object.values(rangedAttackTypes).sort(), cwW.attackType);
+  sheet.concealabilities = withStoredValue(Object.values(concealability), cwW.concealability);
+  sheet.availabilities = withStoredValue(Object.values(availability), cwW.availability);
+  sheet.reliabilities = withStoredValue(Object.values(reliability), cwW.reliability);
 
   if (this.item.system?.CyberWorkType?.Weapon?.ammoItemId == null) {
     this.item.updateSource({ "system.CyberWorkType.Weapon.ammoItemId": "" });
@@ -2959,4 +2960,23 @@ async _prepareCyberware(sheet) {
       }
     }
   }
+}
+
+/**
+ * A dropdown that SHOWS an unrecognised stored value instead of hiding it (user ruling 2026-09-20).
+ * The base select partial marks the option whose value equals the stored one; with none equal the browser
+ * shows the first option (or the blank), and the next submit SAVES that - the rewrite this project spent a
+ * day on. So when the stored value is not one of the choices, it is appended as its own entry, labelled
+ * as not a listed choice: the GM sees "standard (not a listed choice)" sitting in the box, and a submit
+ * keeps it. Read-time canonicalisation (the data models) means only a genuinely unknown string gets here.
+ * Blank never does: blank is the partial's own allowBlank option. Pure.
+ * @param {(string|{value:string,label?:string,localKey?:string})[]} choices
+ * @param {*} stored
+ */
+export function withStoredValue(choices, stored) {
+  const s = String(stored ?? "").trim();
+  if (s === "") return choices;
+  const has = (choices ?? []).some((c) => (typeof c === "string" ? c : c?.value) === s);
+  if (has) return choices;
+  return [...(choices ?? []), { value: s, label: localizeParam("SelectNotListed", { value: s }) }];
 }

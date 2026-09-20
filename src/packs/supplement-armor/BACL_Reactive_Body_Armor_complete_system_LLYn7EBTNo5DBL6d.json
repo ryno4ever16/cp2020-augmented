@@ -11,7 +11,7 @@
     "equipped": false,
     "source": "Rough Guide to the UK p.37",
     "lastOwnerId": "",
-    "armorType": "Hard",
+    "armorType": "hard",
     "coverage": {
       "Head": {
         "stoppingPower": "20",

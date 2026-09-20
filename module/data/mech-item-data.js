@@ -1,4 +1,4 @@
-import { canonicalReliability } from "./enum-spellings.js";
+import { canonicalReliability, canonicalArmorType } from "./enum-spellings.js";
 /**
  * Special-mechanics item fields shared by `misc` gear and `cyberware`
  * (SPECIAL-MECHANICS-PROPOSAL.md — decision D1: extend the registered DataModels, the C4 pattern
@@ -406,6 +406,26 @@ export function makeArmorAugmentedData(SystemModel) {
         mechTypedSP: mechTypedSPField(),
         armorType: new f.StringField({ initial: "" })   // "" = Auto (heuristic) | "soft" | "hard"
       };
+    }
+
+    /** "Soft"/"Hard" (our own pack's spelling until 2026-09-20) read as "soft"/"hard" — the same pair of
+     *  hooks the cyberweapon block uses for reliability: migrateData on the way in, prepareBaseData for
+     *  what arrives after. An unrecognised spelling is left as stored. */
+    static migrateData(source) {
+      const s = source?.system ?? source;
+      if (s && typeof s === "object" && s.armorType !== undefined) {
+        const c = canonicalArmorType(s.armorType);
+        if (c !== null && c !== s.armorType) s.armorType = c;
+      }
+      return super.migrateData(source);
+    }
+
+    prepareBaseData() {
+      super.prepareBaseData?.();
+      if (this.armorType !== undefined) {
+        const c = canonicalArmorType(this.armorType);
+        if (c !== null && c !== this.armorType) this.armorType = c;
+      }
     }
   };
 }

@@ -86,12 +86,25 @@ export function nameKey(name) {
   return String(name ?? "").replace(/\s*\([^)]*\)\s*$/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** The three fields the first-option rewrite could reach on a weapon, and how each is compared. */
+/**
+ * The fields the first-option rewrite could reach, per item type, and how each is compared. A blank
+ * compendium value is "no statement" (the pack rot the corrections layer handles) unless a field says
+ * otherwise (`blankPackIsValue`). Per-type since 2026-09-20, when every dropdown on every item sheet was
+ * measured against the base defaults and the installed packs: weapons are the exposure. The one other
+ * candidate, a skill's stat (six role skills ship blank), is NOT reviewable under the base 1.1.1 model -
+ * its own migrateData rewrites a blank stat to "cool" on read, so blank never reaches a sheet and can
+ * never be restored by an Apply. Program type (blank, unread by anything) got a blank option in its
+ * dropdown instead; armor type (our own "Soft"/"Hard" spelling) is canonicalised on read.
+ */
 const SUSPECT_FIELDS = [
-  { field: "reliability", label: "Reliability", same: (a, b) => (canonicalReliability(a) ?? String(a)) === (canonicalReliability(b) ?? String(b)) },
-  { field: "attackType", label: "AttackType", same: (a, b) => String(a ?? "").trim() === String(b ?? "").trim() },
-  { field: "concealability", label: "Concealability", same: (a, b) => String(a ?? "").trim() === String(b ?? "").trim() },
+  { type: "weapon", field: "reliability", label: "Reliability", same: (a, b) => (canonicalReliability(a) ?? String(a)) === (canonicalReliability(b) ?? String(b)) },
+  { type: "weapon", field: "attackType", label: "AttackType", same: (a, b) => String(a ?? "").trim() === String(b ?? "").trim() },
+  { type: "weapon", field: "concealability", label: "Concealability", same: (a, b) => String(a ?? "").trim() === String(b ?? "").trim() },
 ];
+const REVIEWED_TYPES = Object.freeze([...new Set(SUSPECT_FIELDS.map(f => f.type))]);
+const INDEX_FIELDS = Object.freeze(["type", ...new Set(SUSPECT_FIELDS.map(f => "system." + f.field))]);
+/** The pack-map key for one item: type-qualified, so a skill and a weapon of one name never collide. */
+const packKeyOf = (type, name) => type + ":" + nameKey(name);
 
 /**
  * THE SUSPECT ROWS, pure. `weapons` are `{ actorName, itemName, stats, system }` records; `packByKey`
@@ -104,11 +117,16 @@ export function suspectWeaponRows(weapons, packByKey) {
   const rows = [];
   for (const w of weapons ?? []) {
     if (!predatesCorrectedPacks(w.stats)) continue;
-    const pack = packByKey?.get?.(nameKey(w.itemName)) ?? packByKey?.[nameKey(w.itemName)];
+    const type = String(w.type || "weapon");
+    // the type-qualified key first; a bare name key is the older seam shape (weapons only)
+    const pack = packByKey?.get?.(packKeyOf(type, w.itemName)) ?? packByKey?.[packKeyOf(type, w.itemName)]
+      ?? (type === "weapon" ? (packByKey?.get?.(nameKey(w.itemName)) ?? packByKey?.[nameKey(w.itemName)]) : undefined);
     if (!pack) continue;
-    for (const { field, label, same } of SUSPECT_FIELDS) {
+    for (const { type: ft, field, label, same, blankPackIsValue } of SUSPECT_FIELDS) {
+      if (ft !== type) continue;
+      if (!(field in pack)) continue;
       const stored = w.system?.[field], expect = pack[field];
-      if (String(expect ?? "").trim() === "") continue;
+      if (!blankPackIsValue && String(expect ?? "").trim() === "") continue;
       if (same(stored, expect)) continue;
       rows.push({ actorName: w.actorName, actorUuid: String(w.actorUuid ?? ""), itemName: w.itemName, uuid: String(w.uuid ?? ""), field, fieldLabel: label, stored: String(stored ?? ""), pack: String(expect ?? "") });
     }
@@ -129,7 +147,7 @@ function* worldActors() {
     for (const token of scene.tokens ?? []) {
       if (token.actorLink) continue;
       const rawItems = token.delta?._source?.items;
-      if (Array.isArray(rawItems) && !rawItems.some(i => i?.type === "weapon" && predatesCorrectedPacks(i._stats))) continue;
+      if (Array.isArray(rawItems) && !rawItems.some(i => REVIEWED_TYPES.includes(i?.type) && predatesCorrectedPacks(i._stats))) continue;
       const a = token.actor;
       if (a) yield a;
     }
@@ -185,7 +203,8 @@ export async function migrateEnumSpellings({ force = false } = {}) {
 /** ⏪ the first name this shipped under, kept for the API. */
 export const migrateReliabilitySpelling = migrateEnumSpellings;
 
-/** The current compendium weapons, keyed by name — the base system's packs first, the module's after. */
+/** The current compendium weapons and skills, keyed by type and name - the base system's packs first,
+ *  the module's after. */
 async function compendiumWeaponsByKey() {
   const byKey = new Map();
   const packs = [...(game.packs ?? [])]
@@ -193,12 +212,15 @@ async function compendiumWeaponsByKey() {
     .sort((a, b) => (a.collection.startsWith("cyberpunk2020.") ? 0 : 1) - (b.collection.startsWith("cyberpunk2020.") ? 0 : 1));
   for (const pack of packs) {
     let index;
-    try { index = await pack.getIndex({ fields: ["type", "system.reliability", "system.attackType", "system.concealability"] }); }
+    try { index = await pack.getIndex({ fields: [...INDEX_FIELDS] }); }
     catch (_e) { continue; }
     for (const e of index) {
-      if (e.type !== "weapon") continue;
-      const key = nameKey(e.name);
-      if (!byKey.has(key)) byKey.set(key, { reliability: e.system?.reliability, attackType: e.system?.attackType, concealability: e.system?.concealability });
+      if (!REVIEWED_TYPES.includes(e.type)) continue;
+      const key = packKeyOf(e.type, e.name);
+      if (byKey.has(key)) continue;
+      const entry = {};
+      for (const f of SUSPECT_FIELDS) if (f.type === e.type) entry[f.field] = e.system?.[f.field];
+      byKey.set(key, entry);
     }
   }
   return byKey;
@@ -259,10 +281,10 @@ async function _reviewSuspectWeapons({ force = false, weapons: given = null, pac
   const weapons = given ? [...given] : [];
   for (const actor of given ? [] : worldActors()) {
     for (const item of actor.items ?? []) {
-      if (item.type !== "weapon") continue;
+      if (!REVIEWED_TYPES.includes(item.type)) continue;
       const stats = item._stats ?? item._source?._stats;
-      if (!predatesCorrectedPacks(stats)) continue;   // the gate first: a current-build weapon is never a suspect
-      weapons.push({ actorName: actor.name, actorUuid: actor.uuid, itemName: item.name, uuid: item.uuid, stats, system: item._source?.system ?? item.system });
+      if (!predatesCorrectedPacks(stats)) continue;   // the gate first: a current-build item is never a suspect
+      weapons.push({ type: item.type, actorName: actor.name, actorUuid: actor.uuid, itemName: item.name, uuid: item.uuid, stats, system: item._source?.system ?? item.system });
     }
   }
   // ⭐ THE PACK INDEXES ARE READ ONLY WHEN THERE IS SOMETHING TO COMPARE (server-impact audit 2026-09-19):
@@ -318,10 +340,9 @@ export async function dismissSuspectReview() {
  */
 export async function applySuspectValue({ uuid, field, value }) {
   if (game.user?.isGM !== true) return { skipped: "permission" };
-  const allowed = new Set(SUSPECT_FIELDS.map(f => f.field));
-  if (!allowed.has(String(field))) return { skipped: "field" };
   const item = await fromUuid(String(uuid ?? ""));
   if (!item || item.documentName !== "Item") return { skipped: "item" };
+  if (!SUSPECT_FIELDS.some(f => f.type === item.type && f.field === String(field))) return { skipped: "field" };
   await item.update({ [`system.${field}`]: String(value ?? "") });
   return { applied: true, name: item.name, field, value: String(value ?? "") };
 }
@@ -336,19 +357,23 @@ export async function applySuspectValue({ uuid, field, value }) {
  */
 export async function applySuspectValues(rows) {
   if (game.user?.isGM !== true) return { skipped: "permission", applied: [] };
-  const allowed = new Set(SUSPECT_FIELDS.map(f => f.field));
   const byItem = new Map();
   for (const r of rows ?? []) {
-    if (!allowed.has(String(r?.field))) continue;
     const uuid = String(r?.uuid ?? "");
     if (!byItem.has(uuid)) byItem.set(uuid, {});
-    byItem.get(uuid)[`system.${r.field}`] = String(r.value ?? "");
+    byItem.get(uuid)["system." + String(r?.field)] = String(r?.value ?? "");
   }
   const applied = [];
-  const byParent = new Map();   // parent uuid ("" = world) → [{ _id, ...changes }]
-  for (const [uuid, changes] of byItem) {
+  const byParent = new Map();   // parent uuid ("" = world) -> [{ _id, ...changes }]
+  for (const [uuid, rawChanges] of byItem) {
     const item = await fromUuid(uuid);
     if (!item || item.documentName !== "Item") continue;
+    const changes = {};
+    for (const [k, v] of Object.entries(rawChanges)) {
+      const field = k.slice("system.".length);
+      if (SUSPECT_FIELDS.some(f => f.type === item.type && f.field === field)) changes[k] = v;
+    }
+    if (!Object.keys(changes).length) continue;
     const key = item.parent?.uuid ?? "";
     if (!byParent.has(key)) byParent.set(key, { parent: item.parent ?? null, updates: [] });
     byParent.get(key).updates.push({ _id: item.id, ...changes });

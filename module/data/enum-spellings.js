@@ -74,3 +74,13 @@ export function canonicalWeaponEnums(system) {
   }
   return out;
 }
+
+/** The module's own armor hard/soft switch: "" (Auto) | "soft" | "hard". Our supplement-armor pack shipped
+ *  "Soft"/"Hard" capitalised (2026-09-20 finding); the reader lower-cases, but the sheet's select did not
+ *  recognise them and a submit wrote Auto. Case-folded here; "Auto" reads as "". Unknown → null. */
+export function canonicalArmorType(value) {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (s === "" || s === "auto") return "";
+  if (s === "soft" || s === "hard") return s;
+  return null;
+}

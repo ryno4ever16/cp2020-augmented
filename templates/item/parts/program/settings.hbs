@@ -13,7 +13,10 @@
 <div class="field-list">
   <div class="form-group">
     <label for="programType">{{CPLocal 'ProgramTypeLabel'}}</label>
+    {{!-- The blank choice (2026-09-20): the base default and 205 supplement programs store no type, and a
+          dropdown without a blank saved the first choice (Intrusion) on any submit. Nothing reads the field. --}}
     <select id="programType" name="system.programType">
+      <option value="" {{#if (eq system.programType "")}}selected{{/if}}></option>
       <option value="Intrusion" {{#if (eq system.programType "Intrusion")}}selected{{/if}}>{{CPLocal 'ProgramIntrusion'}}</option>
       <option value="Decryption" {{#if (eq system.programType "Decryption")}}selected{{/if}}>{{CPLocal 'ProgramDecryption'}}</option>
       <option value="Detection" {{#if (eq system.programType "Detection")}}selected{{/if}}>{{CPLocal 'ProgramDetection'}}</option>
