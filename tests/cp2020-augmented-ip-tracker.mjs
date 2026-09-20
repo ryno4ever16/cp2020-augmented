@@ -277,11 +277,15 @@ try {
       const others = actor.items.filter(i => i.type === "skill").slice(2, 5);
       for (const s of others) await record(s, 11);
       const before = queue().length;
-      for (let i = 0; i < 105; i++) await IP.recordSkillRoll({ actorId: actor.id, skillId: sA.id, actorName: actor.name, skillName: sA.name, total: 10 + (i % 7) });
+      for (let i = 0; i < 105; i++) await IP.recordSkillRoll({ actorId: actor.id, skillId: sA.id, actorName: actor.name, skillName: sA.name, total: 10 + i });
       await sleep(500);
       const spam = queue();
       ok("105 repeats of one skill occupy a single row", spam.filter(r => r.skillId === sA.id).length === 1, spam.filter(r => r.skillId === sA.id).length);
-      ok("that row holds all 105 rolls", (spam.find(r => r.skillId === sA.id)?.rolls || []).length === 105, (spam.find(r => r.skillId === sA.id)?.rolls || []).length);
+      // The history behind a row is CAPPED at the newest fifty (server-impact audit 2026-09-19: the queue is a
+      // world setting rewritten and broadcast on every roll; the row cap bounded rows, never rolls).
+      const spreeRolls = spam.find(r => r.skillId === sA.id)?.rolls || [];
+      ok("that row holds the newest fifty of the 105, not all of them", spreeRolls.length === IP.ROLLS_PER_ROW_MAX && IP.ROLLS_PER_ROW_MAX === 50, spreeRolls.length);
+      ok("…oldest dropped, newest kept, the row's total is the newest", spreeRolls[0]?.total === 65 && spreeRolls[49]?.total === 114 && spam.find(r => r.skillId === sA.id)?.total === 114, JSON.stringify([spreeRolls[0]?.total, spreeRolls[49]?.total]));
       ok("no other row was evicted by the repeats", spam.length === before + 1, `${before}→${spam.length}`);
     } catch (e) { out.error = e?.stack || e?.message || String(e); }
     finally {

@@ -273,6 +273,8 @@ export async function removeActorFromQueue(actorId) {
 /** Hard cap on the auto-queue: older un-awarded rolls age out (FIFO) beyond this, so even a MUTED
  *  neglect nudge can never let the log balloon to thousands of rows. */
 export const QUEUE_MAX = 100;
+/** The rolls kept behind ONE coalesced row (newest first to go is the oldest). */
+export const ROLLS_PER_ROW_MAX = 50;
 
 // Has the "queue full" notice already fired for the current over-cap episode? (Reset on apply/clear.)
 let _overflowNotified = false;
@@ -322,7 +324,11 @@ async function _enqueue(row) {
   const at = q.findIndex(r => r.actorId === row.actorId && r.skillId === row.skillId);
   if (at >= 0) {
     const [existing] = q.splice(at, 1);
-    existing.rolls = queueRolls(existing).concat(roll);
+    // The roll history behind a row is CAPPED (server-impact audit 2026-09-19): the queue is a world
+    // setting rewritten and broadcast on every roll, and the row cap bounds rows, not rolls — a row that
+    // kept every roll of a six-month campaign grew the blob without limit. The newest stay; the award is
+    // ruled at row level, so the oldest of a long spree carry nothing the GM still needs.
+    existing.rolls = queueRolls(existing).concat(roll).slice(-ROLLS_PER_ROW_MAX);
     existing.total = roll.total;
     existing.ts = roll.ts;
     q.push(existing);

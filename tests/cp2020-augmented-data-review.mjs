@@ -243,6 +243,13 @@ const notice = await page.evaluate(async (MOD) => {
     out.forcedAfter = (await M.reviewSuspectWeapons({ force: true, packByKey, weapons: sus })).posted;
     await sleepA(300);
     out.realWorld = (await M.reviewSuspectWeapons({ force: true })).rows.length;
+    // ⭐ COST GATE (server-impact audit 2026-09-19): over a world with no pre-correction weapon the sweep
+    // reads NO pack index at all — the field-projected getIndex makes the server read pack documents
+    const CC = foundry.documents?.collections?.CompendiumCollection ?? globalThis.CompendiumCollection;
+    const origIdx = CC.prototype.getIndex; let idxCalls = 0;
+    CC.prototype.getIndex = function (...a) { idxCalls++; return origIdx.apply(this, a); };
+    try { await M.reviewSuspectWeapons({ force: true }); } finally { CC.prototype.getIndex = origIdx; }
+    out.cleanWorldIndexReads = idxCalls;
     for (const m of game.messages.contents.filter(m => !before.has(m.id))) await m.delete().catch(() => {});
     await game.settings.set("cp2020-augmented", "weaponReviewDismissed", false);
     await game.settings.set("cp2020-augmented", "weaponReviewMessageId", "");
@@ -354,6 +361,7 @@ eq("after it an unforced call is skipped", notice.gated, "dismissed");
 check("…and a forced call (the console re-post) still posts", notice.forcedAfter === true);
 eq("two sweeps in flight together leave exactly ONE card (serialised per client)", notice.concurrentCards, 1);
 eq("the rig's own world (all current-build items) has no suspects", notice.realWorld, 0);
+eq("…and that sweep read NO compendium index (the pack reads wait for a candidate)", notice.cleanWorldIndexReads, 0);
 eq("⭐ THE GM'S HAND: a card over two real weapons carries their rows (reliability + concealability each)", notice.liveRows, 4);
 check("the card renders in the chat log", notice.cardRendered === true);
 eq("each Apply button carries the compendium value it would write", notice.buttonCarriesValue, "Standard");

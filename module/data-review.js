@@ -116,12 +116,20 @@ export function suspectWeaponRows(weapons, packByKey) {
   return rows;
 }
 
-/** Every actor that can carry items: world actors plus unlinked scene-token deltas. */
+/**
+ * Every actor that can carry items: world actors plus unlinked scene-token deltas. An unlinked token's
+ * synthetic actor is MATERIALISED only when its delta's raw source holds a weapon old enough to matter
+ * (`predatesCorrectedPacks` on the source stats) — `token.actor` builds a whole Actor per token, and a
+ * profiled world put that at 25+ seconds per launch (the flesh-limb sweep learned the same lesson).
+ * Server-impact audit 2026-09-19: the launch sweep must cost a clean world one in-memory pass.
+ */
 function* worldActors() {
   for (const a of game.actors ?? []) yield a;
   for (const scene of game.scenes ?? []) {
     for (const token of scene.tokens ?? []) {
       if (token.actorLink) continue;
+      const rawItems = token.delta?._source?.items;
+      if (Array.isArray(rawItems) && !rawItems.some(i => i?.type === "weapon" && predatesCorrectedPacks(i._stats))) continue;
       const a = token.actor;
       if (a) yield a;
     }
@@ -248,14 +256,19 @@ async function _reviewSuspectWeapons({ force = false, weapons: given = null, pac
   if (!force && game.settings.get(SCOPE, DISMISSED)) { out.skipped = "dismissed"; return out; }
   // `weapons` / `packByKey` may be handed in — the keeper's seam, because a document's `_stats`
   // (the version stamp this reads) is the server's to write and a test cannot author an old one.
-  const packByKey = givenPacks ?? await compendiumWeaponsByKey();
   const weapons = given ? [...given] : [];
   for (const actor of given ? [] : worldActors()) {
     for (const item of actor.items ?? []) {
       if (item.type !== "weapon") continue;
-      weapons.push({ actorName: actor.name, actorUuid: actor.uuid, itemName: item.name, uuid: item.uuid, stats: item._stats ?? item._source?._stats, system: item._source?.system ?? item.system });
+      const stats = item._stats ?? item._source?._stats;
+      if (!predatesCorrectedPacks(stats)) continue;   // the gate first: a current-build weapon is never a suspect
+      weapons.push({ actorName: actor.name, actorUuid: actor.uuid, itemName: item.name, uuid: item.uuid, stats, system: item._source?.system ?? item.system });
     }
   }
+  // ⭐ THE PACK INDEXES ARE READ ONLY WHEN THERE IS SOMETHING TO COMPARE (server-impact audit 2026-09-19):
+  // a field-projected getIndex over every Item pack makes the server read pack documents, and this runs
+  // at every launch. A world with no pre-correction weapon costs one in-memory pass and no pack reads.
+  const packByKey = weapons.length ? (givenPacks ?? await compendiumWeaponsByKey()) : (givenPacks ?? new Map());
   out.rows = suspectWeaponRows(weapons, packByKey);
   await removeStandingCard();
   if (!out.rows.length) return out;
