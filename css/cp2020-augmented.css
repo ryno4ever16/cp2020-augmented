@@ -4343,9 +4343,11 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-data-review-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .cp-data-review-item { font-weight: bold; }
 .cp-data-review-actor { font-size: 0.9em; opacity: 0.75; }
-.cp-data-review-change { font-size: 0.95em; }
+.cp-data-review-change { font-size: 0.95em; font-style: italic; }
+.cp-data-review-vals { display: flex; flex-wrap: wrap; column-gap: 10px; font-size: 0.95em; }
+.cp-data-review-cur { opacity: 0.75; }
 .cp-data-review-foot { font-size: 0.8em; opacity: 0.8; margin: 4px 0 0 0; }
 .cp-data-review-apply, .cp-data-review-apply-all, .cp-data-review-dismiss { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; line-height: 1.5; padding: 0 6px; font-size: 0.85em; }
 .cp-data-review-actions { display: flex; justify-content: flex-end; gap: 6px; margin: 2px 0; }
 .cp-data-review-done .cp-data-review-text { opacity: 0.55; }
-.cp-data-review-done .cp-data-review-change b { text-decoration: line-through; }
+.cp-data-review-done .cp-data-review-cur { text-decoration: line-through; }
