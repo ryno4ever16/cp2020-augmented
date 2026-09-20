@@ -250,6 +250,16 @@ const notice = await page.evaluate(async (MOD) => {
     CC.prototype.getIndex = function (...a) { idxCalls++; return origIdx.apply(this, a); };
     try { await M.reviewSuspectWeapons({ force: true }); } finally { CC.prototype.getIndex = origIdx; }
     out.cleanWorldIndexReads = idxCalls;
+    // ⭐ THE SETTINGS-MENU BUTTON (user, 2026-09-20): registered, GM-only, and its render IS the action —
+    // over the rig's clean world it says so; over a suspect it posts (the seam cannot reach a menu render,
+    // so the posting half is the forced-call legs above; this pins the wiring and the empty answer)
+    const menu = game.settings.menus.get("cp2020-augmented.dataReviewMenu");
+    out.menu = menu ? { restricted: menu.restricted === true, type: menu.type?.name, label: game.i18n.localize(menu.label) } : null;
+    const infos = []; const origInfo = ui.notifications.info;
+    ui.notifications.info = (m, ...a) => { infos.push(String(m)); return origInfo.call(ui.notifications, m, ...a); };
+    try { if (menu) await new menu.type().render(true); } finally { ui.notifications.info = origInfo; }
+    out.menuSaidNothing = infos.some(m => /needs a second look/.test(m));
+    out.menuCards = game.messages.contents.filter(m => !before.has(m.id) && /cp-data-review/.test(m.content)).length;
     for (const m of game.messages.contents.filter(m => !before.has(m.id))) await m.delete().catch(() => {});
     await game.settings.set("cp2020-augmented", "weaponReviewDismissed", false);
     await game.settings.set("cp2020-augmented", "weaponReviewMessageId", "");
@@ -362,6 +372,8 @@ check("…and a forced call (the console re-post) still posts", notice.forcedAft
 eq("two sweeps in flight together leave exactly ONE card (serialised per client)", notice.concurrentCards, 1);
 eq("the rig's own world (all current-build items) has no suspects", notice.realWorld, 0);
 eq("…and that sweep read NO compendium index (the pack reads wait for a candidate)", notice.cleanWorldIndexReads, 0);
+check("⭐ the settings menu carries a GM-only 'Post the review card' button", notice.menu?.restricted === true && notice.menu?.type === "DataReviewMenu" && notice.menu?.label === "Post the review card", JSON.stringify(notice.menu));
+check("…pressing it over a clean world says nothing needs a second look, and posts no card", notice.menuSaidNothing === true && notice.menuCards === 0, JSON.stringify([notice.menuSaidNothing, notice.menuCards]));
 eq("⭐ THE GM'S HAND: a card over two real weapons carries their rows (reliability + concealability each)", notice.liveRows, 4);
 check("the card renders in the chat log", notice.cardRendered === true);
 eq("each Apply button carries the compendium value it would write", notice.buttonCarriesValue, "Standard");

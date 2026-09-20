@@ -401,3 +401,31 @@ export function registerDataReviewButtons() {
     }
   });
 }
+
+/* ═══════════════ The settings-menu button — the GM's way back to the card ═══════════════
+ *
+ * Module Settings → "Data review" → [Post the review card]. The console call has always worked; a GM who
+ * pressed "Don't show again" and later wants the card back should not need it (user, 2026-09-20). The
+ * menu's `type` must be an Application class (core checks); this one renders nothing — its render IS the
+ * action, a forced sweep, and the referee is told what came of it either way. GM-only via `restricted`.
+ */
+export class DataReviewMenu extends foundry.applications.api.ApplicationV2 {
+  async render() {
+    if (game.user?.isGM !== true) return this;
+    const r = await reviewSuspectWeapons({ force: true });
+    if (r.posted) ui.notifications?.info?.(localize("DataReviewPosted"));
+    else ui.notifications?.info?.(localize("DataReviewNothing"));
+    return this;
+  }
+}
+
+export function registerDataReviewMenu() {
+  game.settings.registerMenu(SCOPE, "dataReviewMenu", {
+    name: "SETTINGS.DataReviewMenuName",
+    label: "SETTINGS.DataReviewMenuLabel",
+    hint: "SETTINGS.DataReviewMenuHint",
+    icon: "fa-solid fa-magnifying-glass",
+    type: DataReviewMenu,
+    restricted: true,
+  });
+}

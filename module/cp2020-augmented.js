@@ -72,7 +72,7 @@ import { registerBookLegality } from "./combat/book-legality.js";
 import { registerRadiation } from "./radiation/radiation.js";
 import { registerRadiationZones, migrateLegacyRadZones } from "./radiation/radiation-zones.js";
 import { registerVehicleHullMigration, migrateVehicleHullFrames } from "./vehicle/vehicle-hull-migration.js";
-import { migrateEnumSpellings, reviewSuspectWeapons, registerDataReviewButtons } from "./data-review.js";
+import { migrateEnumSpellings, reviewSuspectWeapons, registerDataReviewButtons, registerDataReviewMenu } from "./data-review.js";
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
 import { registerRadiationZoneBehavior, registerRadiationZoneVisibilityDefault } from "./radiation/radiation-zone-behavior.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
@@ -215,6 +215,9 @@ Hooks.once("init", function () {
     type: PresetPicker,
     restricted: true,
   });
+  // GM-only "Data review" menu button — posts the weapons-worth-a-second-look card on demand (the way
+  // back after "Don't show again"; user 2026-09-20). See module/data-review.js.
+  registerDataReviewMenu();
   // Fault collector (module/dev/error-journal.js): registered here, near the top of init, because
   // the value of the thing is what it catches — the earlier its listeners are attached on a client
   // that already had the setting on, the more of a load-time fault it can hold. Default off, so on
