@@ -2277,7 +2277,7 @@
     "DataReviewField": "Field",
     "DataReviewStored": "On the actor",
     "DataReviewPack": "Compendium",
-    "DataReviewFoot": "This card returns at each launch while rows remain. Applied rows drop off by themselves. Every change is one ordinary item edit and can be undone by hand on the weapon's sheet.",
+    "DataReviewFoot": "This card returns at each launch while rows remain. Applied rows drop off by themselves. Every change is one ordinary item edit and can be undone by hand on the weapon's sheet. If dismissed, you can show this card again from Module Settings: Data review, Post the review card.",
     "OverTimeAcid": "Acid (eats armor)",
     "OverTimeFire": "Fire (burns)",
     "AmmoSectionSpread": "Shotgun spread",
