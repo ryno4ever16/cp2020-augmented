@@ -4335,11 +4335,17 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-goon .cp-goon-field-invalid { border-color: #c0791a; outline: 1px solid #c0791a; }
 
 /* Data-review notice card (module/data-review.js, 2026-09-19): a compact table in a chat card. */
-.cp-data-review h3 { margin: 0 0 4px 0; }
-.cp-data-review-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin: 4px 0; }
-.cp-data-review-table th, .cp-data-review-table td { padding: 2px 4px; border-bottom: 1px solid rgba(192,160,98,0.3); text-align: left; vertical-align: top; }
+.cp-data-review h3 { margin: 0 0 4px 0; font-size: 1.15em; }
+/* One line per suspect value, text left and its Apply right; a table did not survive the sidebar's
+   width (words split, then the last columns ran off the edge — rig, 2026-09-19). */
+.cp-data-review-rows { display: flex; flex-direction: column; gap: 3px; margin: 4px 0; }
+.cp-data-review-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(192,160,98,0.3); font-size: 0.9em; }
+.cp-data-review-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.cp-data-review-item { font-weight: bold; }
+.cp-data-review-actor { font-size: 0.9em; opacity: 0.75; }
+.cp-data-review-change { font-size: 0.95em; }
 .cp-data-review-foot { font-size: 0.8em; opacity: 0.8; margin: 4px 0 0 0; }
-.cp-data-review-apply, .cp-data-review-apply-all { width: auto; min-width: max-content; white-space: nowrap; line-height: 1.5; padding: 0 6px; font-size: 0.85em; }
-.cp-data-review-actions { display: flex; justify-content: flex-end; margin: 2px 0; }
-.cp-data-review-done td { opacity: 0.55; text-decoration: line-through; }
-.cp-data-review-done td:last-child { text-decoration: none; }
+.cp-data-review-apply, .cp-data-review-apply-all, .cp-data-review-dismiss { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; line-height: 1.5; padding: 0 6px; font-size: 0.85em; }
+.cp-data-review-actions { display: flex; justify-content: flex-end; gap: 6px; margin: 2px 0; }
+.cp-data-review-done .cp-data-review-text { opacity: 0.55; }
+.cp-data-review-done .cp-data-review-change b { text-decoration: line-through; }

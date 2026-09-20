@@ -22,8 +22,10 @@
  *     VeryReliable / Auto / ConcealPocket is indistinguishable from a legitimate one. What code can do
  *     is name the suspects: every weapon on an actor that was written by a system version older than
  *     the corrected packs (`_stats.systemVersion` < 1.1.0, or missing) AND whose value disagrees with
- *     the current compendium entry of the same name. Posted ONCE as a GM-whispered card with actor and
- *     item names, for the GM to check against the book. Writes nothing.
+ *     the current compendium entry of the same name. Posted as a GM-whispered card with actor and item
+ *     names and an Apply button per row; the card RETURNS at every launch while rows remain (the earlier
+ *     card is replaced, never stacked) until the GM presses "Don't show again" (user ruling 2026-09-19:
+ *     not once-ever). Applying a row removes it from the next sweep by itself. The sweep writes nothing.
  *
  * The selects themselves gained a blank option the same day (templates/item/parts/*), so the mechanism
  * cannot fire again; this file is about what it already did.
@@ -194,16 +196,47 @@ async function compendiumWeaponsByKey() {
   return byKey;
 }
 
+const DISMISSED = "weaponReviewDismissed";   // the GM pressed "Don't show again"
+const CARD_ID   = "weaponReviewMessageId";   // the standing card, replaced at each re-post
+
+/** Register the two review settings on demand (the string one is not a Boolean stamp). */
+function ensureReviewSettings() {
+  ensureStamps([DISMISSED]);
+  if (!game.settings.settings.has(`${SCOPE}.${CARD_ID}`)) {
+    game.settings.register(SCOPE, CARD_ID, { scope: "world", config: false, type: String, default: "" });
+  }
+}
+
 /**
- * Post the one-time GM notice naming weapons whose values may have been rewritten (see the file
- * header). Reads everything, writes nothing but the stamp. `force` re-posts. Returns the rows.
+ * Remove the standing card, if it still exists. The id is cleared FIRST and removals are serialised
+ * through one chain, so two callers in flight together (the dismiss button and a re-post, rig-seen
+ * 2026-09-19) cannot both delete the same message — the second delete of a message reaches the server
+ * as "does not exist" and is logged as an error before any catch here could see it.
+ */
+let _removal = Promise.resolve();
+function removeStandingCard() {
+  _removal = _removal.then(async () => {
+    const id = String(game.settings.get(SCOPE, CARD_ID) || "");
+    if (!id) return;
+    await game.settings.set(SCOPE, CARD_ID, "");
+    const msg = game.messages.get(id);
+    if (!msg) return;
+    try { await msg.delete(); } catch (_e) { /* already gone */ }
+  });
+  return _removal;
+}
+
+/**
+ * Post the GM notice naming weapons whose values may have been rewritten (see the file header). Runs
+ * at every launch: while rows remain and the GM has not dismissed it, the card is (re)posted, the
+ * earlier one removed first so only one stands. `force` posts even after a dismissal (the console
+ * re-post). Reads everything, writes nothing but the card and its id. Returns the rows.
  */
 export async function reviewSuspectWeapons({ force = false, weapons: given = null, packByKey: givenPacks = null } = {}) {
   const out = { skipped: null, rows: [], posted: false };
   if (game.user?.isGM !== true) { out.skipped = "permission"; return out; }
-  const STAMP = "weaponReviewNoticePosted";
-  ensureStamps([STAMP]);
-  if (!force && game.settings.get(SCOPE, STAMP)) { out.skipped = "done"; return out; }
+  ensureReviewSettings();
+  if (!force && game.settings.get(SCOPE, DISMISSED)) { out.skipped = "dismissed"; return out; }
   // `weapons` / `packByKey` may be handed in — the keeper's seam, because a document's `_stats`
   // (the version stamp this reads) is the server's to write and a test cannot author an old one.
   const packByKey = givenPacks ?? await compendiumWeaponsByKey();
@@ -215,15 +248,25 @@ export async function reviewSuspectWeapons({ force = false, weapons: given = nul
     }
   }
   out.rows = suspectWeaponRows(weapons, packByKey);
-  await game.settings.set(SCOPE, STAMP, true);
+  await removeStandingCard();
   if (!out.rows.length) return out;
   const content = await renderChatCard("data-review-notice.hbs", {
     rows: out.rows.map(r => ({ ...r, fieldLabel: localize(r.fieldLabel) })),
     count: out.rows.length,
   });
-  await ChatMessage.create({ content, whisper: getGMUserIds(), speaker: { alias: localize("DataReviewSpeaker") } });
+  const msg = await ChatMessage.create({ content, whisper: getGMUserIds(), speaker: { alias: localize("DataReviewSpeaker") } });
+  if (msg?.id) await game.settings.set(SCOPE, CARD_ID, msg.id);
   out.posted = true;
   return out;
+}
+
+/** "Don't show again": stamp the dismissal and take the standing card down. GM-only. */
+export async function dismissSuspectReview() {
+  if (game.user?.isGM !== true) return { skipped: "permission" };
+  ensureReviewSettings();
+  await game.settings.set(SCOPE, DISMISSED, true);
+  await removeStandingCard();
+  return { dismissed: true };
 }
 
 /* ═══════════════════ The card's controls — the GM's hand, one row at a time ═══════════════════
@@ -249,16 +292,18 @@ export function registerDataReviewButtons() {
   onGlobalClick(async (ev) => {
     const one = ev.target?.closest?.(".cp-data-review-apply");
     const all = ev.target?.closest?.(".cp-data-review-apply-all");
-    if (!one && !all) return;
+    const dismiss = ev.target?.closest?.(".cp-data-review-dismiss");
+    if (!one && !all && !dismiss) return;
     ev.preventDefault();
     if (game.user?.isGM !== true) return;
+    if (dismiss) { await dismissSuspectReview().catch(e => console.warn(`${SCOPE} | data review dismiss failed`, e)); return; }
     const card = (one ?? all).closest(".cp-data-review");
     const targets = one ? [one] : [...(card?.querySelectorAll(".cp-data-review-apply:not(:disabled)") ?? [])];
     for (const btn of targets) {
       btn.disabled = true;
       try {
         const r = await applySuspectValue({ uuid: btn.dataset.uuid, field: btn.dataset.field, value: btn.dataset.value });
-        if (r.applied) btn.closest("tr")?.classList.add("cp-data-review-done");
+        if (r.applied) btn.closest(".cp-data-review-row")?.classList.add("cp-data-review-done");
         else btn.disabled = false;
       } catch (e) {
         console.warn(`${SCOPE} | data review apply failed`, e);

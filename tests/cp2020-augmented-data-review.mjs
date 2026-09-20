@@ -207,10 +207,40 @@ const notice = await page.evaluate(async (MOD) => {
     await new Promise(res => setTimeout(res, 300));
     out.cleanRows = r2.rows.length; out.cleanPosted = r2.posted;
     out.cleanCards = game.messages.contents.filter(m => !before2.has(m.id)).length;
-    out.stamp = game.settings.get("cp2020-augmented", "weaponReviewNoticePosted");
-    out.gated = (await M.reviewSuspectWeapons()).skipped;
+    // ⭐ NOT ONCE-EVER (user ruling 2026-09-19): an UNFORCED call posts while rows remain and the GM has
+    // not dismissed; a second unforced call REPLACES the standing card (one card, not a stack); the
+    // dismiss button stamps the dismissal and takes the card down; after it, unforced is skipped and
+    // force still posts.
+    await game.settings.set("cp2020-augmented", "weaponReviewDismissed", false);
+    const sleepA = (ms) => new Promise(r => setTimeout(r, ms));
+    const sus = [{ actorName: "__PW__DR Bartz", itemName: "Budget Arms C13", stats: { systemVersion: "1.0.3" }, system: { reliability: "VeryReliable", attackType: "Auto", concealability: "ConcealPocket" } }];
+    const beforeU = new Set(game.messages.contents.map(m => m.id));
+    const u1 = await M.reviewSuspectWeapons({ packByKey, weapons: sus });
+    await sleepA(400);
+    out.unforcedPosted = u1.posted === true && u1.skipped === null;
+    const firstId = game.settings.get("cp2020-augmented", "weaponReviewMessageId");
+    out.cardIdKept = !!firstId && !!game.messages.get(firstId);
+    const u2 = await M.reviewSuspectWeapons({ packByKey, weapons: sus });
+    await sleepA(400);
+    out.secondReplaces = u2.posted === true && !game.messages.get(firstId) && game.messages.contents.filter(m => !beforeU.has(m.id) && /cp-data-review/.test(m.content)).length === 1;
+    let dbtn = null;
+    for (let i = 0; i < 40 && !dbtn; i++) { dbtn = document.querySelector(".chat-message .cp-data-review .cp-data-review-dismiss"); if (!dbtn) await sleepA(100); }
+    out.dismissRendered = !!dbtn;
+    dbtn?.click();
+    // wait for the CARD to be gone (the button's last act), not for the stamp (its first) — polling the
+    // stamp let the next call race the button's own delete and the server logged a second delete
+    const isCard = (m) => !beforeU.has(m.id) && /cp-data-review/.test(m.content);
+    for (let i = 0; i < 60; i++) { await sleepA(100); if (!game.messages.contents.some(isCard) && !game.settings.get("cp2020-augmented", "weaponReviewMessageId")) break; }
+    await sleepA(300);
+    out.dismissed = game.settings.get("cp2020-augmented", "weaponReviewDismissed");
+    out.cardGone = game.messages.contents.filter(m => !beforeU.has(m.id) && /cp-data-review/.test(m.content)).length === 0;
+    out.gated = (await M.reviewSuspectWeapons({ packByKey, weapons: sus })).skipped;
+    out.forcedAfter = (await M.reviewSuspectWeapons({ force: true, packByKey, weapons: sus })).posted;
+    await sleepA(300);
     out.realWorld = (await M.reviewSuspectWeapons({ force: true })).rows.length;
     for (const m of game.messages.contents.filter(m => !before.has(m.id))) await m.delete().catch(() => {});
+    await game.settings.set("cp2020-augmented", "weaponReviewDismissed", false);
+    await game.settings.set("cp2020-augmented", "weaponReviewMessageId", "");
 
     /* ⭐ THE GM'S HAND: a card over two REAL weapons; press one Apply, the other row is untouched; then Apply all */
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -236,7 +266,7 @@ const notice = await page.evaluate(async (MOD) => {
       out.buttonCarriesValue = btn1?.dataset?.value ?? null;
       btn1?.click();
       for (let i = 0; i < 40; i++) { await sleep(100); if (w1._source.system.reliability === "Standard") break; }
-      out.afterOne = { one: [w1._source.system.reliability, w1._source.system.concealability], two: [w2._source.system.reliability, w2._source.system.concealability], btnDisabled: btn1?.disabled === true, rowDone: !!btn1?.closest("tr")?.classList.contains("cp-data-review-done") };
+      out.afterOne = { one: [w1._source.system.reliability, w1._source.system.concealability], two: [w2._source.system.reliability, w2._source.system.concealability], btnDisabled: btn1?.disabled === true, rowDone: !!btn1?.closest(".cp-data-review-row")?.classList.contains("cp-data-review-done") };
       card?.querySelector(".cp-data-review-apply-all")?.click();
       for (let i = 0; i < 60; i++) { await sleep(100); if (w2._source.system.concealability === "ConcealJacket" && w1._source.system.concealability === "ConcealJacket") break; }
       out.afterAll = { one: [w1._source.system.reliability, w1._source.system.concealability], two: [w2._source.system.reliability, w2._source.system.concealability] };
@@ -248,6 +278,7 @@ const notice = await page.evaluate(async (MOD) => {
       out.refusedLeft = w1._source.system.reliability;
       out.badField = await M.applySuspectValue({ uuid: w1.uuid, field: "damage", value: "9d6" });
       for (const m of game.messages.contents.filter(m => !before3.has(m.id))) await m.delete().catch(() => {});
+      await game.settings.set("cp2020-augmented", "weaponReviewMessageId", "");   // the card above was deleted by hand here
     } finally { try { await act?.delete(); } catch (_e) {} }
   } catch (e) { out.threw = String(e?.message ?? e) + " " + String(e?.stack ?? "").split("\n")[1]; }
   return out;
@@ -259,7 +290,13 @@ check("whispered to the GM only", notice.whispered === true);
 check("the actor, the weapon, the stored value and the compendium value are on it", notice.namesOnCard === true);
 check("every visible string is localized", notice.noRawKeys === true);
 check("NEGATIVE: no suspects, no card", notice.cleanRows === 0 && notice.cleanPosted === false && notice.cleanCards === 0, JSON.stringify([notice.cleanRows, notice.cleanPosted, notice.cleanCards]));
-eq("the stamp is set and gates an unforced call", [notice.stamp, notice.gated], [true, "done"]);
+check("⭐ NOT ONCE-EVER: an unforced call posts while rows remain and nothing is dismissed", notice.unforcedPosted === true);
+check("the standing card's id is kept", notice.cardIdKept === true);
+check("a second unforced call REPLACES the standing card — one card, never a stack", notice.secondReplaces === true);
+check("the card carries a Don't-show-again button", notice.dismissRendered === true);
+check("pressing it stamps the dismissal and takes the card down", notice.dismissed === true && notice.cardGone === true, JSON.stringify([notice.dismissed, notice.cardGone]));
+eq("after it an unforced call is skipped", notice.gated, "dismissed");
+check("…and a forced call (the console re-post) still posts", notice.forcedAfter === true);
 eq("the rig's own world (all current-build items) has no suspects", notice.realWorld, 0);
 eq("⭐ THE GM'S HAND: a card over two real weapons carries their rows (reliability + concealability each)", notice.liveRows, 4);
 check("the card renders in the chat log", notice.cardRendered === true);

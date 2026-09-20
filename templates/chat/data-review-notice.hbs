@@ -1,19 +1,25 @@
-{{!-- The one-time GM notice from module/data-review.js: weapons written by a pre-1.1.0 system build whose
+{{!-- The GM notice from module/data-review.js: weapons written by a pre-1.1.0 system build whose
       reliability / attack type / concealability disagree with the current compendium entry of the same
-      name. Nothing here is written by the module; the GM checks each row against the book. --}}
+      name. One line per suspect value — the weapon and its actor, then "field: stored → compendium" —
+      with its own Apply; Apply all does every line still standing; "Don't show again" stops the card
+      returning at launch. Lines, not a table: a chat sidebar is ~270px wide and a five-column table
+      either split words or ran off the edge (both seen on the rig, 2026-09-19). --}}
 <div class="cp-data-review">
     <h3>{{CPLocal "DataReviewTitle"}}</h3>
     <p>{{CPLocal "DataReviewIntro" count=count}}</p>
-    <table class="cp-data-review-table">
-        <thead><tr><th>{{CPLocal "DataReviewActor"}}</th><th>{{CPLocal "DataReviewItem"}}</th><th>{{CPLocal "DataReviewField"}}</th><th>{{CPLocal "DataReviewStored"}}</th><th>{{CPLocal "DataReviewPack"}}</th><th></th></tr></thead>
-        <tbody>
-        {{#each rows as |r|}}
-            <tr><td>{{r.actorName}}</td><td>{{r.itemName}}</td><td>{{r.fieldLabel}}</td><td>{{r.stored}}</td><td>{{r.pack}}</td>
-                <td><button type="button" class="cp-data-review-apply" data-uuid="{{r.uuid}}" data-field="{{r.field}}" data-value="{{r.pack}}" data-tooltip="{{CPLocal 'DataReviewApplyTip'}}">{{CPLocal "DataReviewApply"}}</button></td></tr>
-        {{/each}}
-        </tbody>
-    </table>
+    <div class="cp-data-review-rows">
+    {{#each rows as |r|}}
+        <div class="cp-data-review-row">
+            <div class="cp-data-review-text">
+                <span class="cp-data-review-item">{{r.itemName}}</span> <span class="cp-data-review-actor">{{r.actorName}}</span>
+                <span class="cp-data-review-change">{{r.fieldLabel}}: <s>{{r.stored}}</s> → <b>{{r.pack}}</b></span>
+            </div>
+            <button type="button" class="cp-data-review-apply" data-uuid="{{r.uuid}}" data-field="{{r.field}}" data-value="{{r.pack}}" data-tooltip="{{CPLocal 'DataReviewApplyTip'}}">{{CPLocal "DataReviewApply"}}</button>
+        </div>
+    {{/each}}
+    </div>
     <div class="cp-data-review-actions">
+        <button type="button" class="cp-data-review-dismiss" data-tooltip="{{CPLocal 'DataReviewDismissTip'}}">{{CPLocal "DataReviewDismiss"}}</button>
         <button type="button" class="cp-data-review-apply-all" data-tooltip="{{CPLocal 'DataReviewApplyAllTip'}}">{{CPLocal "DataReviewApplyAll"}}</button>
     </div>
     <p class="cp-data-review-foot">{{CPLocal "DataReviewFoot"}}</p>
