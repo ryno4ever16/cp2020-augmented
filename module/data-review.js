@@ -288,6 +288,41 @@ export async function applySuspectValue({ uuid, field, value }) {
   return { applied: true, name: item.name, field, value: String(value ?? "") };
 }
 
+/**
+ * Apply MANY rows in as few writes as the platform allows: rows are grouped by the item they name (several
+ * fields on one weapon become one update) and then by the item's parent, so an actor's weapons go through
+ * one updateEmbeddedDocuments call and world items through one Item.updateDocuments. A card over
+ * hundreds of rows (a world that lived through the rewrite for a year) is otherwise hundreds of round
+ * trips, each re-rendering the sheet. Same gates as the single apply. Returns the rows applied.
+ * @param {{uuid:string, field:string, value:string}[]} rows
+ */
+export async function applySuspectValues(rows) {
+  if (game.user?.isGM !== true) return { skipped: "permission", applied: [] };
+  const allowed = new Set(SUSPECT_FIELDS.map(f => f.field));
+  const byItem = new Map();
+  for (const r of rows ?? []) {
+    if (!allowed.has(String(r?.field))) continue;
+    const uuid = String(r?.uuid ?? "");
+    if (!byItem.has(uuid)) byItem.set(uuid, {});
+    byItem.get(uuid)[`system.${r.field}`] = String(r.value ?? "");
+  }
+  const applied = [];
+  const byParent = new Map();   // parent uuid ("" = world) → [{ _id, ...changes }]
+  for (const [uuid, changes] of byItem) {
+    const item = await fromUuid(uuid);
+    if (!item || item.documentName !== "Item") continue;
+    const key = item.parent?.uuid ?? "";
+    if (!byParent.has(key)) byParent.set(key, { parent: item.parent ?? null, updates: [] });
+    byParent.get(key).updates.push({ _id: item.id, ...changes });
+    applied.push(...Object.keys(changes).map(k => ({ uuid, field: k.slice("system.".length) })));
+  }
+  for (const { parent, updates } of byParent.values()) {
+    if (parent) await parent.updateEmbeddedDocuments("Item", updates);
+    else await Item.updateDocuments(updates);
+  }
+  return { applied };
+}
+
 export function registerDataReviewButtons() {
   onGlobalClick(async (ev) => {
     const one = ev.target?.closest?.(".cp-data-review-apply");
@@ -298,18 +333,27 @@ export function registerDataReviewButtons() {
     if (game.user?.isGM !== true) return;
     if (dismiss) { await dismissSuspectReview().catch(e => console.warn(`${SCOPE} | data review dismiss failed`, e)); return; }
     const card = (one ?? all).closest(".cp-data-review");
-    const targets = one ? [one] : [...(card?.querySelectorAll(".cp-data-review-apply:not(:disabled)") ?? [])];
-    for (const btn of targets) {
-      btn.disabled = true;
+    const markDone = (btn) => { btn.disabled = true; btn.closest(".cp-data-review-row")?.classList.add("cp-data-review-done"); };
+    if (one) {
+      one.disabled = true;
       try {
-        const r = await applySuspectValue({ uuid: btn.dataset.uuid, field: btn.dataset.field, value: btn.dataset.value });
-        if (r.applied) btn.closest(".cp-data-review-row")?.classList.add("cp-data-review-done");
-        else btn.disabled = false;
-      } catch (e) {
-        console.warn(`${SCOPE} | data review apply failed`, e);
-        btn.disabled = false;
-      }
+        const r = await applySuspectValue({ uuid: one.dataset.uuid, field: one.dataset.field, value: one.dataset.value });
+        if (r.applied) markDone(one); else one.disabled = false;
+      } catch (e) { console.warn(`${SCOPE} | data review apply failed`, e); one.disabled = false; }
+      return;
     }
-    if (all) all.disabled = true;
+    // Apply all: every button still standing, batched (one write per actor), then each row marked.
+    const standing = [...(card?.querySelectorAll(".cp-data-review-apply:not(:disabled)") ?? [])];
+    all.disabled = true;
+    for (const btn of standing) btn.disabled = true;
+    try {
+      const r = await applySuspectValues(standing.map(b => ({ uuid: b.dataset.uuid, field: b.dataset.field, value: b.dataset.value })));
+      const done = new Set((r.applied ?? []).map(a => `${a.uuid}|${a.field}`));
+      for (const btn of standing) { if (done.has(`${btn.dataset.uuid}|${btn.dataset.field}`)) markDone(btn); else btn.disabled = false; }
+    } catch (e) {
+      console.warn(`${SCOPE} | data review apply-all failed`, e);
+      for (const btn of standing) btn.disabled = false;
+      all.disabled = false;
+    }
   });
 }

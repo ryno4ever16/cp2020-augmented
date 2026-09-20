@@ -279,6 +279,46 @@ const notice = await page.evaluate(async (MOD) => {
       out.badField = await M.applySuspectValue({ uuid: w1.uuid, field: "damage", value: "9d6" });
       for (const m of game.messages.contents.filter(m => !before3.has(m.id))) await m.delete().catch(() => {});
       await game.settings.set("cp2020-augmented", "weaponReviewMessageId", "");   // the card above was deleted by hand here
+
+      /* ⭐ THE LONG CARD (user, 2026-09-19: hundreds of rows in a severe world): the rows scroll inside
+         the card while heading and buttons stay put; Apply all is ONE write per actor, not one per row */
+      const act2 = await Actor.create({ name: "__PW__DR Owner Two", type: "character" });
+      const many = [];
+      for (let n = 0; n < 30; n++) many.push({ name: `__PW__DR Bulk ${String(n).padStart(2, "0")}`, type: "weapon", system: { weaponType: "Pistol", reliability: "VeryReliable", attackType: "Auto", concealability: "ConcealPocket" } });
+      const w1s = await act.createEmbeddedDocuments("Item", many.slice(0, 15));
+      const w2s = await act2.createEmbeddedDocuments("Item", many.slice(15));
+      const packs2 = new Map(many.map(m => [m.name.toLowerCase().replace(/[^a-z0-9]/g, ""), { reliability: "Standard", attackType: "", concealability: "ConcealJacket" }]));
+      const rowsMany = [...w1s.map(w => ({ actorName: act.name, itemName: w.name, uuid: w.uuid, stats: { systemVersion: "1.0.3" }, system: w._source.system })),
+                        ...w2s.map(w => ({ actorName: act2.name, itemName: w.name, uuid: w.uuid, stats: { systemVersion: "1.0.3" }, system: w._source.system }))];
+      const before4 = new Set(game.messages.contents.map(m => m.id));
+      const r4 = await M.reviewSuspectWeapons({ force: true, packByKey: packs2, weapons: rowsMany });
+      out.manyRows = r4.rows.length;   // 2 fields × 30 (a blank compendium attack type is never a row)
+      // the geometry needs a LAID-OUT card: open the chat tab and take the copy in the chat log
+      try { ui.sidebar?.changeTab?.("chat", "primary"); } catch (_e) { document.querySelector('#sidebar [data-tab="chat"]')?.click(); }
+      await sleep(300);
+      let list = null;
+      for (let i = 0; i < 40 && !list; i++) { list = [...document.querySelectorAll(".chat-message .cp-data-review .cp-data-review-rows")].find(el => el.clientHeight > 0) ?? null; if (!list) await sleep(100); }
+      const cs = list ? getComputedStyle(list) : null;
+      out.listGeom = list ? { overflowY: cs.overflowY, maxHeight: cs.maxHeight, scrollH: list.scrollHeight, clientH: list.clientHeight, host: list.closest("#chat-log, #chat-notifications, .chat-log, #chat")?.id ?? list.closest(".chat-log, .chat-sidebar, #sidebar")?.className ?? "?" } : null;
+      out.listScrolls = !!list && cs.overflowY === "auto" && list.scrollHeight > list.clientHeight + 20;
+      out.listCapped = !!list && list.clientHeight <= Math.ceil(window.innerHeight * 0.4) + 2;
+      const card2 = list?.closest(".cp-data-review");
+      out.buttonsOutsideScroller = !!card2 && !list.contains(card2.querySelector(".cp-data-review-apply-all")) && !list.contains(card2.querySelector("h3"));
+      // count the writes: one updateEmbeddedDocuments per actor
+      const calls = [];
+      const origU = Actor.prototype.updateEmbeddedDocuments;
+      Actor.prototype.updateEmbeddedDocuments = function (...args) { calls.push([this.name, args[1]?.length]); return origU.apply(this, args); };
+      try {
+        card2?.querySelector(".cp-data-review-apply-all")?.click();
+        for (let i = 0; i < 100; i++) { await sleep(100); if (w2s.every(w => w._source.system.concealability === "ConcealJacket") && w1s.every(w => w._source.system.reliability === "Standard")) break; }
+        await sleep(300);
+      } finally { Actor.prototype.updateEmbeddedDocuments = origU; }
+      out.batchCalls = calls;
+      out.allApplied = [...w1s, ...w2s].every(w => w._source.system.reliability === "Standard" && w._source.system.attackType === "Auto" && w._source.system.concealability === "ConcealJacket");
+      out.allMarked = card2 ? card2.querySelectorAll(".cp-data-review-row.cp-data-review-done").length : -1;
+      for (const m of game.messages.contents.filter(m => !before4.has(m.id))) await m.delete().catch(() => {});
+      await game.settings.set("cp2020-augmented", "weaponReviewMessageId", "");
+      await act2.delete();
     } finally { try { await act?.delete(); } catch (_e) {} }
   } catch (e) { out.threw = String(e?.message ?? e) + " " + String(e?.stack ?? "").split("\n")[1]; }
   return out;
@@ -308,6 +348,13 @@ eq("Apply all presses every row still standing", [notice.afterAll?.one, notice.a
 eq("NEGATIVE: a non-GM is refused at the action layer", notice.refused?.skipped, "permission");
 eq("…and nothing was written", notice.refusedLeft, "Standard");
 eq("NEGATIVE: a field the notice never names is refused", notice.badField?.skipped, "field");
+eq("⭐ THE LONG CARD: 30 weapons over two actors make 60 rows (two fields each; a blank compendium attack type is no row)", notice.manyRows, 60);
+check("the rows scroll inside the card (overflow auto, content taller than the box)", notice.listScrolls === true, JSON.stringify(notice.listGeom));
+check("…capped at ~40% of the viewport", notice.listCapped === true);
+check("…with the heading and the buttons outside the scroller", notice.buttonsOutsideScroller === true);
+check("Apply all is ONE write per actor (15 items each), not one per row", Array.isArray(notice.batchCalls) && notice.batchCalls.length === 2 && notice.batchCalls.every(c => c[1] === 15), JSON.stringify(notice.batchCalls));
+check("…and every field on every weapon landed", notice.allApplied === true);
+eq("…and every row is marked done", notice.allMarked, 60);
 
 /* ─────────────────── §4 the selects ─────────────────── */
 console.log("\n§4 the selects no longer lie");

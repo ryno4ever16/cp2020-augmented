@@ -4338,7 +4338,9 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-data-review h3 { margin: 0 0 4px 0; font-size: 1.15em; }
 /* One line per suspect value, text left and its Apply right; a table did not survive the sidebar's
    width (words split, then the last columns ran off the edge — rig, 2026-09-19). */
-.cp-data-review-rows { display: flex; flex-direction: column; gap: 3px; margin: 4px 0; }
+/* The rows scroll inside the card past ~40% of the viewport (a world that lived through the rewrite
+   can carry hundreds); the heading, the intro and the buttons stay outside the scroller. */
+.cp-data-review-rows { display: flex; flex-direction: column; gap: 3px; margin: 4px 0; max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .cp-data-review-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(192,160,98,0.3); font-size: 0.9em; }
 .cp-data-review-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .cp-data-review-item { font-weight: bold; }
