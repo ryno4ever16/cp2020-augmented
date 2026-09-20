@@ -266,6 +266,21 @@ const notice = await page.evaluate(async (MOD) => {
 
     /* ⭐ THE GM'S HAND: a card over two REAL weapons; press one Apply, the other row is untouched; then Apply all */
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    // Apply ASKS FIRST (2026-09-20): find the confirm dialog, read its text, tick "don't ask again" when told, press yes
+    const answerConfirm = async ({ noAsk = false, yes = true } = {}) => {
+      for (let i = 0; i < 60; i++) {
+        const d = [...foundry.applications.instances.values()].find(a => a.rendered && a.options?.classes?.includes?.("cp-data-review-confirm"));
+        if (d) {
+          const text = d.element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+          const box = d.element?.querySelector?.('input[name="noask"]');
+          if (noAsk && box) box.checked = true;
+          d.element?.querySelector?.(yes ? 'button[data-action="yes"]' : 'button[data-action="no"]')?.click();
+          return { seen: true, text, hadNoAsk: !!box };
+        }
+        await sleep(100);
+      }
+      return { seen: false, text: "", hadNoAsk: false };
+    };
     let act = null;
     try {
       act = await Actor.create({ name: "__PW__DR Owner", type: "character" });
@@ -273,7 +288,7 @@ const notice = await page.evaluate(async (MOD) => {
         { name: "__PW__DR Suspect One", type: "weapon", system: { weaponType: "Pistol", reliability: "VeryReliable", attackType: "Auto", concealability: "ConcealPocket" } },
         { name: "__PW__DR Suspect Two", type: "weapon", system: { weaponType: "Pistol", reliability: "VeryReliable", attackType: "", concealability: "ConcealPocket" } },
       ])).sort((x, y) => x.name.localeCompare(y.name));
-      const packs = new Map([["pwdrsuspectone", { reliability: "Standard", attackType: "", concealability: "ConcealJacket" }], ["pwdrsuspecttwo", { reliability: "Standard", attackType: "", concealability: "ConcealJacket" }]]);
+      const packs = new Map([["pwdrsuspectone", { source: "Pistols (test pack)", reliability: "Standard", attackType: "", concealability: "ConcealJacket" }], ["pwdrsuspecttwo", { source: "Pistols (test pack)", reliability: "Standard", attackType: "", concealability: "ConcealJacket" }]]);
       const rows = [
         { actorName: act.name, itemName: w1.name, uuid: w1.uuid, stats: { systemVersion: "1.0.3" }, system: w1._source.system },
         { actorName: act.name, itemName: w2.name, uuid: w2.uuid, stats: { systemVersion: "1.0.3" }, system: w2._source.system },
@@ -286,10 +301,23 @@ const notice = await page.evaluate(async (MOD) => {
       out.cardRendered = !!card;
       const btn1 = card?.querySelector(`.cp-data-review-apply[data-uuid="${w1.uuid}"][data-field="reliability"]`);
       out.buttonCarriesValue = btn1?.dataset?.value ?? null;
+      out.rowNamesSource = btn1?.closest(".cp-data-review-row")?.querySelector(".cp-data-review-source")?.textContent?.trim() ?? null;
       btn1?.click();
+      out.declined = await answerConfirm({ yes: false });
+      await sleep(400);
+      out.afterDecline = { rel: w1._source.system.reliability, btnEnabled: btn1?.disabled === false };
+      btn1?.click();
+      out.confirmOne = await answerConfirm({ noAsk: true });
       for (let i = 0; i < 40; i++) { await sleep(100); if (w1._source.system.reliability === "Standard") break; }
       out.afterOne = { one: [w1._source.system.reliability, w1._source.system.concealability], two: [w2._source.system.reliability, w2._source.system.concealability], btnDisabled: btn1?.disabled === true, rowDone: !!btn1?.closest(".cp-data-review-row")?.classList.contains("cp-data-review-done") };
+      const btnW1Conceal = card?.querySelector(`.cp-data-review-apply[data-uuid="${w1.uuid}"][data-field="concealability"]`);
+      btnW1Conceal?.click();
+      const secondAsk = await (async () => { for (let i = 0; i < 8; i++) { const d = [...foundry.applications.instances.values()].find(a => a.rendered && a.options?.classes?.includes?.("cp-data-review-confirm")); if (d) return true; await sleep(100); } return false; })();
+      out.secondAsked = secondAsk;
+      for (let i = 0; i < 40; i++) { await sleep(100); if (w1._source.system.concealability === "ConcealJacket") break; }
+      out.afterSecondSingle = w1._source.system.concealability;
       card?.querySelector(".cp-data-review-apply-all")?.click();
+      out.confirmAll = await answerConfirm();
       for (let i = 0; i < 60; i++) { await sleep(100); if (w2._source.system.concealability === "ConcealJacket" && w1._source.system.concealability === "ConcealJacket") break; }
       out.afterAll = { one: [w1._source.system.reliability, w1._source.system.concealability], two: [w2._source.system.reliability, w2._source.system.concealability] };
       // non-GM refusal at the action layer
@@ -354,6 +382,7 @@ const notice = await page.evaluate(async (MOD) => {
       Actor.prototype.updateEmbeddedDocuments = function (...args) { calls.push([this.name, args[1]?.length]); return origU.apply(this, args); };
       try {
         card2?.querySelector(".cp-data-review-apply-all")?.click();
+        out.confirmBulk = await answerConfirm();
         for (let i = 0; i < 100; i++) { await sleep(100); if (w2s.every(w => w._source.system.concealability === "ConcealJacket") && w1s.every(w => w._source.system.reliability === "Standard")) break; }
         await sleep(300);
       } finally { Actor.prototype.updateEmbeddedDocuments = origU; }
@@ -389,9 +418,14 @@ check("…pressing it over a clean world says nothing needs a second look, and p
 eq("⭐ THE GM'S HAND: a card over two real weapons carries their rows (reliability + concealability each)", notice.liveRows, 4);
 check("the card renders in the chat log", notice.cardRendered === true);
 eq("each Apply button carries the compendium value it would write", notice.buttonCarriesValue, "Standard");
+eq("each row names the pack its compendium value comes from", notice.rowNamesSource, "Pistols (test pack)");
+check("⭐ Apply ASKS FIRST: the dialog names the weapon, the field, the value and the pack, and a decline writes nothing", notice.declined?.seen === true && /Suspect One/.test(notice.declined.text) && /Reliability/.test(notice.declined.text) && /Standard/.test(notice.declined.text) && /test pack/.test(notice.declined.text) && notice.afterDecline?.rel === "VeryReliable" && notice.afterDecline?.btnEnabled === true, JSON.stringify([notice.declined?.text?.slice(0, 120), notice.afterDecline]));
+check("...the dialog offers 'don't ask again for this card'", notice.confirmOne?.seen === true && notice.confirmOne?.hadNoAsk === true, JSON.stringify(notice.confirmOne));
 eq("pressing ONE Apply writes that one field on that one weapon", notice.afterOne?.one, ["Standard", "ConcealPocket"]);
 eq("…and the other weapon is untouched", notice.afterOne?.two, ["VeryReliable", "ConcealPocket"]);
 check("…the pressed button is spent and its row marked done", notice.afterOne?.btnDisabled === true && notice.afterOne?.rowDone === true, JSON.stringify(notice.afterOne));
+check("...after 'don't ask again', the next single Apply on this card writes without a dialog", notice.secondAsked === false && notice.afterSecondSingle === "ConcealJacket", JSON.stringify([notice.secondAsked, notice.afterSecondSingle]));
+check("⭐ Apply all asks with the count and the actor count, and names the pack", notice.confirmAll?.seen === true && /2 value/.test(notice.confirmAll.text) && /1 actor/.test(notice.confirmAll.text) && /test pack/.test(notice.confirmAll.text), notice.confirmAll?.text?.slice(0, 160));
 eq("Apply all presses every row still standing", [notice.afterAll?.one, notice.afterAll?.two], [["Standard", "ConcealJacket"], ["Standard", "ConcealJacket"]]);
 eq("NEGATIVE: a non-GM is refused at the action layer", notice.refused?.skipped, "permission");
 eq("…and nothing was written", notice.refusedLeft, "Standard");
@@ -410,6 +444,7 @@ check("…clicking a header opens that actor's sheet", notice.headOpensActor ===
 check("the rows scroll inside the card (overflow auto, content taller than the box)", notice.listScrolls === true, JSON.stringify(notice.listGeom));
 check("…capped at ~40% of the viewport", notice.listCapped === true);
 check("…with the heading and the buttons outside the scroller", notice.buttonsOutsideScroller === true);
+check("the long card's Apply all asks with sixty values over two actors", notice.confirmBulk?.seen === true && /60 value/.test(notice.confirmBulk.text) && /2 actor/.test(notice.confirmBulk.text), notice.confirmBulk?.text?.slice(0, 120));
 check("Apply all is ONE write per actor (15 items each), not one per row", Array.isArray(notice.batchCalls) && notice.batchCalls.length === 2 && notice.batchCalls.every(c => c[1] === 15), JSON.stringify(notice.batchCalls));
 check("…and every field on every weapon landed", notice.allApplied === true);
 eq("…and every row is marked done", notice.allMarked, 60);

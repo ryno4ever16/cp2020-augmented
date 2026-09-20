@@ -4356,3 +4356,6 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-data-review-actions { display: flex; justify-content: flex-end; gap: 6px; margin: 2px 0; }
 .cp-data-review-done .cp-data-review-text { opacity: 0.55; }
 .cp-data-review-done .cp-data-review-cur { text-decoration: line-through; }
+.cp-data-review-source { opacity: 0.75; font-size: 0.95em; }
+.cp-data-review-confirm-body p { margin: 0 0 6px 0; }
+.cp-data-review-noask { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 0.9em; }

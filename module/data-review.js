@@ -32,7 +32,7 @@
  */
 import { canonicalReliability, canonicalWeaponEnums } from "./data/enum-spellings.js";
 import { renderChatCard, getGMUserIds } from "./compat.js";
-import { localize } from "./utils.js";
+import { localize, localizeParam } from "./utils.js";
 import { onGlobalClick } from "./popout-compat.js";
 export { canonicalReliability };
 
@@ -128,7 +128,7 @@ export function suspectWeaponRows(weapons, packByKey) {
       const stored = w.system?.[field], expect = pack[field];
       if (!blankPackIsValue && String(expect ?? "").trim() === "") continue;
       if (same(stored, expect)) continue;
-      rows.push({ actorName: w.actorName, actorUuid: String(w.actorUuid ?? ""), itemName: w.itemName, uuid: String(w.uuid ?? ""), field, fieldLabel: label, stored: String(stored ?? ""), pack: String(expect ?? "") });
+      rows.push({ actorName: w.actorName, actorUuid: String(w.actorUuid ?? ""), itemName: w.itemName, uuid: String(w.uuid ?? ""), field, fieldLabel: label, stored: String(stored ?? ""), pack: String(expect ?? ""), packSource: String(pack.source ?? "") });
     }
   }
   return rows;
@@ -218,7 +218,10 @@ async function compendiumWeaponsByKey() {
       if (!REVIEWED_TYPES.includes(e.type)) continue;
       const key = packKeyOf(e.type, e.name);
       if (byKey.has(key)) continue;
-      const entry = {};
+      // `source` names the pack the value came from - the card shows it, because the compendium is the
+      // module's reference and not the book, and a scraped expansion pack deserves less trust than a
+      // hand-entered one (user, 2026-09-20: the item audit is open and will stay open for now).
+      const entry = { source: String(pack.metadata?.label ?? pack.collection ?? "") };
       for (const f of SUSPECT_FIELDS) if (f.type === e.type) entry[f.field] = e.system?.[f.field];
       byKey.set(key, entry);
     }
@@ -386,6 +389,26 @@ export async function applySuspectValues(rows) {
   return { applied };
 }
 
+/**
+ * The "are you sure" before a write to an actor's item. Returns false (declined), true (write), or
+ * "noask" (write, and stop asking for this card's single rows). DialogV2, the module's own confirm idiom.
+ */
+async function confirmApply({ title, body, yes, noAsk }) {
+  const DialogV2 = foundry.applications.api.DialogV2;
+  const noAskHtml = noAsk ? `<label class="cp-data-review-noask"><input type="checkbox" name="noask"> ${localize("DataReviewConfirmNoAsk")}</label>` : "";
+  let checked = false;
+  const ok = await DialogV2.confirm({
+    window: { title },
+    classes: ["cp-data-review-confirm"],
+    content: `<div class="cp-data-review-confirm-body">${body}${noAskHtml}</div>`,
+    yes: { label: yes, callback: (_ev, _btn, dialog) => { checked = dialog?.element?.querySelector?.('input[name="noask"]')?.checked === true; return true; } },
+    no: { label: localize("DataReviewConfirmNo") },
+    rejectClose: false,
+  });
+  if (!ok) return false;
+  return checked ? "noask" : true;
+}
+
 export function registerDataReviewButtons() {
   onGlobalClick(async (ev) => {
     const one = ev.target?.closest?.(".cp-data-review-apply");
@@ -404,6 +427,27 @@ export function registerDataReviewButtons() {
     const card = (one ?? all).closest(".cp-data-review");
     const markDone = (btn) => { btn.disabled = true; btn.closest(".cp-data-review-row")?.classList.add("cp-data-review-done"); };
     if (one) {
+      // ⭐ ASKS FIRST (user, 2026-09-20): the compendium value is the module's reference, not the book -
+      // the item audit is open - so a write to an actor's item is a decision, not a reflex. The card
+      // remembers "don't ask again" for its own rows only.
+      if (card?.dataset.cpNoAsk !== "1") {
+        const row = one.closest(".cp-data-review-row");
+        const head = (() => { let el = row?.previousElementSibling; while (el && !el.classList.contains("cp-data-review-actor-head")) el = el.previousElementSibling; return el; })();
+        const ok = await confirmApply({
+          title: localize("DataReviewConfirmOneTitle"),
+          body: localizeParam("DataReviewConfirmOneBody", {
+            item: row?.querySelector(".cp-data-review-item")?.textContent?.trim() ?? "",
+            actor: head?.firstChild?.textContent?.trim() ?? "",
+            field: row?.querySelector(".cp-data-review-change")?.textContent?.trim() ?? one.dataset.field,
+            value: one.dataset.value ?? "",
+            source: row?.querySelector(".cp-data-review-source")?.textContent?.trim() ?? "",
+          }),
+          yes: localize("DataReviewConfirmOneYes"),
+          noAsk: true,
+        });
+        if (!ok) return;
+        if (ok === "noask" && card) card.dataset.cpNoAsk = "1";
+      }
       one.disabled = true;
       try {
         const r = await applySuspectValue({ uuid: one.dataset.uuid, field: one.dataset.field, value: one.dataset.value });
@@ -413,6 +457,23 @@ export function registerDataReviewButtons() {
     }
     // Apply all: every button still standing, batched (one write per actor), then each row marked.
     const standing = [...(card?.querySelectorAll(".cp-data-review-apply:not(:disabled)") ?? [])];
+    if (!standing.length) return;
+    {
+      const actors = new Set(), sources = new Set();
+      for (const btn of standing) {
+        const row = btn.closest(".cp-data-review-row");
+        let el = row?.previousElementSibling; while (el && !el.classList.contains("cp-data-review-actor-head")) el = el.previousElementSibling;
+        if (el) actors.add(el.firstChild?.textContent?.trim() ?? "");
+        const s = row?.querySelector(".cp-data-review-source")?.textContent?.trim(); if (s) sources.add(s);
+      }
+      const ok = await confirmApply({
+        title: localizeParam("DataReviewConfirmAllTitle", { count: standing.length, actors: actors.size }),
+        body: localizeParam("DataReviewConfirmAllBody", { count: standing.length, actors: actors.size, sources: [...sources].join(", ") || "—" }),
+        yes: localize("DataReviewConfirmAllYes"),
+        noAsk: false,
+      });
+      if (!ok) return;
+    }
     all.disabled = true;
     for (const btn of standing) btn.disabled = true;
     try {

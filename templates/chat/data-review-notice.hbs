@@ -16,7 +16,8 @@
             <div class="cp-data-review-text">
                 <span class="cp-data-review-item">{{r.itemName}}</span>
                 <span class="cp-data-review-change">{{r.fieldLabel}}</span>
-                <span class="cp-data-review-vals"><span class="cp-data-review-cur">{{CPLocal "DataReviewStored"}}: {{r.stored}}</span><span class="cp-data-review-new">{{CPLocal "DataReviewPack"}}: <b>{{r.pack}}</b></span></span>
+                {{!-- the pack the value came from, named (2026-09-20): the compendium is the module's reference, not the book --}}
+                <span class="cp-data-review-vals"><span class="cp-data-review-cur">{{CPLocal "DataReviewStored"}}: {{r.stored}}</span><span class="cp-data-review-new">{{CPLocal "DataReviewPack"}}{{#if r.packSource}} (<span class="cp-data-review-source">{{r.packSource}}</span>){{/if}}: <b>{{r.pack}}</b></span></span>
             </div>
             <button type="button" class="cp-data-review-apply" data-uuid="{{r.uuid}}" data-field="{{r.field}}" data-value="{{r.pack}}" data-tooltip="{{CPLocal 'DataReviewApplyTip'}}">{{CPLocal "DataReviewApply"}}</button>
         </div>
