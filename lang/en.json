@@ -2254,6 +2254,8 @@
     "DataReviewTitle": "Weapons worth a second look",
     "DataReviewIntro": "{count} weapon value(s) on your actors were written by an older version of the system and no longer match the compendium entry of the same name. An older sheet could silently replace a value it did not recognise with the first choice in its list (Very Reliable, Auto, Pocket). Apply writes the compendium value to that one field; Apply all does every row. A weapon you customised on purpose is left alone by not pressing its button.",
     "DataReviewApply": "Apply",
+    "DataReviewActorCount": "{count} value(s)",
+    "DataReviewActorOpenTip": "Open this actor's sheet.",
     "DataReviewApplyTip": "Write the compendium value to this one field on this one weapon.",
     "DataReviewApplyAll": "Apply all remaining",
     "DataReviewDismiss": "Don't show again",

@@ -4344,7 +4344,10 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-data-review-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(192,160,98,0.3); font-size: 0.9em; }
 .cp-data-review-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .cp-data-review-item { font-weight: bold; }
-.cp-data-review-actor { font-size: 0.9em; opacity: 0.75; }
+.cp-data-review-actor-head { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; padding: 2px 4px; font-weight: bold; background: rgba(192,160,98,0.18); border-left: 3px solid rgba(192,160,98,0.8); cursor: pointer; }
+.cp-data-review-actor-head:first-child { margin-top: 0; }
+.cp-data-review-actor-head:hover { background: rgba(192,160,98,0.3); }
+.cp-data-review-actor-count { font-weight: normal; font-size: 0.85em; opacity: 0.75; }
 .cp-data-review-change { font-size: 0.95em; font-style: italic; }
 .cp-data-review-vals { display: flex; flex-wrap: wrap; column-gap: 10px; font-size: 0.95em; }
 .cp-data-review-cur { opacity: 0.75; }

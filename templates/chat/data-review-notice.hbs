@@ -1,6 +1,6 @@
 {{!-- The GM notice from module/data-review.js: weapons written by a pre-1.1.0 system build whose
       reliability / attack type / concealability disagree with the current compendium entry of the same
-      name. One line per suspect value — the weapon and its actor, then "field: stored → compendium" —
+      name. One header per actor, then one line per suspect value — the weapon, then "field: stored → compendium" —
       with its own Apply; Apply all does every line still standing; "Don't show again" stops the card
       returning at launch. Lines, not a table: a chat sidebar is ~270px wide and a five-column table
       either split words or ran off the edge (both seen on the rig, 2026-09-19). --}}
@@ -8,16 +8,19 @@
     <h3>{{CPLocal "DataReviewTitle"}}</h3>
     <p>{{CPLocal "DataReviewIntro" count=count}}</p>
     <div class="cp-data-review-rows">
-    {{#each rows as |r|}}
+    {{!-- a header PER ACTOR (user, 2026-09-19): the GM sees who carries the weapon; the name opens the actor --}}
+    {{#each groups as |g|}}
+        <div class="cp-data-review-actor-head" data-actor-uuid="{{g.actorUuid}}" data-tooltip="{{CPLocal 'DataReviewActorOpenTip'}}">{{g.actorName}}<span class="cp-data-review-actor-count">{{CPLocal "DataReviewActorCount" count=g.count}}</span></div>
+        {{#each g.rows as |r|}}
         <div class="cp-data-review-row">
             <div class="cp-data-review-text">
-                <span class="cp-data-review-item">{{r.itemName}}</span> <span class="cp-data-review-actor">{{r.actorName}}</span>
-                {{!-- both values labelled (user, 2026-09-19: an arrow left it unclear which was current) --}}
+                <span class="cp-data-review-item">{{r.itemName}}</span>
                 <span class="cp-data-review-change">{{r.fieldLabel}}</span>
                 <span class="cp-data-review-vals"><span class="cp-data-review-cur">{{CPLocal "DataReviewStored"}}: {{r.stored}}</span><span class="cp-data-review-new">{{CPLocal "DataReviewPack"}}: <b>{{r.pack}}</b></span></span>
             </div>
             <button type="button" class="cp-data-review-apply" data-uuid="{{r.uuid}}" data-field="{{r.field}}" data-value="{{r.pack}}" data-tooltip="{{CPLocal 'DataReviewApplyTip'}}">{{CPLocal "DataReviewApply"}}</button>
         </div>
+        {{/each}}
     {{/each}}
     </div>
     <div class="cp-data-review-actions">

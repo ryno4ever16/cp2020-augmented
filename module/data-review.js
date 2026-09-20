@@ -110,7 +110,7 @@ export function suspectWeaponRows(weapons, packByKey) {
       const stored = w.system?.[field], expect = pack[field];
       if (String(expect ?? "").trim() === "") continue;
       if (same(stored, expect)) continue;
-      rows.push({ actorName: w.actorName, itemName: w.itemName, uuid: String(w.uuid ?? ""), field, fieldLabel: label, stored: String(stored ?? ""), pack: String(expect ?? "") });
+      rows.push({ actorName: w.actorName, actorUuid: String(w.actorUuid ?? ""), itemName: w.itemName, uuid: String(w.uuid ?? ""), field, fieldLabel: label, stored: String(stored ?? ""), pack: String(expect ?? "") });
     }
   }
   return rows;
@@ -244,20 +244,36 @@ export async function reviewSuspectWeapons({ force = false, weapons: given = nul
   for (const actor of given ? [] : worldActors()) {
     for (const item of actor.items ?? []) {
       if (item.type !== "weapon") continue;
-      weapons.push({ actorName: actor.name, itemName: item.name, uuid: item.uuid, stats: item._stats ?? item._source?._stats, system: item._source?.system ?? item.system });
+      weapons.push({ actorName: actor.name, actorUuid: actor.uuid, itemName: item.name, uuid: item.uuid, stats: item._stats ?? item._source?._stats, system: item._source?.system ?? item.system });
     }
   }
   out.rows = suspectWeaponRows(weapons, packByKey);
   await removeStandingCard();
   if (!out.rows.length) return out;
   const content = await renderChatCard("data-review-notice.hbs", {
-    rows: out.rows.map(r => ({ ...r, fieldLabel: localize(r.fieldLabel) })),
+    groups: groupRowsByActor(out.rows.map(r => ({ ...r, fieldLabel: localize(r.fieldLabel) }))),
     count: out.rows.length,
   });
   const msg = await ChatMessage.create({ content, whisper: getGMUserIds(), speaker: { alias: localize("DataReviewSpeaker") } });
   if (msg?.id) await game.settings.set(SCOPE, CARD_ID, msg.id);
   out.posted = true;
   return out;
+}
+
+/**
+ * The card's shape (user, 2026-09-19): rows under a header PER ACTOR, so the GM can see who carries the
+ * weapon and go look at whether it was meant. Groups keep first-seen order (world actors, then unlinked
+ * scene tokens, the sweep's order); rows keep theirs. Pure.
+ * @returns {{actorName:string, actorUuid:string, count:number, rows:object[]}[]}
+ */
+export function groupRowsByActor(rows) {
+  const groups = new Map();
+  for (const r of rows ?? []) {
+    const key = r.actorUuid || r.actorName;
+    if (!groups.has(key)) groups.set(key, { actorName: r.actorName, actorUuid: r.actorUuid ?? "", count: 0, rows: [] });
+    const g = groups.get(key); g.rows.push(r); g.count++;
+  }
+  return [...groups.values()];
 }
 
 /** "Don't show again": stamp the dismissal and take the standing card down. GM-only. */
@@ -328,9 +344,15 @@ export function registerDataReviewButtons() {
     const one = ev.target?.closest?.(".cp-data-review-apply");
     const all = ev.target?.closest?.(".cp-data-review-apply-all");
     const dismiss = ev.target?.closest?.(".cp-data-review-dismiss");
-    if (!one && !all && !dismiss) return;
+    const head = ev.target?.closest?.(".cp-data-review-actor-head[data-actor-uuid]");
+    if (!one && !all && !dismiss && !head) return;
     ev.preventDefault();
     if (game.user?.isGM !== true) return;
+    if (head) {   // the actor's name opens the actor, so the GM can judge the weapon in place
+      const actor = await fromUuid(String(head.dataset.actorUuid)).catch(() => null);
+      if (actor?.sheet) actor.sheet.render(true);
+      return;
+    }
     if (dismiss) { await dismissSuspectReview().catch(e => console.warn(`${SCOPE} | data review dismiss failed`, e)); return; }
     const card = (one ?? all).closest(".cp-data-review");
     const markDone = (btn) => { btn.disabled = true; btn.closest(".cp-data-review-row")?.classList.add("cp-data-review-done"); };

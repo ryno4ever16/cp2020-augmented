@@ -288,8 +288,9 @@ const notice = await page.evaluate(async (MOD) => {
       const w1s = await act.createEmbeddedDocuments("Item", many.slice(0, 15));
       const w2s = await act2.createEmbeddedDocuments("Item", many.slice(15));
       const packs2 = new Map(many.map(m => [m.name.toLowerCase().replace(/[^a-z0-9]/g, ""), { reliability: "Standard", attackType: "", concealability: "ConcealJacket" }]));
-      const rowsMany = [...w1s.map(w => ({ actorName: act.name, itemName: w.name, uuid: w.uuid, stats: { systemVersion: "1.0.3" }, system: w._source.system })),
-                        ...w2s.map(w => ({ actorName: act2.name, itemName: w.name, uuid: w.uuid, stats: { systemVersion: "1.0.3" }, system: w._source.system }))];
+      const rowsMany = [...w1s.map(w => ({ actorName: act.name, actorUuid: act.uuid, itemName: w.name, uuid: w.uuid, stats: { systemVersion: "1.0.3" }, system: w._source.system })),
+                        ...w2s.map(w => ({ actorName: act2.name, actorUuid: act2.uuid, itemName: w.name, uuid: w.uuid, stats: { systemVersion: "1.0.3" }, system: w._source.system }))];
+      out.groupsPure = M.groupRowsByActor(M.suspectWeaponRows(rowsMany, packs2)).map(g => [g.actorName, g.count, g.rows.length]);
       const before4 = new Set(game.messages.contents.map(m => m.id));
       const r4 = await M.reviewSuspectWeapons({ force: true, packByKey: packs2, weapons: rowsMany });
       out.manyRows = r4.rows.length;   // 2 fields × 30 (a blank compendium attack type is never a row)
@@ -303,6 +304,15 @@ const notice = await page.evaluate(async (MOD) => {
       out.listScrolls = !!list && cs.overflowY === "auto" && list.scrollHeight > list.clientHeight + 20;
       out.listCapped = !!list && list.clientHeight <= Math.ceil(window.innerHeight * 0.4) + 2;
       const card2 = list?.closest(".cp-data-review");
+      // ⭐ PER-ACTOR HEADERS (user, 2026-09-19): one per actor, in sweep order, with the count; the name opens the actor
+      const heads = [...(card2?.querySelectorAll(".cp-data-review-actor-head") ?? [])];
+      out.heads = heads.map(h => [h.firstChild?.textContent?.trim(), h.querySelector(".cp-data-review-actor-count")?.textContent?.trim(), h.dataset.actorUuid]);
+      out.rowsUnderFirstHead = (() => { let n = 0, el = heads[0]?.nextElementSibling; while (el && el.classList.contains("cp-data-review-row")) { n++; el = el.nextElementSibling; } return n; })();
+      out.noPerRowActorLine = !card2?.querySelector(".cp-data-review-row .cp-data-review-actor");
+      heads[1]?.click();
+      for (let i = 0; i < 40; i++) { await sleep(100); if (act2.sheet?.rendered) break; }
+      out.headOpensActor = act2.sheet?.rendered === true;
+      await act2.sheet?.close().catch(() => {});
       out.buttonsOutsideScroller = !!card2 && !list.contains(card2.querySelector(".cp-data-review-apply-all")) && !list.contains(card2.querySelector("h3"));
       // count the writes: one updateEmbeddedDocuments per actor
       const calls = [];
@@ -349,6 +359,11 @@ eq("NEGATIVE: a non-GM is refused at the action layer", notice.refused?.skipped,
 eq("…and nothing was written", notice.refusedLeft, "Standard");
 eq("NEGATIVE: a field the notice never names is refused", notice.badField?.skipped, "field");
 eq("⭐ THE LONG CARD: 30 weapons over two actors make 60 rows (two fields each; a blank compendium attack type is no row)", notice.manyRows, 60);
+eq("the pure grouping: two actors, thirty values each, rows kept", notice.groupsPure, [["__PW__DR Owner", 30, 30], ["__PW__DR Owner Two", 30, 30]]);
+check("⭐ PER-ACTOR HEADERS: one per actor, in order, with the count and the actor's uuid", Array.isArray(notice.heads) && notice.heads.length === 2 && notice.heads[0][0] === "__PW__DR Owner" && notice.heads[1][0] === "__PW__DR Owner Two" && notice.heads.every(h => h[1] === "30 value(s)" && /^Actor\./.test(h[2])), JSON.stringify(notice.heads));
+eq("…the first header is followed by exactly its actor's rows", notice.rowsUnderFirstHead, 30);
+check("…and no row repeats the actor's name", notice.noPerRowActorLine === true);
+check("…clicking a header opens that actor's sheet", notice.headOpensActor === true);
 check("the rows scroll inside the card (overflow auto, content taller than the box)", notice.listScrolls === true, JSON.stringify(notice.listGeom));
 check("…capped at ~40% of the viewport", notice.listCapped === true);
 check("…with the heading and the buttons outside the scroller", notice.buttonsOutsideScroller === true);
