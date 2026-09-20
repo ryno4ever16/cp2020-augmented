@@ -743,9 +743,11 @@ Hooks.once("ready", function () {
   // 2026-09-19: canonicalise out-of-enum reliability spellings before any sheet can rewrite them, then
   // name (once, to the GM) the pre-1.1.0 weapons whose values may already have been rewritten.
   registerDataReviewButtons();
+  // The review card is posted by the ACTIVE GM only: two GMs joining together each ran the sweep and
+  // the world kept two cards (rig-seen 2026-09-19). The migration still runs on every GM (idempotent).
   if (game.user?.isGM) {
     migrateEnumSpellings()
-      .then(() => reviewSuspectWeapons())
+      .then(() => (game.users?.activeGM ?? game.user) === game.user ? reviewSuspectWeapons() : null)
       .catch((e) => console.warn(`${SCOPE} | data review failed`, e));
   }
 

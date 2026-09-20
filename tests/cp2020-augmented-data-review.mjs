@@ -235,6 +235,11 @@ const notice = await page.evaluate(async (MOD) => {
     out.dismissed = game.settings.get("cp2020-augmented", "weaponReviewDismissed");
     out.cardGone = game.messages.contents.filter(m => !beforeU.has(m.id) && /cp-data-review/.test(m.content)).length === 0;
     out.gated = (await M.reviewSuspectWeapons({ packByKey, weapons: sus })).skipped;
+    // two forced sweeps in flight together: serialised, so exactly ONE card stands afterwards
+    const beforeC = new Set(game.messages.contents.map(m => m.id));
+    await Promise.all([M.reviewSuspectWeapons({ force: true, packByKey, weapons: sus }), M.reviewSuspectWeapons({ force: true, packByKey, weapons: sus })]);
+    await sleepA(500);
+    out.concurrentCards = game.messages.contents.filter(m => !beforeC.has(m.id) && /cp-data-review/.test(m.content)).length;
     out.forcedAfter = (await M.reviewSuspectWeapons({ force: true, packByKey, weapons: sus })).posted;
     await sleepA(300);
     out.realWorld = (await M.reviewSuspectWeapons({ force: true })).rows.length;
@@ -347,6 +352,7 @@ check("the card carries a Don't-show-again button", notice.dismissRendered === t
 check("pressing it stamps the dismissal and takes the card down", notice.dismissed === true && notice.cardGone === true, JSON.stringify([notice.dismissed, notice.cardGone]));
 eq("after it an unforced call is skipped", notice.gated, "dismissed");
 check("…and a forced call (the console re-post) still posts", notice.forcedAfter === true);
+eq("two sweeps in flight together leave exactly ONE card (serialised per client)", notice.concurrentCards, 1);
 eq("the rig's own world (all current-build items) has no suspects", notice.realWorld, 0);
 eq("⭐ THE GM'S HAND: a card over two real weapons carries their rows (reliability + concealability each)", notice.liveRows, 4);
 check("the card renders in the chat log", notice.cardRendered === true);

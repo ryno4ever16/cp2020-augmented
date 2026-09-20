@@ -232,7 +232,16 @@ function removeStandingCard() {
  * earlier one removed first so only one stands. `force` posts even after a dismissal (the console
  * re-post). Reads everything, writes nothing but the card and its id. Returns the rows.
  */
-export async function reviewSuspectWeapons({ force = false, weapons: given = null, packByKey: givenPacks = null } = {}) {
+let _sweep = Promise.resolve();
+export function reviewSuspectWeapons(opts = {}) {
+  // ONE SWEEP AT A TIME per client: the launch sweep takes seconds over a big world, and a forced
+  // call arriving inside it (rig-seen 2026-09-19) left the first card orphaned — each had cleared
+  // the id and posted. Serialised, the second waits and replaces the first's card as intended.
+  const run = _sweep.then(() => _reviewSuspectWeapons(opts));
+  _sweep = run.catch(() => {});
+  return run;
+}
+async function _reviewSuspectWeapons({ force = false, weapons: given = null, packByKey: givenPacks = null } = {}) {
   const out = { skipped: null, rows: [], posted: false };
   if (game.user?.isGM !== true) { out.skipped = "permission"; return out; }
   ensureReviewSettings();
