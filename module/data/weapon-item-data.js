@@ -13,6 +13,8 @@
  * migration; existing weapon items float (all three default false).
  */
 
+import { canonicalWeaponEnums } from "./enum-spellings.js";
+
 const WEAPON_AUGMENT_FIELDS = {
   edged:  (f) => new f.BooleanField({ initial: false }),
   mono:   (f) => new f.BooleanField({ initial: false }),
@@ -60,6 +62,43 @@ export function makeWeaponAugmentedData(SystemModel) {
         if (base[key] === undefined) add[key] = make(f);
       }
       return { ...base, ...add };
+    }
+
+    /**
+     * ⭐ READ THE BASE SYSTEM'S OWN SPELLINGS AS THE ENUM (2026-09-19). The base DEFAULT_WEAPON starts
+     * every new weapon at `reliability: "ST"`, `concealability: "P"`, `availability: "common"` — none
+     * of which its sheet selects offer — and its 2025 packs stored `"standard"`, `"jacket"`, `"long
+     * coat"`. A select with no blank option rendered those as its first option and the next submit
+     * saved it (Very Reliable / Pocket / Excellent), silently, in users' worlds. This turns each
+     * recognised spelling into the enum value AS THE DOCUMENT IS READ, so the sheet shows the right
+     * choice, the math reads the right value, and a submit writes the right value — without a write
+     * of its own. The one-time migration (module/data-review.js) persists the same reading.
+     *
+     * ⚠ `migrateData` also runs on UPDATE changes (memory: the mergeDefaults hazard), so only fields
+     * PRESENT on `source.system` are touched and nothing is ever defaulted in. Unrecognised spellings
+     * are left exactly as stored — the sheet's blank option is the honest answer for those.
+     */
+    static migrateData(source) {
+      const sys = source?.system ?? source;
+      if (sys && typeof sys === "object") {
+        const fix = canonicalWeaponEnums(sys);
+        for (const [k, v] of Object.entries(fix)) sys[k] = v;
+      }
+      return super.migrateData(source);
+    }
+
+    /**
+     * ⭐ AND THE SCHEMA'S OWN DEFAULTS, which migrateData never sees: a weapon created with no
+     * reliability / concealability / availability gets the base initials ("ST", "P", "common")
+     * AFTER migration ran on the (empty) creation data — rig-proven 2026-09-19 — so those land in
+     * the stored source as they are. Canonicalised here on the prepared model instead, so the sheet
+     * shows Standard / Pocket / Common for a brand-new weapon, the math reads the same, and the
+     * sheet's first submit writes it. The one-time migration persists the stored source.
+     */
+    prepareBaseData() {
+      super.prepareBaseData?.();
+      const fix = canonicalWeaponEnums(this);
+      for (const [k, v] of Object.entries(fix)) this[k] = v;
     }
   };
 }

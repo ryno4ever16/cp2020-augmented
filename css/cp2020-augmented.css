@@ -4337,3 +4337,7 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-data-review-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin: 4px 0; }
 .cp-data-review-table th, .cp-data-review-table td { padding: 2px 4px; border-bottom: 1px solid rgba(192,160,98,0.3); text-align: left; vertical-align: top; }
 .cp-data-review-foot { font-size: 0.8em; opacity: 0.8; margin: 4px 0 0 0; }
+.cp-data-review-apply, .cp-data-review-apply-all { width: auto; min-width: max-content; white-space: nowrap; line-height: 1.5; padding: 0 6px; font-size: 0.85em; }
+.cp-data-review-actions { display: flex; justify-content: flex-end; margin: 2px 0; }
+.cp-data-review-done td { opacity: 0.55; text-decoration: line-through; }
+.cp-data-review-done td:last-child { text-decoration: none; }

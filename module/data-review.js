@@ -28,60 +28,60 @@
  * The selects themselves gained a blank option the same day (templates/item/parts/*), so the mechanism
  * cannot fire again; this file is about what it already did.
  */
-import { RELIABILITY_CANONICAL } from "./data-corrections.js";
+import { canonicalReliability, canonicalWeaponEnums } from "./data/enum-spellings.js";
 import { renderChatCard, getGMUserIds } from "./compat.js";
 import { localize } from "./utils.js";
+import { onGlobalClick } from "./popout-compat.js";
+export { canonicalReliability };
 
 const SCOPE = "cp2020-augmented";
 
-/** The enum the sheet's select offers (lookups.js `reliability`), by value. */
-const RELIABILITY_ENUM = new Set(["VeryReliable", "Standard", "Unreliable"]);
-
-/** Every spelling the canonical map knows, plus the book's own abbreviations. Keyed lower-case, no spaces. */
-const RELIABILITY_SPELLINGS = {
-  ...Object.fromEntries(Object.entries(RELIABILITY_CANONICAL).map(([k, v]) => [k.replace(/\s+/g, ""), v])),
-  vr: "VeryReliable", st: "Standard", ur: "Unreliable",
-  veryreliable: "VeryReliable", standard: "Standard", unreliable: "Unreliable",
-};
-
 /**
- * The enum value for a stored reliability, or null when the stored value is not a spelling this
- * module recognises (an enum value answers itself). Pure.
+ * The update an item needs so its enum-backed fields are STORED as the enum, or null when it needs
+ * none: a weapon's reliability / concealability / availability, a cyberweapon work-block's
+ * reliability. The recognised spellings live in data/enum-spellings.js; an unrecognised one is left
+ * alone. Reads the SOURCE (`_source`) when the item is a document, because the weapon model already
+ * reads spellings as the enum at load and the prepared value would hide what is stored. Pure.
  */
-export function canonicalReliability(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return null;
-  if (RELIABILITY_ENUM.has(raw)) return raw;
-  return RELIABILITY_SPELLINGS[raw.toLowerCase().replace(/\s+/g, "")] ?? null;
-}
-
-/** The update an item needs for its reliability spelling, or null when it needs none. Pure. */
-export function reliabilitySpellingUpdate(item) {
-  const sys = item?.system ?? {};
+export function enumSpellingUpdate(item) {
+  const sys = item?._source?.system ?? item?.system ?? {};
+  const id = item?.id ?? item?._id;
   if (item?.type === "weapon") {
-    const canon = canonicalReliability(sys.reliability);
-    if (canon && canon !== sys.reliability) return { _id: item.id ?? item._id, "system.reliability": canon };
-    return null;
+    const fix = canonicalWeaponEnums(sys);
+    const keys = Object.keys(fix);
+    if (!keys.length) return null;
+    return { _id: id, ...Object.fromEntries(keys.map(k => [`system.${k}`, fix[k]])) };
   }
   if (item?.type === "cyberware") {
     const stored = sys.CyberWorkType?.Weapon?.reliability;
     if (stored === undefined || stored === null || stored === "") return null;
     const canon = canonicalReliability(stored);
-    if (canon && canon !== stored) return { _id: item.id ?? item._id, "system.CyberWorkType.Weapon.reliability": canon };
+    if (canon && canon !== stored) return { _id: id, "system.CyberWorkType.Weapon.reliability": canon };
   }
   return null;
 }
+/** ⏪ the first name this shipped under, kept for the API. */
+export const reliabilitySpellingUpdate = enumSpellingUpdate;
 
-/** Does this build's data predate the corrected packs? `_stats.systemVersion` < 1.1.0, or absent. Pure. */
+/**
+ * Does this item's data predate the corrected packs? Two tells, either is enough: `_stats.systemVersion`
+ * below 1.1.0, or no `_stats.createdTime` at all — a document written before the platform stamped
+ * creation times (the user's 2025 items carry none), and the stamp survives later edits where the
+ * version stamp does not (every edit rewrites `systemVersion` to the running build). Pure.
+ */
 export function predatesCorrectedPacks(stats) {
-  const v = String(stats?.systemVersion ?? "").trim();
+  if (!stats || !(Number(stats.createdTime) > 0)) return true;
+  const v = String(stats.systemVersion ?? "").trim();
   if (!v) return true;
   try { return !foundry.utils.isNewerVersion(v, "1.0.999"); } catch (_e) { return true; }
 }
 
-/** One key for "the same weapon by name": letters and digits only, lower-case. Pure. */
+/**
+ * One key for "the same weapon by name": letters and digits only, lower-case, with a trailing
+ * parenthetical dropped — "Sternmeyer Type 35 (left)" is the compendium's Sternmeyer Type 35. Pure.
+ */
 export function nameKey(name) {
-  return String(name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return String(name ?? "").replace(/\s*\([^)]*\)\s*$/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 /** The three fields the first-option rewrite could reach on a weapon, and how each is compared. */
@@ -108,7 +108,7 @@ export function suspectWeaponRows(weapons, packByKey) {
       const stored = w.system?.[field], expect = pack[field];
       if (String(expect ?? "").trim() === "") continue;
       if (same(stored, expect)) continue;
-      rows.push({ actorName: w.actorName, itemName: w.itemName, field: label, stored: String(stored ?? ""), pack: String(expect ?? "") });
+      rows.push({ actorName: w.actorName, itemName: w.itemName, uuid: String(w.uuid ?? ""), field, fieldLabel: label, stored: String(stored ?? ""), pack: String(expect ?? "") });
     }
   }
   return rows;
@@ -139,10 +139,10 @@ function ensureStamps(keys) {
  * header). Two stamps, the flesh-limb migration's shape: one before the sweep, one after it returns,
  * so a run that dies part-way is retried at the next load. GM-only. Returns counts, by value.
  */
-export async function migrateReliabilitySpelling({ force = false } = {}) {
+export async function migrateEnumSpellings({ force = false } = {}) {
   const out = { skipped: null, actors: 0, items: 0, worldItems: 0 };
   if (game.user?.isGM !== true) { out.skipped = "permission"; return out; }
-  const DONE = "reliabilitySpellingMigrated", COMPLETED = `${DONE}Completed`;
+  const DONE = "enumSpellingsMigrated", COMPLETED = `${DONE}Completed`;
   ensureStamps([DONE, COMPLETED]);
   if (!force && game.settings.get(SCOPE, DONE) && game.settings.get(SCOPE, COMPLETED)) { out.skipped = "done"; return out; }
   await game.settings.set(SCOPE, DONE, true);
@@ -150,7 +150,7 @@ export async function migrateReliabilitySpelling({ force = false } = {}) {
     for (const actor of worldActors()) {
       const updates = [];
       for (const item of actor.items ?? []) {
-        const u = reliabilitySpellingUpdate(item);
+        const u = enumSpellingUpdate(item);
         if (u) updates.push(u);
       }
       if (!updates.length) continue;
@@ -158,20 +158,22 @@ export async function migrateReliabilitySpelling({ force = false } = {}) {
       out.actors += 1; out.items += updates.length;
     }
     for (const item of game.items ?? []) {
-      const u = reliabilitySpellingUpdate(item);
+      const u = enumSpellingUpdate(item);
       if (!u) continue;
       const { _id, ...fields } = u;
       await item.update(fields, { render: false });
       out.worldItems += 1;
     }
     await game.settings.set(SCOPE, COMPLETED, true);
-    if (out.items || out.worldItems) console.log(`${SCOPE} | reliability spelling canonicalised on ${out.items} embedded + ${out.worldItems} world item(s).`);
+    if (out.items || out.worldItems) console.log(`${SCOPE} | enum spellings canonicalised on ${out.items} embedded + ${out.worldItems} world item(s).`);
   } catch (e) {
-    console.warn(`${SCOPE} | reliability-spelling migration failed part-way; it retries at the next load, or now via `
-      + `game.cpAugmented.migrations.reliabilitySpelling()`, e);
+    console.warn(`${SCOPE} | enum-spelling migration failed part-way; it retries at the next load, or now via `
+      + `game.cpAugmented.migrations.enumSpellings()`, e);
   }
   return out;
 }
+/** ⏪ the first name this shipped under, kept for the API. */
+export const migrateReliabilitySpelling = migrateEnumSpellings;
 
 /** The current compendium weapons, keyed by name — the base system's packs first, the module's after. */
 async function compendiumWeaponsByKey() {
@@ -209,17 +211,60 @@ export async function reviewSuspectWeapons({ force = false, weapons: given = nul
   for (const actor of given ? [] : worldActors()) {
     for (const item of actor.items ?? []) {
       if (item.type !== "weapon") continue;
-      weapons.push({ actorName: actor.name, itemName: item.name, stats: item._stats ?? item._source?._stats, system: item._source?.system ?? item.system });
+      weapons.push({ actorName: actor.name, itemName: item.name, uuid: item.uuid, stats: item._stats ?? item._source?._stats, system: item._source?.system ?? item.system });
     }
   }
   out.rows = suspectWeaponRows(weapons, packByKey);
   await game.settings.set(SCOPE, STAMP, true);
   if (!out.rows.length) return out;
   const content = await renderChatCard("data-review-notice.hbs", {
-    rows: out.rows.map(r => ({ ...r, fieldLabel: localize(r.field) })),
+    rows: out.rows.map(r => ({ ...r, fieldLabel: localize(r.fieldLabel) })),
     count: out.rows.length,
   });
   await ChatMessage.create({ content, whisper: getGMUserIds(), speaker: { alias: localize("DataReviewSpeaker") } });
   out.posted = true;
   return out;
+}
+
+/* ═══════════════════ The card's controls — the GM's hand, one row at a time ═══════════════════
+ *
+ * The notice names what code cannot know; these let the GM act on it without leaving chat. Each row
+ * carries its item's uuid, the field and the compendium value; APPLY writes exactly that one field on
+ * that one item (`item.update`), so a weapon the GM customised on purpose is skipped by not pressing
+ * its button. APPLY ALL presses every row still standing. GM-only twice: at render (the whisper) and
+ * here at the click, because a card is a door too. Bound through onGlobalClick so a popped-out chat
+ * window is heard (popout-compat.js).
+ */
+export async function applySuspectValue({ uuid, field, value }) {
+  if (game.user?.isGM !== true) return { skipped: "permission" };
+  const allowed = new Set(SUSPECT_FIELDS.map(f => f.field));
+  if (!allowed.has(String(field))) return { skipped: "field" };
+  const item = await fromUuid(String(uuid ?? ""));
+  if (!item || item.documentName !== "Item") return { skipped: "item" };
+  await item.update({ [`system.${field}`]: String(value ?? "") });
+  return { applied: true, name: item.name, field, value: String(value ?? "") };
+}
+
+export function registerDataReviewButtons() {
+  onGlobalClick(async (ev) => {
+    const one = ev.target?.closest?.(".cp-data-review-apply");
+    const all = ev.target?.closest?.(".cp-data-review-apply-all");
+    if (!one && !all) return;
+    ev.preventDefault();
+    if (game.user?.isGM !== true) return;
+    const card = (one ?? all).closest(".cp-data-review");
+    const targets = one ? [one] : [...(card?.querySelectorAll(".cp-data-review-apply:not(:disabled)") ?? [])];
+    for (const btn of targets) {
+      btn.disabled = true;
+      try {
+        const r = await applySuspectValue({ uuid: btn.dataset.uuid, field: btn.dataset.field, value: btn.dataset.value });
+        if (r.applied) btn.closest("tr")?.classList.add("cp-data-review-done");
+        else btn.disabled = false;
+      } catch (e) {
+        console.warn(`${SCOPE} | data review apply failed`, e);
+        btn.disabled = false;
+      }
+    }
+    if (all) all.disabled = true;
+  });
 }

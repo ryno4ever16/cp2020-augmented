@@ -5,12 +5,16 @@
     <h3>{{CPLocal "DataReviewTitle"}}</h3>
     <p>{{CPLocal "DataReviewIntro" count=count}}</p>
     <table class="cp-data-review-table">
-        <thead><tr><th>{{CPLocal "DataReviewActor"}}</th><th>{{CPLocal "DataReviewItem"}}</th><th>{{CPLocal "DataReviewField"}}</th><th>{{CPLocal "DataReviewStored"}}</th><th>{{CPLocal "DataReviewPack"}}</th></tr></thead>
+        <thead><tr><th>{{CPLocal "DataReviewActor"}}</th><th>{{CPLocal "DataReviewItem"}}</th><th>{{CPLocal "DataReviewField"}}</th><th>{{CPLocal "DataReviewStored"}}</th><th>{{CPLocal "DataReviewPack"}}</th><th></th></tr></thead>
         <tbody>
         {{#each rows as |r|}}
-            <tr><td>{{r.actorName}}</td><td>{{r.itemName}}</td><td>{{r.fieldLabel}}</td><td>{{r.stored}}</td><td>{{r.pack}}</td></tr>
+            <tr><td>{{r.actorName}}</td><td>{{r.itemName}}</td><td>{{r.fieldLabel}}</td><td>{{r.stored}}</td><td>{{r.pack}}</td>
+                <td><button type="button" class="cp-data-review-apply" data-uuid="{{r.uuid}}" data-field="{{r.field}}" data-value="{{r.pack}}" data-tooltip="{{CPLocal 'DataReviewApplyTip'}}">{{CPLocal "DataReviewApply"}}</button></td></tr>
         {{/each}}
         </tbody>
     </table>
+    <div class="cp-data-review-actions">
+        <button type="button" class="cp-data-review-apply-all" data-tooltip="{{CPLocal 'DataReviewApplyAllTip'}}">{{CPLocal "DataReviewApplyAll"}}</button>
+    </div>
     <p class="cp-data-review-foot">{{CPLocal "DataReviewFoot"}}</p>
 </div>

@@ -1,3 +1,4 @@
+import { canonicalReliability } from "./enum-spellings.js";
 /**
  * Special-mechanics item fields shared by `misc` gear and `cyberware`
  * (SPECIAL-MECHANICS-PROPOSAL.md — decision D1: extend the registered DataModels, the C4 pattern
@@ -358,6 +359,31 @@ export function makeMechAugmentedData(SystemModel) {
         mechDrug: mechDrugField(),
         mechTypedSP: mechTypedSPField()
       };
+    }
+
+    /**
+     * ⭐ THE CYBERWEAPON WORK-BLOCK'S RELIABILITY, READ AS THE ENUM (2026-09-19) — the same reading the
+     * weapon model gives its own (weapon-item-data.js): the base packs and the base defaults spell it
+     * "ST" / "st", the sheet select offers Standard, and a select with no blank option used to save
+     * the first option over it. Only a block that is PRESENT is touched (migrateData also runs on
+     * update changes); an unrecognised spelling is left as stored.
+     */
+    static migrateData(source) {
+      const w = (source?.system ?? source)?.CyberWorkType?.Weapon;
+      if (w && typeof w === "object" && w.reliability !== undefined) {
+        const c = canonicalReliability(w.reliability);
+        if (c !== null && c !== w.reliability) w.reliability = c;
+      }
+      return super.migrateData(source);
+    }
+
+    prepareBaseData() {
+      super.prepareBaseData?.();
+      const w = this.CyberWorkType?.Weapon;
+      if (w && typeof w === "object" && w.reliability !== undefined) {
+        const c = canonicalReliability(w.reliability);
+        if (c !== null && c !== w.reliability) w.reliability = c;
+      }
     }
   };
 }
