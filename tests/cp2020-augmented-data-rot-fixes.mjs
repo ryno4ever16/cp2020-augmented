@@ -152,7 +152,21 @@ try {
         created.push(it);
         return it;
       };
-      const rawOf = async (packId, id) => (await game.packs.get(packId).getDocument(id)).system;
+      // What the pack STORES, not what a document reads: since 2026-09-19 the weapon model canonicalises
+      // recognised spellings in `migrateData`, which runs on the raw data BEFORE it becomes a document's
+      // `_source` — so neither `doc.system` nor `doc._source` shows "undefined" / "very reliable" /
+      // "long coat" for a pack row that stores them. The compendium INDEX does: the server builds it
+      // from the stored records without constructing a document. The preconditions below are about the
+      // stored bytes the drag-in rule meets, so they read the index with the fields named. (Battery red
+      // 2026-09-20 during 1.2.6 prep: five preconditions, all this; `_source` was the first wrong fix.)
+      // ⚠ ORDER MATTERS: read a row's index entry BEFORE fetching its document. Rig-proven 2026-09-20:
+      // a fresh getIndex({fields}) returns the stored bytes, but a getDocument on that id overwrites
+      // the cached index entry with the migrated document's values ("common" read back as "Common").
+      const RAW_FIELDS = ["system.availability", "system.reliability", "system.concealability", "system.damage", "system.ap"];
+      const rawOf = async (packId, id) => {
+        const idx = await game.packs.get(packId).getIndex({ fields: RAW_FIELDS });
+        return idx.get(id)?.system ?? {};
+      };
 
       // 2a. placeholder availability → clean blank, with the shared stamp present.
       const rawGnome = await rawOf(PISTOLS_ADD, "0plHCzWiYgjpWuZj");
@@ -209,8 +223,14 @@ try {
       const mpk9 = await mkFrom(SMGS_ADD, "VCNhTdWnVoPTYYzi");
       ok('entry: the second free-text spelling ("jacket") also maps onto the enum',
         mpk9.system.concealability === "ConcealJacket", mpk9.system.concealability);
-      ok("scope: the rule does NOT reach this pack — its availability is left as authored",
-        mpk9.system.availability === "common", JSON.stringify(mpk9.system.availability));
+      // Scope. The old leg read the imported copy's availability as the authored "common" and called
+      // that "the rule did not reach this pack". Two things retired it (2026-09-20): the model now reads
+      // every copy's spelling as the enum, so "Common" is what any copy says; and a per-item ENTRY does
+      // reach this pack (the MPK-9 concealability leg above), so the correction stamp cannot separate
+      // rule from entry. The rule's refusal of this pack is pinned by the direct-call negative in §3;
+      // what remains to say here is that the copy's availability is the model's read, not a rewrite.
+      ok("scope: an out-of-rule pack's availability is the model's read of the authored row (the rule's refusal is the §3 direct-call negative)",
+        mpk9.system.availability === "Common", JSON.stringify(mpk9.system.availability));
 
       /* ── 3. NEGATIVES ──────────────────────────────────────────────────────────────────────── */
       // 3a. a clean core-pack item imports byte-identical — no rule bleed outside the two packs.

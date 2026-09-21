@@ -41,6 +41,9 @@
  *   FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-data-conformance.mjs
  */
 import { chromium } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 const BASE = process.env.FVTT_URL || "http://localhost:30004";
 const GM_PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
 
@@ -172,6 +175,18 @@ const OPEN_LITERALS = { "armor|source|undefined": 4 };
 /* The 61 ratified alias spellings (CALIBER-REGISTRY-PROPOSAL.md §7a). A leg asserts every one still
  * resolves, so a revert of the alias block turns this lint red rather than silently un-pricing 432
  * weapons. Kept as the spelling list only — the target ids live in module/lookups.js. */
+/* MODULE PACK INVENTORY (added 2026-09-20). The lint had no inventory check: "enumeration closes" is
+ * satisfied by an EMPTY pack, and the document count was an INFO line. The 09-20 hollow-pack incident
+ * (memory `earmark-rig-hollow-module-packs`: a root robocopy /MIR purged every rig pack's CURRENT; two
+ * packs came back empty at the next relaunch) was caught only because a book-value pin happened to fetch
+ * one vehicle-weapons document. This leg turns that luck into a check: every module pack's live index
+ * must hold exactly as many documents as its `src/packs/<name>` source directory. It also reds when a
+ * shipped/seeded pack has fallen behind its sources (the release skill's stale-pack step). */
+const SRC_PACKS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "packs");
+const EXPECTED_PACK_COUNTS = Object.fromEntries(fs.readdirSync(SRC_PACKS)
+  .filter((d) => fs.statSync(path.join(SRC_PACKS, d)).isDirectory())
+  .map((d) => [`cp2020-augmented.${d}`, fs.readdirSync(path.join(SRC_PACKS, d)).filter((f) => f.endsWith(".json")).length]));
+
 const RATIFIED_ALIAS_SPELLINGS = [
   "7.62N", "7.62C", "7.62E", "7.62x37 mm", "7.62mm EAE cased", "7.62mm ETU", "7.62mm caseless",
   "7.62x54R", "7.62 mm SP-3", "7.62 mm SP-4",
@@ -361,6 +376,18 @@ try {
         packs.length > 0 && packRead === packs.length && readFailures.length === 0,
         `read failures: ${JSON.stringify(readFailures)}`);
 
+      /* module pack inventory: index size == source count, per pack (an empty pack "reads" fine above) */
+      const inventory = [];
+      for (const [id, want] of Object.entries(AL.EXPECTED_PACK_COUNTS)) {
+        const p = game.packs.get(id);
+        const got = p ? (await p.getIndex()).size : -1;
+        inventory.push({ id, want, got });
+      }
+      const short = inventory.filter((r) => r.got !== r.want);
+      out.info.inventory = inventory;
+      ok(`module pack inventory: every module pack holds exactly its source count (${inventory.length} packs, ${inventory.reduce((n, r) => n + r.want, 0)} documents expected)`,
+        inventory.length > 0 && short.length === 0, `off: ${JSON.stringify(short)}`);
+
       /* corrections-view fidelity — prove the merge above equals what a real create produces */
       const mkFrom = async (packId, id) => {
         const doc = await game.packs.get(packId).getDocument(id);
@@ -458,7 +485,7 @@ try {
       out.leftover = game.items.filter(i => created.some(c => c.id === i.id)).length;
     }
     return out;
-  }, { OPEN_AMMO, OPEN_DAMAGE, OPEN_ENUM, OPEN_LITERALS, RATIFIED_ALIAS_SPELLINGS });
+  }, { OPEN_AMMO, OPEN_DAMAGE, OPEN_ENUM, OPEN_LITERALS, RATIFIED_ALIAS_SPELLINGS, EXPECTED_PACK_COUNTS });
 
   for (const c of R.checks) {
     if (!c.pass) failures++;

@@ -347,6 +347,13 @@ const MANIFEST = [
   ["module/item/item-sheet.js:2281", "_cpActivateAmmoControls", "item-sheet:ammo", "change", "input[value=\"None\"]", "", null, null],
   ["module/item/item-sheet.js:2365", "_cpActivateAmmoControls", "item-sheet:ammo", "click", ".cp-ammo-qty-lock", "", null, null],
   ["module/item/item-sheet.js:2365", "_cpActivateAmmoControls", "item-sheet:ammo", "click", ".cp-ammo-buy-box", "", null, null],
+  // Added 2026-09-20 (1.2.6, over-time rows on the weapon sheet): the Add control renders on an editable
+  // weapon sheet with fewer than two rows; the per-row controls render only once a row exists.
+  ["module/item/item-sheet.js:2313", "_cpActivateWeaponOverTimeControls", "item-sheet:any", "click", ".cp-ot-add", "", null, null],
+  ["module/item/item-sheet.js:2313", "_cpActivateWeaponOverTimeControls", "item-sheet:any", "click", ".cp-ot-remove", "index", "renders only for an existing over-time row; the fixture weapon carries none", null],
+  ["module/item/item-sheet.js:2332", "_cpActivateWeaponOverTimeControls", "item-sheet:any", "change", "select.cp-ot-type", "", "renders only for an existing over-time row; the fixture weapon carries none", null],
+  ["module/item/item-sheet.js:2332", "_cpActivateWeaponOverTimeControls", "item-sheet:any", "change", ".cp-ot-row", "", "renders only for an existing over-time row; the fixture weapon carries none", null],
+  ["module/item/item-sheet.js:2347", "_cpActivateWeaponOverTimeControls", "item-sheet:any", "input", "input.cp-formula-field", "", "renders only inside an over-time row; the fixture weapon carries none", null],
   ["module/item/item-sheet.js:2365", "_cpActivateAmmoControls", "item-sheet:ammo", "click", ".ammo-ms-trigger", "", null, null],
   ["module/item/item-sheet.js:2365", "_cpActivateAmmoControls", "item-sheet:ammo", "click", ".ammo-ms", "", null, null],
   ["module/item/item-sheet.js:2493", "_cpSetupNotesActions", "item-sheet:any", "click", "[data-action=\"notes-edit\"]", "", null, null],

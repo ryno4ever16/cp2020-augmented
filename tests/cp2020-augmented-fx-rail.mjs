@@ -5583,7 +5583,9 @@ try {
     ok("live: the scene is drained before the cap is driven (setup, negative)",
       fx.liveGroundFires().length === 0, String(fx.liveGroundFires().length));
     const bursts = Math.ceil(fx.GROUND_FIRE.maxLive / fx.GROUND_FIRE.maxPerPayload) + 2;
+    let firesBeforeLast = 0;   // the engine's creation count when the NEWEST burst is fired (see below)
     for (let i = 0; i < bursts; i++) {
+      if (i === bursts - 1) firesBeforeLast = spawned.filter(isFire).length;
       await fx.fxWeaponFired(payload({
         modifier: "api", shotsFired: 4, shotsHit: 4,
         areaDamages: { Torso: [{ damage: i + 1 }, { damage: 3 }, { damage: 2 }, { damage: 1 }] },
@@ -5620,9 +5622,19 @@ try {
     ok("live: the scene cap holds across bursts — the peak never exceeds it",
       peakLive <= fx.GROUND_FIRE.maxLive,
       `peak ${peakLive} against a cap of ${fx.GROUND_FIRE.maxLive}`);
-    ok("live: …and the NEWEST burst's flames were drawn rather than refused by the cap",
-      peakLive >= fx.GROUND_FIRE.maxPerPayload,
-      `peak ${peakLive} vs one payload's ${fx.GROUND_FIRE.maxPerPayload}`);
+    // ⛔ "THE NEWEST WERE DRAWN" IS READ FROM THE ENGINE'S CREATION HOOK, NOT FROM A CANVAS SAMPLE
+    // (rewritten 2026-09-20, the third repair of this leg: it read `peak 3 vs one payload's 4` under
+    // the full battery and 4 alone). The peak of a 250 ms sample of what is ALIVE is a property of
+    // Sequencer's creation latency under load — pending placements count against the cap and evict
+    // before they exist on the canvas — so the sample under-reads exactly when the rig is busy. What
+    // the leg exists to prove is that the cap refused nothing of the newest burst: `createSequencerEffect`
+    // fires once per created flame, so at least a full payload's worth of creations after the newest
+    // burst was fired (polled to the bound) is the claim, and the total-count leg below closes it.
+    for (let i = 0; i < 40 && spawned.filter(isFire).length < bursts * fx.GROUND_FIRE.maxPerPayload; i++) await sleep(250);
+    const firesAfterLast = spawned.filter(isFire).length - firesBeforeLast;
+    ok("live: …and the NEWEST burst's flames were created rather than refused by the cap (engine creation hook)",
+      firesAfterLast >= fx.GROUND_FIRE.maxPerPayload,
+      `${firesAfterLast} flame creations after the newest burst fired (needs ${fx.GROUND_FIRE.maxPerPayload}); peak alive sampled ${peakLive}`);
     ok("live: every burst queued its full placement — the cap evicts, it does not refuse",
       spawned.filter(isFire).length === bursts * fx.GROUND_FIRE.maxPerPayload,
       `${bursts} bursts queued ${spawned.filter(isFire).length} flames (peak alive ${peakLive}, settled ${liveNow})`);
@@ -7699,15 +7711,25 @@ try {
     ok("impact audio source: the core SDP site keeps its penetration gate",
       /if \(res\.through > 0\) _sdpHitSound\(fxSilent\)/.test(vehDmg),
       "core path gated on res.through");
-    // The two remaining hooks-side declarations are the applies that are NOT impacts (a burn tick, an
-    // accumulated-damage conversion). The two that came off a shot went with the retired auto-apply
-    // route and its relay mode (2026-08-14); the shots that still reach an apply seam declare it at the
-    // vehicle sites and through routeWeaponFiredToVehicle, both asserted here.
-    ok("impact audio source: every flow that came off a SHOT declares the rail already sounded it",
-      (dmgHooks.match(/fxSilent:\s+true/g) ?? []).length === 2
+    // THE INVARIANT, not a count (rewritten 2026-09-20 after the leg reddened on a correct change: the
+    // over-time acid tick added a third silent apply beside the burn tick and the accumulated-damage
+    // conversion, and the old leg pinned "exactly two"). What has to hold: EVERY applyLocationDamage
+    // call the hooks file makes says whether the rail already sounded it — `fxSilent: true` for an
+    // apply that is not an impact, the computed flag for one that came off a shot. A call site that
+    // omits the field would double the rail's impact sound, and that is the only thing worth failing on.
+    // The vehicle-side sites and the vehicle route keep their explicit declarations.
+    const applySites = [];
+    for (let i = dmgHooks.indexOf("applyLocationDamage({"); i !== -1; i = dmgHooks.indexOf("applyLocationDamage({", i + 1)) {
+      let depth = 0, j = i + "applyLocationDamage(".length;
+      for (; j < dmgHooks.length; j++) { if (dmgHooks[j] === "{") depth++; else if (dmgHooks[j] === "}") { depth--; if (depth === 0) break; } }
+      applySites.push(dmgHooks.slice(i, j + 1));
+    }
+    const undeclared = applySites.filter(s => !/fxSilent\s*:/.test(s));
+    ok(`impact audio source: every apply seam in the hooks declares whether the rail already sounded it (${applySites.length} sites)`,
+      applySites.length >= 3 && undeclared.length === 0
       && (vehWpn.match(/fxSilent: true \}\);/g) ?? []).length === 2
       && /routeWeaponFiredToVehicle\(\{ areaDamages, ap, fxSilent \}/.test(dmgApp),
-      JSON.stringify({ hooks: (dmgHooks.match(/fxSilent:\s+true/g) ?? []).length,
+      JSON.stringify({ hooksSites: applySites.length, undeclared: undeclared.map(s => s.slice(0, 80)),
                        vehicle: (vehWpn.match(/fxSilent: true \}\);/g) ?? []).length }));
     // ⭐ THE LEG SITS ON THE SEAM EVERY PERSONNEL APPLY PASSES THROUGH. The hand-applied damage dialog
     // calls applyLocationDamage DIRECTLY and never touches applyAreaDamages, so a leg one level up

@@ -601,25 +601,35 @@ check("G LEGACY: with a single handle present it resolves to that sole handle",
 const tips = await gm.page.evaluate(async ({ itemA, itemC, SCOPE }) => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const D = await import(`/modules/${SCOPE}/module/vehicle/vehicle-deploy-request.js`);
-  const read = (root) => ({
+  // Exact `for` targets, and a bounded poll for the titles (2026-09-20: the full battery read the DEC
+  // label's title as empty ONCE while the ACC label beside it read fine; alone, the suite passed at
+  // 250 chars. The substring regexes could match any label whose `for` merely contains "acc"/"dec",
+  // and the single 800 ms sleep is a race under load — both replaced; the assertion is unchanged.)
+  const readOnce = (root) => ({
     accBtn: root.querySelector(".field.accel")?.getAttribute("title") ?? "",
     decBtn: root.querySelector(".field.decel")?.getAttribute("title") ?? "",
-    accLabel: [...root.querySelectorAll("label")].find(l => /acc/i.test(l.getAttribute("for") ?? ""))?.getAttribute("title") ?? "",
-    decLabel: [...root.querySelectorAll("label")].find(l => /dec/i.test(l.getAttribute("for") ?? ""))?.getAttribute("title") ?? "",
+    // the actor sheet's fields are system.acc/dec; the item sheet's are system.speed.acceleration/deceleration
+    accLabel: root.querySelector('label[for="system.acc"], label[for="system.speed.acceleration"]')?.getAttribute("title") ?? "",
+    decLabel: root.querySelector('label[for="system.dec"], label[for="system.speed.deceleration"]')?.getAttribute("title") ?? "",
   });
+  const read = async (root) => {
+    let r = readOnce(root);
+    for (let i = 0; i < 20 && !(r.accLabel && r.decLabel && r.accBtn && r.decBtn); i++) { await sleep(150); r = readOnce(root); }
+    return r;
+  };
   const itA = await fromUuid(itemA);
   await itA.sheet.render(true); await sleep(800);
-  const itemTips = read(itA.sheet.element);
+  const itemTips = await read(itA.sheet.element);
   itemTips.shotId = itA.sheet.id;
 
   const itC = await fromUuid(itemC);
   await itC.sheet.render(true); await sleep(800);
-  const fallbackTips = read(itC.sheet.element);
+  const fallbackTips = await read(itC.sheet.element);
   await itC.sheet.close();
 
   const actor = await D.createVehicleActorFromItem(itA, { name: "__PWL__TipCar", requesterUserId: game.user.id });
   await actor.sheet.render(true); await sleep(900);
-  const actorTips = read(actor.sheet.element);
+  const actorTips = await read(actor.sheet.element);
   actorTips.shotId = actor.sheet.id;
   actorTips.acc = actor.system.acc;
   actorTips.dec = actor.system.dec;

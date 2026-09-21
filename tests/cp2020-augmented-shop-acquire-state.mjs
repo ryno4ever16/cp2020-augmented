@@ -488,6 +488,10 @@ try {
     JSON.stringify(B.failureCards[0]?.whisper ?? []));
 
   /* ══ SECTION C — buyer precedence ═══════════════════════════════════════════════════════════════ */
+  await gm.evaluate(() => {
+    if (!game.settings.settings.has("cp2020-augmented.__pwAcqParked"))
+      game.settings.register("cp2020-augmented", "__pwAcqParked", { scope: "world", config: false, type: String, default: "[]" });
+  });
   const Csetup = await gm.evaluate(async () => {
     const mk = (name, type) => Actor.create({ name, type, system: { eurobucks: 1000 },
       flags: { "cp2020-augmented": { __pwtest: true } } });
@@ -501,6 +505,20 @@ try {
     const npc = await mk("__PW__AcqNpc", "npc");
     const OWNER = CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
     for (const a of [assigned, incidental]) await a.update({ [`ownership.${player.id}`]: OWNER });
+    // C2 needs "exactly one owned actor". That is a PRECONDITION THIS SUITE ESTABLISHES (2026-09-20:
+    // the rig world carried a standing "⚔ Generic Combatant (multi-action)" owned by the player and
+    // the leg read two owned actors — a world-state dependency, not a product fact). Park the player's
+    // ownership of every other character/npc for the run; the finally block below restores it, by
+    // the prior per-user level (or by removing the key when none was set).
+    const parked = [];
+    for (const a of game.actors) {
+      if (a.id === assigned.id || a.id === incidental.id) continue;
+      if (a.type !== "character" && a.type !== "npc") continue;
+      if (!a.testUserPermission(player, "OWNER")) continue;
+      parked.push({ id: a.id, prior: a.ownership?.[player.id] ?? null });
+      await a.update({ [`ownership.${player.id}`]: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE });
+    }
+    await game.settings.set("cp2020-augmented", "__pwAcqParked", JSON.stringify(parked)).catch(() => {});
     const prevChar = player.character?.id ?? null;
     await player.update({ character: assigned.id });
 
@@ -669,8 +687,19 @@ try {
     await gm?.evaluate(async () => {
       // Setup mode is client state; leave it off however this run ended.
       try { (await import("/modules/cp2020-augmented/module/shop/setup-mode.js")).setShopSetupMode(false); } catch { /* module state is best-effort */ }
-      const player = game.users.find(u => !u.isGM);
+      const player = game.users.find(u => !u.isGM && /test user 1/i.test(u.name)) ?? game.users.find(u => !u.isGM);
       await player?.update({ character: null }).catch(() => {});
+      // Give back the ownership the setup parked (see Csetup): prior level, or the key removed.
+      try {
+        if (!game.settings.settings.has("cp2020-augmented.__pwAcqParked"))
+          game.settings.register("cp2020-augmented", "__pwAcqParked", { scope: "world", config: false, type: String, default: "[]" });
+        const parked = JSON.parse(game.settings.get("cp2020-augmented", "__pwAcqParked") || "[]");
+        for (const { id, prior } of parked) {
+          const a = game.actors.get(id); if (!a || !player) continue;
+          await a.update(prior === null ? { [`ownership.-=${player.id}`]: null } : { [`ownership.${player.id}`]: prior }).catch(() => {});
+        }
+        await game.settings.set("cp2020-augmented", "__pwAcqParked", "[]").catch(() => {});
+      } catch { /* restore is best-effort */ }
       const scene = game.scenes.getName("__PW__AcqScene");
       const prev = game.scenes.find(s => s.id !== scene?.id);
       if (prev && scene?.active) await prev.activate().catch(() => {});

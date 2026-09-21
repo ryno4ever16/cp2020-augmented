@@ -165,6 +165,12 @@ const EXCLUDED = {
   fleshLimbStatusMigrated: "migration stamps: flipping re-fires or suppresses one-time world sweeps (document writes); restoring wrong re-runs a migration",
   radZonesMigrated: "migration stamps: flipping re-fires or suppresses one-time world sweeps (document writes); restoring wrong re-runs a migration",
   fleshLimbStatusMigratedCompleted: "migration stamps: the companion 'sweep finished' record; clearing it makes the next load re-run that sweep",
+  // 2026-09-20 (1.2.6, data-review.js): the enum-spelling repair is a one-time world sweep with the same
+  // attempted/finished stamp pair as the two above; the review card's dismissal is a state record the
+  // GM writes with "Don't show again" (the Data review settings menu re-posts regardless of it).
+  enumSpellingsMigrated: "migration stamps: flipping re-fires or suppresses one-time world sweeps (document writes); restoring wrong re-runs a migration",
+  enumSpellingsMigratedCompleted: "migration stamps: the companion 'sweep finished' record; clearing it makes the next load re-run that sweep",
+  weaponReviewDismissed: "internal state record written by the review card's 'Don't show again' button, not a feature switch",
   radZonesMigratedCompleted: "migration stamps: the companion 'sweep finished' record; clearing it makes the next load re-run that sweep",
   // ⚠ Classified 2026-08-20 after §1 went red on them. They are the vehicle hull/frame sweep's stamp
   // pair (module/vehicle/vehicle-hull-migration.js), registered config:false and never added here when
