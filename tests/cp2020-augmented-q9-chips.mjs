@@ -102,8 +102,15 @@ const r = await p.evaluate(async () => {
       mechRollMods: { enabled: true, attackMod: 3, dualWieldOnly: true, auto: true } } }]);
   const [gun] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__AmbiPistol", type: "weapon",
     system: { weaponType: "Pistol", attackType: "SemiAuto", range: 50, shots: 10, shotsLeft: 10, rof: 1, accuracy: 0, attackSkill: "" } }]);
+  // 2026-09-27 (battery red, 1 in ~10): a ranged FUMBLE reshapes the card so the last-numeric read
+  // returns null, and the fixed sleeps raced the dialog and the card under load. Fumble table stood
+  // down for this section (restored below), dialog and card POLLED to a bound.
+  const wasFumbleTable = game.settings.get("cyberpunk2020", "fumbleTableEnabled");
+  if (wasFumbleTable) await game.settings.set("cyberpunk2020", "fumbleTableEnabled", false);
+  const untilDialog = async (d) => { for (let i = 0; i < 40 && !d.element?.querySelector("button.fire"); i++) await sleep(150); };
+  const newCard = async (beforeIds) => { for (let i = 0; i < 60; i++) { const m = game.messages.contents.filter(x => !beforeIds.has(x.id)).at(-1); if (m && lastNumericInCard(m) !== null) return m; await sleep(150); } return game.messages.contents.filter(x => !beforeIds.has(x.id)).at(-1) ?? null; };
   const fdlg = sheet._cpOpenWeaponAttackDialog(gun);
-  await sleep(900);
+  await untilDialog(fdlg);
   const ambiRowSel = `input[name="gearMod_${ambi.id}"]`;
   const ambiRow = fdlg.element?.querySelector(ambiRowSel);
   const ambiField = ambiRow?.closest(".field");
@@ -119,18 +126,17 @@ const r = await p.evaluate(async () => {
   // fire with dual wield on → extraMod folds the +3 (the last numeric card term); dualWield −3 is separate
   before = new Set(game.messages.contents.map(m => m.id));
   fdlg.element?.querySelector("button.fire")?.click();
-  await sleep(1500);
-  const ambiMsg = game.messages.contents.filter(m => !before.has(m.id)).at(-1);
+  const ambiMsg = await newCard(before);
   out.ambiFold = { lastTerm: ambiMsg ? lastNumericInCard(ambiMsg) : null };   // extraMod = +3
 
   // fire again with dual wield OFF → the ambi provider is excluded (extraMod 0)
   const fdlg2 = sheet._cpOpenWeaponAttackDialog(gun);
-  await sleep(800);
+  await untilDialog(fdlg2);
   before = new Set(game.messages.contents.map(m => m.id));
   fdlg2.element?.querySelector("button.fire")?.click();
-  await sleep(1500);
-  const ambiMsg2 = game.messages.contents.filter(m => !before.has(m.id)).at(-1);
+  const ambiMsg2 = await newCard(before);
   out.ambiOffFold = { lastTerm: ambiMsg2 ? lastNumericInCard(ambiMsg2) : null };   // 0
+  if (wasFumbleTable) await game.settings.set("cyberpunk2020", "fumbleTableEnabled", true).catch(() => {});
 
   await actor.delete().catch(() => {});
   return out;
