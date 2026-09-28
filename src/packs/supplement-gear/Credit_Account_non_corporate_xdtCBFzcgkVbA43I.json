@@ -29,7 +29,8 @@
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
         "dirty": true
-      }
+      },
+      "serviceMode": "recurring"
     }
   },
   "_stats": {},

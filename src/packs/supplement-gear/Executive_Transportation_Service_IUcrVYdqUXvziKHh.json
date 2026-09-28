@@ -35,7 +35,8 @@
         "weightSkimNotReviewed": true,
         "ledger": "AUDIT-WALK-2026-07",
         "dirty": true
-      }
+      },
+      "serviceMode": "oneoff"
     }
   },
   "_stats": {},

@@ -2185,7 +2185,7 @@
     "ServiceDeleteTip": "Cancel / remove this service.",
     "ServiceEditTip": "Edit this service.",
     "ServiceMode": "Type",
-    "ServiceModeAuto": "Auto (infer)",
+    "ServiceModeAuto": "Not set (treated as gear)",
     "ServiceModeGear": "Gear",
     "ServiceModeOneoff": "One-off service",
     "ServiceModeRecurring": "Recurring service",
