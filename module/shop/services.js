@@ -1,6 +1,7 @@
 import { canShop } from "../settings.js";
 import { localize } from "../utils.js";
 import { isShopSetupMode } from "./setup-mode.js";
+import { correctedServiceMode } from "../data-corrections.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -55,81 +56,25 @@ export function servicePeriodOf(item) {
  * classified as services. All of that is gone. What declares a service now, in order:
  *   1. the item's own flag (`serviceMode`) — set by the GM on the item sheet, by the Services tab's
  *      "+" button, by a shop purchase (buyItem's flagPatch), or authored into a module pack source;
- *   2. the base system's Rentals & Services compendium, row by row (`RENTALS_SERVICE_MODES` below,
- *      keyed by the row's `_id`, reached through the document's pack or, for an embedded copy, the
- *      `_stats.compendiumSource` core stamps on drag-in and purchase). The pack IS the book's services
- *      list, so membership in it is the declaration; a row not in the table is a one-off (the safer,
- *      non-persistent class), never gear;
+ *   2. the corrections registry (`module/data-corrections.js`, THE place for facts about the base
+ *      system's rows we cannot edit): the Rentals & Services list is declared there row by row, and an
+ *      entry-less row of that pack is a one-off, never gear — read live by `correctedServiceMode`
+ *      through the document's pack or an embedded copy's `_stats.compendiumSource`;
  *   3. otherwise gear.
+ * No table lives in this file: our rows declare in their pack sources, the base rows in the registry.
  */
-const RENTALS_PACK = "cyberpunk2020.rentalandservices";
-
-/**
- * The base Rentals & Services pack, classified row by row (Core p.63 list; 40 rows at system 1.1.1).
- * Recurring = billed per period (housing, phone/utility/cable, plans and accounts, the monthly food
- * budgets); one-off = paid per use (rides, calls, a night's lodging, a clinic visit, a day in hospital).
- * The period rides with a recurring row where the book's isn't the default month.
- */
-export const RENTALS_SERVICE_MODES = Object.freeze({
-  // housing — monthly
-  oN5HJZeZ4Ef4MMTY: "recurring", Odj2rS5kKKejVWVr: "recurring", a1PfGEaWAmwhvKIg: "recurring", fe2JHml3p3rOS9M3: "recurring",   // Appartment/Condo ×4
-  LJ2N1CRa9q5UJjor: "recurring", JiAMrymDUuqzXH2G: "recurring", "8kMNCMooW7gID3Ki": "recurring", L9oN4cVPnGTf58fc: "recurring", // House ×4
-  // plans, accounts, lines — monthly
-  "3xXDt7msEp0rodwB": "recurring",   // Cell Phone Service
-  LdrNwR79wlxSid09: "recurring",     // Standard Phone Service
-  BUCT1O4inYF7AtU5: "recurring",     // Utilities
-  g1HLhgxSH0kjlv19: "recurring",     // Cable TV
-  "1wSczzdjOpEZHUG4": "recurring",   // Health Plan
-  nnzTwmtbnwsuT5LH: "recurring",     // Trauma Team Acct
-  "1MUFsLYenBNcW0VV": "recurring",   // CredChip Account
-  // food budgets — monthly (Core p.63 prices them per month)
-  nEYfvmgrG2BneL9F: "recurring",     // Kibble
-  "3DKBHvIJRMQ7nz7O": "recurring",   // Generic Prepak
-  kby6H8nselTicIdq: "recurring",     // Good Prepak
-  sJhbh46gnrrx9NL0: "recurring",     // Fresh Food
-  // per use
-  "97xCt0Z74g613nHN": "oneoff",      // Taxi
-  HDJMDrJwwyd7W4HF: "oneoff",        // AV-Taxi
-  "2O2PlXxgAJTYbHcr": "oneoff",      // PayPhone Call
-  asfDWfOJkdyTckyw: "oneoff",        // Data Term Use
-  utDVxkOftG5ei4iA: "oneoff",        // Clinic Visit
-  RfWVJIgFgoGgZzeo: "oneoff",        // Day in Hospital
-  KdUSPc9jKlxZBYTz: "oneoff",        // Day in Intensive Care
-  qyyD4zTJnXrmsIqF: "oneoff",        // Clone Limb Replacement
-  ww5M1GUNlFxGQ4Ki: "oneoff",        // Mag Lev Chit
-  TcE1Dce0LumTnmMt: "oneoff",        // Fastcharge
-  RjIQ1XyKF8rjAF6R: "oneoff",        // Cab Hailer Activationfee
-  UTQE3c98erdd4Z4z: "oneoff",        // CHOOH² (fuel, per fill)
-  z2f2TvELHm3t1YCs: "oneoff",        // Air
-  ayf8BevRGNfVDW43: "oneoff", UMgA64Ze5RUNqVkC: "oneoff", ox0PovQuEYpxgXnj: "oneoff", kzxa75xkXUJtfvnJ: "oneoff", // Hotel Room ×4 (per night)
-  MV0opo466kDttaku: "oneoff", "7ynv1iRjCVS6tKqT": "oneoff", c2NLex4kqxhj5c88: "oneoff", YEsC8bdEgXNZsvYc: "oneoff", // Coffin ×4 (per night)
-});
-
-/**
- * Which base-pack row an item IS: `{pack, id}` for a compendium document, or for an embedded copy the
- * row it was made from (`_stats.compendiumSource`, "Compendium.<pack>.Item.<id>"). Null when neither.
- */
-export function compendiumRowOf(item) {
-  const pack = item?.pack ?? item?.collection?.metadata?.id ?? null;
-  const id = item?.id ?? item?._id ?? null;
-  if (pack && id && !item?.parent) return { pack: String(pack), id: String(id) };
-  const src = String(item?._stats?.compendiumSource ?? item?._source?._stats?.compendiumSource ?? "");
-  const m = /^Compendium\.([^.]+\.[^.]+)\.Item\.([A-Za-z0-9]+)$/.exec(src);
-  return m ? { pack: m[1], id: m[2] } : null;
-}
 
 /**
  * Classify a (catalog or embedded) item as "gear" | "recurring" | "oneoff" — by declaration only.
  * @param {Item|object} item
- * @param {string} [_packName]  kept for the callers' signature; the pack is read off the document
+ * @param {string} [_packName]  kept for the callers' signature; origin is read off the document
  * @returns {"gear"|"recurring"|"oneoff"}
  */
 export function classifyService(item, _packName = "") {
   const mode = serviceModeOf(item);
   if (SERVICE_MODES.includes(mode)) return mode;   // the item's own declaration wins
-  const row = compendiumRowOf(item);
-  if (row?.pack === RENTALS_PACK) return RENTALS_SERVICE_MODES[row.id] ?? "oneoff";
-  return "gear";
+  const declared = correctedServiceMode(item);
+  return declared || "gear";
 }
 
 /**

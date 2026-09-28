@@ -40,6 +40,7 @@ const r = await p.evaluate(async () => {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const svc = await import("/modules/cp2020-augmented/module/shop/services.js");
   const purchase = await import("/modules/cp2020-augmented/module/shop/purchase.js");
+  const DC = await import("/modules/cp2020-augmented/module/data-corrections.js");
   const SCOPE = "cp2020-augmented";
   const FIX = ["__PW__SVC Headphones", "__PW__SVC Cell Phone (inert)", "__PW__SVC Power Cable"];
   for (const a of game.actors.filter(a => a.name?.startsWith("__PW__SVC"))) await a.delete().catch(() => {});
@@ -83,12 +84,12 @@ const r = await p.evaluate(async () => {
     const idx = await rent.getIndex();
     const rentDoc = async (n) => { const e = idx.find(x => x.name === n); return e ? rent.getDocument(e._id) : null; };
     const cps = await rentDoc("Cell Phone Service"), taxi = await rentDoc("Taxi"), house = await rentDoc("House – Moderate Zone"), kibble = await rentDoc("Kibble");
-    out.c = { cellPhoneService: cps && svc.classifyService(cps), taxi: taxi && svc.classifyService(taxi), house: house && svc.classifyService(house), kibble: kibble && svc.classifyService(kibble), rowOf: cps && svc.compendiumRowOf(cps) };
-    out.cTableCoversPack = idx.filter(e => !(e._id in svc.RENTALS_SERVICE_MODES)).map(e => e.name);
+    out.c = { cellPhoneService: cps && svc.classifyService(cps), taxi: taxi && svc.classifyService(taxi), house: house && svc.classifyService(house), kibble: kibble && svc.classifyService(kibble), rowOf: cps && DC.parseCompendiumSource(cps.uuid) };
+    out.cTableCoversPack = idx.filter(e => !["recurring", "oneoff"].includes(DC.correctionFor("cyberpunk2020.rentalandservices", e._id)?.serviceMode)).map(e => e.name);
 
     /* D - an embedded copy with NO flag classifies by its compendiumSource */
     const [copy] = await actor.createEmbeddedDocuments("Item", [game.items.fromCompendium(cps)]);
-    out.d = { flag: svc.serviceModeOf(copy), source: String(copy._stats?.compendiumSource ?? ""), cls: svc.classifyService(copy) };
+    out.d = { flag: svc.serviceModeOf(copy), source: String(copy._stats?.compendiumSource ?? ""), cls: svc.classifyService(copy), stamped: DC.isCorrectionApplied(copy) };
     lists = await sheetLists();
     out.dSheet = { onServices: lists.services.includes("Cell Phone Service") };
 
@@ -134,10 +135,11 @@ ok("A tab membership: neither homebrew item is on the Services tab, and the head
 ok("B classification: base 'Cellular Phone' and 'Cab Hailer' rows are gear", r.b?.cellularPhone === "gear" && r.b?.cabHailer === "gear", JSON.stringify(r.b));
 ok("B purchase: buying the Cab Hailer CREATES the item and charges its price", r.bBuy?.itemsAdded === 1 && r.bBuy?.gotCabHailer === true && r.bBuy?.charged === 50, JSON.stringify(r.bBuy));
 ok("C Rentals rows by declaration: Cell Phone Service recurring / Taxi one-off / House recurring / Kibble recurring", r.c?.cellPhoneService === "recurring" && r.c?.taxi === "oneoff" && r.c?.house === "recurring" && r.c?.kibble === "recurring", JSON.stringify(r.c));
-ok("C the row lookup reads the pack and id off the compendium document", r.c?.rowOf?.pack === "cyberpunk2020.rentalandservices" && typeof r.c?.rowOf?.id === "string", JSON.stringify(r.c?.rowOf));
-ok("C the table covers every row of the installed Rentals pack (none fall to the one-off default)", Array.isArray(r.cTableCoversPack) && r.cTableCoversPack.length === 0, JSON.stringify(r.cTableCoversPack));
+ok("C the origin parser reads the pack and id off the compendium document", r.c?.rowOf?.packId === "cyberpunk2020.rentalandservices" && typeof r.c?.rowOf?.itemId === "string", JSON.stringify(r.c?.rowOf));
+ok("C the corrections registry declares every row of the installed Rentals pack (none fall to the one-off default)", Array.isArray(r.cTableCoversPack) && r.cTableCoversPack.length === 0, JSON.stringify(r.cTableCoversPack));
 ok("D an embedded Rentals copy with NO flag classifies recurring by its compendiumSource stamp", r.d?.flag === "" && /rentalandservices/.test(r.d?.source ?? "") && r.d?.cls === "recurring", JSON.stringify(r.d));
 ok("D tab membership: that copy sits on the Services tab", r.dSheet?.onServices === true, JSON.stringify(r.dSheet));
+ok("D read-time only: a copy whose entry carries just the service class is NOT stamped as corrected (nothing was written)", r.d?.stamped === false, JSON.stringify(r.d));
 ok("E the GM's flag wins: flagged 'Headphones' is recurring; a housing row flagged gear is gear", r.e?.headphonesFlagged === "recurring" && r.e?.houseFlaggedGear === "gear" && /rentalandservices/.test(r.e?.houseSource ?? ""), JSON.stringify(r.e));
 ok("E tab membership follows the flag both ways", r.eSheet?.headphonesOnServices === true && r.eSheet?.houseOnServices === false, JSON.stringify(r.eSheet));
 ok("F the Services tab's + button declares the new item recurring", r.f?.added === true && r.f?.flag === "recurring" && r.f?.cls === "recurring", JSON.stringify(r.f));

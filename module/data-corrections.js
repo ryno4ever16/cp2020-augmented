@@ -33,6 +33,13 @@
  * `correctedArmorType()` below, which `combat/armor-layers.js` consults when an entry declares no
  * hardness of its own. Read-time is what this correction needs to be: an armor piece already sitting on
  * a character was created long before the entry existed, and the layer law has to type it correctly now.
+ *
+ * A correction may also carry `serviceMode: "recurring" | "oneoff"` (user ruling 2026-09-27: a service is
+ * DECLARED, never inferred from a name). READ-TIME ONLY, exactly like `armorType`: resolved live by
+ * `correctedServiceMode()` for the shop and the character sheet's Services tab, never written into a
+ * copy. The base Rentals & Services list is declared here row by row; our own packs declare in their
+ * sources (`flags.cp2020-augmented.serviceMode`). A row of a service-list pack with no entry is a
+ * one-off - the pack IS the book's services list, so membership is a declaration - never gear.
  */
 
 const CYBERWARE_OLD = "cyberpunk2020.cyberware-old";
@@ -178,10 +185,50 @@ export const DATA_CORRECTIONS = {
     I2c4U3FtntrJCIEl: { patch: mechConsumable({ doses: 1 }) },       // Slap Patch
   },
   "cyberpunk2020.rentalandservices": {
-    oN5HJZeZ4Ef4MMTY: { name: "Apartment/Condo – Combat Zone" },
-    Odj2rS5kKKejVWVr: { name: "Apartment/Condo – Corporate Zone" },
-    a1PfGEaWAmwhvKIg: { name: "Apartment/Condo – Executive Zone" },
-    fe2JHml3p3rOS9M3: { name: "Apartment/Condo – Moderate Zone" },
+    /* ── SERVICE CLASS (read-time; see `correctedServiceMode`) — Core p.63's list, all 40 rows ──────
+     * recurring = billed per period: housing, phone/utility/cable lines, plans and accounts, and the food
+     * budgets (the book prices Kibble/Prepak/Fresh Food per month). oneoff = paid per use: rides, calls,
+     * a night's lodging, a clinic visit, a day in hospital, fuel. The period is the default month. */
+    oN5HJZeZ4Ef4MMTY: { name: "Apartment/Condo – Combat Zone",    serviceMode: "recurring" },
+    Odj2rS5kKKejVWVr: { name: "Apartment/Condo – Corporate Zone", serviceMode: "recurring" },
+    a1PfGEaWAmwhvKIg: { name: "Apartment/Condo – Executive Zone", serviceMode: "recurring" },
+    fe2JHml3p3rOS9M3: { name: "Apartment/Condo – Moderate Zone",  serviceMode: "recurring" },
+    LJ2N1CRa9q5UJjor: { serviceMode: "recurring" },   // House – Combat Zone
+    JiAMrymDUuqzXH2G: { serviceMode: "recurring" },   // House – Corporate Zone
+    "8kMNCMooW7gID3Ki": { serviceMode: "recurring" }, // House – Executive Zone
+    L9oN4cVPnGTf58fc: { serviceMode: "recurring" },   // House – Moderate Zone
+    "3xXDt7msEp0rodwB": { serviceMode: "recurring" }, // Cell Phone Service
+    LdrNwR79wlxSid09: { serviceMode: "recurring" },   // Standard Phone Service
+    BUCT1O4inYF7AtU5: { serviceMode: "recurring" },   // Utilities
+    g1HLhgxSH0kjlv19: { serviceMode: "recurring" },   // Cable TV
+    "1wSczzdjOpEZHUG4": { serviceMode: "recurring" }, // Health Plan
+    nnzTwmtbnwsuT5LH: { serviceMode: "recurring" },   // Trauma Team Acct
+    "1MUFsLYenBNcW0VV": { serviceMode: "recurring" }, // CredChip Account
+    nEYfvmgrG2BneL9F: { serviceMode: "recurring" },   // Kibble
+    "3DKBHvIJRMQ7nz7O": { serviceMode: "recurring" }, // Generic Prepak
+    kby6H8nselTicIdq: { serviceMode: "recurring" },   // Good Prepak
+    sJhbh46gnrrx9NL0: { serviceMode: "recurring" },   // Fresh Food
+    "97xCt0Z74g613nHN": { serviceMode: "oneoff" },    // Taxi
+    HDJMDrJwwyd7W4HF: { serviceMode: "oneoff" },      // AV-Taxi
+    "2O2PlXxgAJTYbHcr": { serviceMode: "oneoff" },    // PayPhone Call
+    asfDWfOJkdyTckyw: { serviceMode: "oneoff" },      // Data Term Use
+    utDVxkOftG5ei4iA: { serviceMode: "oneoff" },      // Clinic Visit
+    RfWVJIgFgoGgZzeo: { serviceMode: "oneoff" },      // Day in Hospital
+    KdUSPc9jKlxZBYTz: { serviceMode: "oneoff" },      // Day in Intensive Care
+    qyyD4zTJnXrmsIqF: { serviceMode: "oneoff" },      // Clone Limb Replacement
+    ww5M1GUNlFxGQ4Ki: { serviceMode: "oneoff" },      // Mag Lev Chit
+    TcE1Dce0LumTnmMt: { serviceMode: "oneoff" },      // Fastcharge
+    RjIQ1XyKF8rjAF6R: { serviceMode: "oneoff" },      // Cab Hailer Activationfee
+    UTQE3c98erdd4Z4z: { serviceMode: "oneoff" },      // CHOOH² (fuel, per fill)
+    z2f2TvELHm3t1YCs: { serviceMode: "oneoff" },      // Air
+    ayf8BevRGNfVDW43: { serviceMode: "oneoff" },      // Hotel Room – Combat Zone (per night)
+    UMgA64Ze5RUNqVkC: { serviceMode: "oneoff" },      // Hotel Room – Corporate Zone
+    ox0PovQuEYpxgXnj: { serviceMode: "oneoff" },      // Hotel Room – Executive Zone
+    kzxa75xkXUJtfvnJ: { serviceMode: "oneoff" },      // Hotel Room – Moderate Zone
+    MV0opo466kDttaku: { serviceMode: "oneoff" },      // Coffin – Combat Zone (per night)
+    "7ynv1iRjCVS6tKqT": { serviceMode: "oneoff" },    // Coffin – Corporate Zone
+    c2NLex4kqxhj5c88: { serviceMode: "oneoff" },      // Coffin – Executive Zone
+    YEsC8bdEgXNZsvYc: { serviceMode: "oneoff" },      // Coffin – Moderate Zone
   },
   "cyberpunk2020.surveillance": {
     // PR #41 name fixes + P4 vision profiles (their own text: IR / light amplification).
@@ -494,6 +541,23 @@ export function correctedArmorType(item) {
   return (t === "hard" || t === "soft") ? t : "";
 }
 
+/** The base packs that ARE the book's services list: a row with no entry is a one-off, never gear. */
+const SERVICE_LIST_PACKS = new Set(["cyberpunk2020.rentalandservices"]);
+
+/**
+ * The declared service class for a base-pack item, or "" when the registry says nothing.
+ * READ-TIME, same match as `correctedArmorType`: an owned copy by its `_stats.compendiumSource`, a
+ * compendium document by its own uuid. Returns "recurring" | "oneoff" from the entry; "oneoff" for an
+ * entry-less row of a service-list pack; "" for anything else (the caller treats "" as gear).
+ */
+export function correctedServiceMode(item) {
+  const src = parseCompendiumSource(item?._stats?.compendiumSource ?? item?._source?._stats?.compendiumSource ?? item?.uuid);
+  if (!src) return "";
+  const m = String(correctionFor(src.packId, src.itemId)?.serviceMode ?? "").toLowerCase();
+  if (m === "recurring" || m === "oneoff") return m;
+  return SERVICE_LIST_PACKS.has(src.packId) ? "oneoff" : "";
+}
+
 /** Parse "Compendium.<pack.id>.Item.<docId>" → {packId, itemId}, else null. Exported so any other
  *  reader of an owned copy's pack origin uses THIS parser rather than a second regex of its own. */
 export function parseCompendiumSource(uuid) {
@@ -515,16 +579,19 @@ function setPath(obj, path, value) {
  */
 export function applyCorrectionToItemData(data, c) {
   if (!c) return false;
-  if (c.name) data.name = c.name;
+  // Reports whether a CREATE-TIME field was applied (2026-09-27): an entry that carries only a read-time
+  // field (`armorType`, `serviceMode`) touches nothing here and must not stamp the copy as corrected.
+  let changed = false;
+  if (c.name) { data.name = c.name; changed = true; }
   data.system ??= {};
-  if (c.cost !== undefined) data.system.cost = c.cost;
-  if (c.flavor !== undefined) data.system.flavor = c.flavor;
+  if (c.cost !== undefined) { data.system.cost = c.cost; changed = true; }
+  if (c.flavor !== undefined) { data.system.flavor = c.flavor; changed = true; }
   if (c.notesAppend && !String(data.system.notes ?? "").includes(c.notesAppend)) {
-    data.system.notes = `${data.system.notes ?? ""}${c.notesAppend}`;
+    data.system.notes = `${data.system.notes ?? ""}${c.notesAppend}`; changed = true;
   }
   // Generic field patches (paths relative to `system`) — applied last so they win.
-  if (c.patch) for (const [path, value] of Object.entries(c.patch)) setPath(data.system, path, value);
-  return true;
+  if (c.patch) for (const [path, value] of Object.entries(c.patch)) { setPath(data.system, path, value); changed = true; }
+  return changed;
 }
 
 /**
