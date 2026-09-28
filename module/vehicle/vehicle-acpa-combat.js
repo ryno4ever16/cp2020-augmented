@@ -246,8 +246,33 @@ function wrapAcpaRollData() {
   _rollDataWrapped = true;
 }
 
+/**
+ * Re-derive every suit that links a pilot, on THIS client. Derived data is per client, so each one
+ * has to do it for itself.
+ *
+ * WHY (user report 2026-09-27, reproduced with the reporter's own exported actors): at world load the
+ * actors are constructed one by one, and a suit that comes BEFORE its pilot in that order is prepared
+ * while the pilot does not exist yet - `game.actors.get(pilotId)` finds nothing, the effective REF
+ * falls back to the manual field, MA reads 0 and Run shows SIB x 3. Nothing re-derived it afterwards
+ * (the updateActor hook below fires only on updates), so the wrong numbers stood on every client until
+ * someone re-picked the pilot. Order is not something we control (a suit named "Scraphemoth" sat ahead
+ * of its pilot "Uther Pendrek"), so the repair is unconditional: once the world is ready and every
+ * document exists, reset each linked suit. Cheap - a handful of vehicle actors, no writes.
+ */
+export function rederiveLinkedSuits() {
+  let n = 0;
+  for (const suit of game.actors ?? []) {
+    if (suit.type !== "cp2020-augmented.vehicle" || !suit.system?.pilotId) continue;
+    try { suit.reset(); n++; if (suit.sheet?.rendered) suit.sheet.render(false); } catch (e) { console.warn(`${SCOPE} | suit re-derive failed`, suit.name, e); }
+  }
+  return n;
+}
+
 export function registerAcpaCombatHooks() {
   wrapAcpaRollData();
+  // The load-order repair (see rederiveLinkedSuits). This registrar runs from the module's ready
+  // handler, when every world document already exists; the else-branch covers an earlier call.
+  if (game.ready) rederiveLinkedSuits(); else Hooks.once("ready", rederiveLinkedSuits);
   Hooks.on("updateCombat", async (combat, changed) => {
     // One acting session — `tickAcpaCombatant` writes heat/charge, so a second client double-ticks it.
     if (!isPrimaryGMSession()) return;
