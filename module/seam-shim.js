@@ -316,6 +316,19 @@ function installWeaponFiredShim(ItemProto) {
         attackerTokenId: firingTokenIdOf(this.actor),
         weaponName: this.name,
         weaponId: this.id ?? null,   // resolve the EXACT weapon downstream (two same-named weapons with different ammo)
+        // ⭐ ONE TRIGGER PULL, ONE ID (2026-09-30). The base's full-auto method renders one multi-hit
+        // card PER TARGET (item.js __fullAuto loops the targets and executes a Multiroll inside the
+        // loop) and this seam emits one weaponFired per card, so a burst walked across three figures
+        // arrived as three payloads and the per-round action counter charged three actions for one
+        // pull. Every card of this call carries the same id; the counter advances once per id.
+        fireId: foundry.utils.randomID(),
+        // WHICH FIRE METHOD this pull went through (`__semiAuto`, `__fullAuto`, `__threeRoundBurst`,
+        // `__meleeBonk`, `__martialBonk`). The action counter needs "was this one semi-auto shot", and
+        // the method name is the base's own answer rather than a re-derivation from the mode string.
+        fireMethod: name,
+        // Dual Wield as ticked in the dialog. CP2020 p.98 makes a two-weapon attack one act at -3 on
+        // both weapons, so a second weapon fired with this ticked JOINS the open attack action.
+        dualWield: attackMods?.dualWield === true,
         fallbackTargetActorId: attackMods?.targetActor?.id ?? null,
         // The aimed-at token, captured for PRESENTATION only (see the two-field note at the emit below).
         // The base system hands its target-token list to __fullAuto ONLY, so the multi-hit card carries a
@@ -555,6 +568,11 @@ function installRenderEmit() {
           attackerTokenId: _fireCtx.attackerTokenId ?? null,
           weaponName: _fireCtx.weaponName,
           weaponId: _fireCtx.weaponId,
+          // One id per trigger pull, the fire method's name, and the Dual Wield state - captured where
+          // the weapon facts above are (see the notes there). Read by the per-round action counter.
+          fireId: _fireCtx.fireId ?? null,
+          fireMethod: _fireCtx.fireMethod ?? null,
+          dualWield: _fireCtx.dualWield === true,
           // WHAT KIND OF ATTACK THIS WEAPON MAKES — carried for the readers that never see the item
           // (the GM's client, resolving a relayed payload). See the note where it is captured.
           attackType: _fireCtx.attackType ?? null,

@@ -31,13 +31,25 @@ async function joinGM(p){await p.goto(BASE+"/join",{waitUntil:"domcontentloaded"
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
+let section = "pre";   // which section an error surfaced in (the collector prefixes it)
 p.on("pageerror", e => errors.push("pageerror: " + e.message));
-p.on("console", m => { if (m.type() === "error") errors.push("console: " + m.text()); });
+// The location rides along (2026-09-30): one bare "reading '_id'" console error in a battery could not be
+// attributed to a section without it.
+p.on("console", async m => {
+  if (m.type() !== "error") return;
+  const l = m.location?.() ?? {};
+  let stack = "";
+  // An Error object logged through Foundry's notification queue reports the queue's own line as its location;
+  // the Error's stack is the only thing that names where it was thrown.
+  for (const a of m.args?.() ?? []) { try { const s = await a.evaluate(v => (v && v.stack) ? String(v.stack) : null); if (s) { stack = " :: " + s.split(String.fromCharCode(10)).slice(0, 6).join(" | "); break; } } catch {} }
+  errors.push(`[${section}] console: ` + m.text() + (l.url ? ` @ ${l.url}:${l.lineNumber ?? "?"}` : "") + stack);
+});
 await joinGM(p);
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // LEG a — action-counter combat scoping (out-of-combat no-op, in-combat accrual+penalty, combatStart clear)
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+section = "A";
 const legA = await p.evaluate(async () => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -146,6 +158,7 @@ const legA = await p.evaluate(async () => {
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // LEG b — radiation lifecycle (dose→cure, clean-cure warn/no-card, reset, compound→cure)
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+section = "B";
 const legB = await p.evaluate(async () => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -232,6 +245,7 @@ const legB = await p.evaluate(async () => {
 // LEG c — radiation GM gates (MOCKED non-GM user context via game.user.isGM getter override — NOT a
 //          second client; the death-card resolver's warn/no-card path is asserted the same way)
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+section = "C";
 const legC = await p.evaluate(async () => {
   const out = { ok: {}, nums: {}, notes: { method: "game.user.isGM mocked false via instance getter — no second browser client" } };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -287,6 +301,7 @@ const legC = await p.evaluate(async () => {
 // LEG d — martial skill filter: untrained-martial hidden on empty search; typing reveals; trained/ip/
 //          chipped visible; non-martial never empty-search hidden.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+section = "D";
 const legD = await p.evaluate(async () => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -362,6 +377,7 @@ const legD = await p.evaluate(async () => {
 // LEG e — card lock: stun-save prompt stamp/disable/second-click-inert/GM-rearm; unstamped result card;
 //          Take-Aim tracker toggle still cycles.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+section = "E";
 const legE = await p.evaluate(async () => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -501,6 +517,7 @@ const legE = await p.evaluate(async () => {
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // LEG f — sheet-fix smoke: ACPA sheet size/scroll/pilot; weapon-sheet selects + title.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+section = "F";
 const legF = await p.evaluate(async () => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -563,6 +580,7 @@ const legF = await p.evaluate(async () => {
 const DAI_NAME = "🦿 ACPA Suit — DaiOni";
 
 // ── LEG g — maneuver-dialog geometry (condition-column alignment, resizable window, scroll behaviour)
+section = "G";
 const legG = await p.evaluate(async (DAI_NAME) => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -666,6 +684,7 @@ const legG = await p.evaluate(async (DAI_NAME) => {
 
 // ── LEG h — driver preselect honors the vehicle's linked pilot (openControlRollDialog pulls pilotId
 //            to the front of the candidate list); NEGATIVE with pilotId cleared; duplicate guard.
+section = "H";
 const legH = await p.evaluate(async (DAI_NAME) => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -768,6 +787,7 @@ const legH = await p.evaluate(async (DAI_NAME) => {
 }, DAI_NAME);
 
 // ── LEG i — ruleset badge + countermeasures hint on the DaiOni sheet render.
+section = "I";
 const legI = await p.evaluate(async (DAI_NAME) => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));

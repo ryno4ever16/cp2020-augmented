@@ -225,21 +225,130 @@ function _getActionCount(actor) {
 // instead of two sequential setFlags. Callers may still fire-and-forget — the returned promise carries
 // the chain, so a trailing .catch() is enough.
 const _actionCountChains = new WeakMap();
-function _incrementActionCount(actor) {
-  // Single choke point for every increment path (weapon fire, aim/dodge/parry, manual +action): the
-  // counter only advances inside a combat this actor is part of. Out of combat it is a no-op so the
-  // penalty never accrues with no round boundary to reset it.
-  if (!_inActiveCombat(actor)) return Promise.resolve();
-  const next = (_actionCountChains.get(actor) ?? Promise.resolve()).catch(() => {}).then(() => {
-    const round   = game?.combat?.round ?? 0;
-    const current = _getActionCount(actor);
-    return actor.update({
-      "flags.cp2020-augmented.actionCount":      current + 1,
-      "flags.cp2020-augmented.actionCountRound": round,
-    });
-  });
+function _chainActionWrite(actor, write) {
+  const next = (_actionCountChains.get(actor) ?? Promise.resolve()).catch(() => {}).then(write);
   _actionCountChains.set(actor, next);
   return next;
+}
+
+/**
+ * THE OPEN ATTACK ACTION OF THIS ROUND (2026-09-30, user-relayed report; RYNO's ruling).
+ *
+ * CP2020 p.98 lists what ONE action is: "Attack up to your weapon's maximum Rate of Fire (ROF), or make a
+ * Melee attack." The counter used to advance once per fire ROLL, and the base rolls a semi-auto weapon one
+ * shot per roll (item.js __semiAuto fires exactly one round), so an ROF-2 pistol's second shot was charged
+ * as a second action and pre-filled -3. The book charges nothing for it. So the counter now keeps, beside
+ * the count, a record of the attack action currently open: which weapons are in it and how many shots
+ * each has spent (`shots`), plus a per-round tally per weapon (`roundShots`, for the "past its ROF" note)
+ * and the id of the last trigger pull (`lastFireId`, see the seam). `attackActionStep` below is the whole
+ * rule; everything else reads or writes this record.
+ *
+ * Stored as ONE JSON STRING flag on purpose. A nested object here would be MERGED by Document#update (an
+ * ObjectField update merges - the hazard recorded after the 2026-08 partial-update bugs), so a weapon that
+ * dropped out of the action would linger in the map; a string is replaced whole in a single write.
+ */
+const ATTACK_FLAG = "attackAction";
+export const SEMI_AUTO_METHOD = "__semiAuto";
+function _attackState(actor, round) {
+  try {
+    const raw = actor.getFlag?.("cp2020-augmented", ATTACK_FLAG);
+    const st = typeof raw === "string" ? JSON.parse(raw) : null;
+    if (st && st.round === round) return st;
+  } catch { /* unreadable - start fresh */ }
+  return null;
+}
+/**
+ * The pure rule: given the open attack action `state` (or null) and one fire roll, say whether the roll
+ * opens a NEW action or continues the open one, and return the next state. Exported for the keeper.
+ *
+ *   roll = { itemId, round, fireMethod, rof, shots, dualWield, fireId }
+ *   kind = "continue"    same weapon, semi-auto, still under its ROF        -> no new action
+ *          "join"        another weapon with Dual Wield ticked (p.98)       -> no new action
+ *          "sameTrigger" another card of the same trigger pull (multi-target burst) -> no new action
+ *          "rofSpent"    same weapon, semi-auto, already at its ROF         -> new action (the note names it)
+ *          "new"         everything else: first shot, other weapon, burst / full auto / melee, unknown ROF
+ * Burst, full auto and melee spend the whole allowance (`consume = rof`), so the next roll from that weapon
+ * is a new action - p.106 makes a burst one action, and p.98 allows one melee attack per action.
+ */
+export function attackActionStep(state, roll) {
+  const round  = roll?.round ?? 0;
+  const id     = String(roll?.itemId ?? "");
+  const rofNum = Math.floor(Number(roll?.rof));
+  const rofKnown = Number.isFinite(rofNum) && rofNum > 0;
+  const rof    = rofKnown ? rofNum : 1;
+  const n      = Math.max(1, Math.floor(Number(roll?.shots) || 1));
+  const semi   = roll?.fireMethod === SEMI_AUTO_METHOD;
+  const live   = (state && state.round === round) ? state : { round, shots: {}, roundShots: {}, lastFireId: null };
+  const shots  = live.shots ?? {};
+  const roundShots = live.roundShots ?? {};
+  if (roll?.fireId && live.lastFireId === roll.fireId) {
+    return { kind: "sameTrigger", newAction: false, state: live, firedInAction: Number(shots[id]) || 0, firedInRound: Number(roundShots[id]) || 0, rof };
+  }
+  const inAction      = !!id && Object.prototype.hasOwnProperty.call(shots, id);
+  const firedInAction = inAction ? (Number(shots[id]) || 0) : 0;
+  const firedInRound  = (Number(roundShots[id]) || 0) + n;
+  const consume       = semi ? n : rof;
+  const openWeapons   = Object.keys(shots).length > 0;
+  let kind;
+  if (!id || !rofKnown)                          kind = "new";
+  else if (inAction && semi)                     kind = firedInAction < rof ? "continue" : "rofSpent";
+  else if (!inAction && roll?.dualWield && openWeapons) kind = "join";
+  else                                           kind = "new";
+  let nextShots;
+  if (!id)                      nextShots = {};
+  else if (kind === "continue") nextShots = { ...shots, [id]: firedInAction + consume };
+  else if (kind === "join")     nextShots = { ...shots, [id]: consume };
+  else                          nextShots = { [id]: consume };
+  const nextRound = id ? { ...roundShots, [id]: firedInRound } : { ...roundShots };
+  return {
+    kind,
+    newAction: kind === "new" || kind === "rofSpent",
+    state: { round, shots: nextShots, roundShots: nextRound, lastFireId: roll?.fireId ?? null },
+    firedInAction: id ? (nextShots[id] ?? 0) : 0,
+    firedInRound,
+    rof,
+  };
+}
+function _incrementActionCount(actor) {
+  // Single choke point for every NON-attack increment (aim / dodge / parry / manual +action): the counter
+  // only advances inside a combat this actor is part of. Out of combat it is a no-op so the penalty never
+  // accrues with no round boundary to reset it. A declared action CLOSES the open attack action - a shot
+  // after a kick is a new action (p.98) - while the per-round shot tally is kept.
+  if (!_inActiveCombat(actor)) return Promise.resolve();
+  return _chainActionWrite(actor, () => {
+    const round  = game?.combat?.round ?? 0;
+    const st     = _attackState(actor, round);
+    const closed = { round, shots: {}, roundShots: st?.roundShots ?? {}, lastFireId: null };
+    return actor.update({
+      "flags.cp2020-augmented.actionCount":      _getActionCount(actor) + 1,
+      "flags.cp2020-augmented.actionCountRound": round,
+      [`flags.cp2020-augmented.${ATTACK_FLAG}`]: JSON.stringify(closed),
+    });
+  });
+}
+/** The weapon-fire increment path: runs the rule against the open attack action and advances the counter
+ *  only when the roll opened a new action. Same per-actor chain as the declared actions, same guard. */
+function _recordWeaponFire(actor, payload) {
+  if (!_inActiveCombat(actor)) return Promise.resolve();
+  return _chainActionWrite(actor, () => {
+    const round = game?.combat?.round ?? 0;
+    const item  = payload?.weaponId ? actor.items?.get?.(payload.weaponId) : null;
+    const sys   = item?._getWeaponSystem?.() ?? item?.system ?? {};
+    const step  = attackActionStep(_attackState(actor, round), {
+      itemId: payload?.weaponId || item?.id || "", round,
+      fireMethod: payload?.fireMethod ?? null,
+      rof: item ? sys.rof : null,          // an unresolvable weapon never continues: one action per roll, as before
+      shots: payload?.shotsFired,
+      dualWield: payload?.dualWield === true,
+      fireId: payload?.fireId ?? null,
+    });
+    const update = { [`flags.cp2020-augmented.${ATTACK_FLAG}`]: JSON.stringify(step.state) };
+    if (step.newAction) {
+      update["flags.cp2020-augmented.actionCount"]      = _getActionCount(actor) + 1;
+      update["flags.cp2020-augmented.actionCountRound"] = round;
+    }
+    return actor.update(update);
+  });
 }
 /** True for an ACPA / powered-armor actor — the Maximum Metal multi-action rules apply to these. */
 export function _isAcpa(actor) {
@@ -262,14 +371,41 @@ export function _multiActionPenaltyFor(actor, count) {
   if (_isAcpa(actor)) return -(count + 1);
   return -(count - 1) * 3;
 }
-function _getMultiActionPenalty(actor) {
-  if (!_isMultiActionEnabled()) return 0;
-  // The attack dialog pre-fills the penalty for the action being DECLARED — i.e. count+1. The shared
-  // action counter is incremented AFTER the roll (on the weaponFired hook), so at dialog-render it still
-  // holds only the PRIOR actions' count; without the +1 the 2nd action would show −0 instead of −3 (and
-  // every later action one step too lenient). The combat-tracker BADGE, by contrast, shows the count of
-  // actions already taken and uses _multiActionPenaltyFor(count) directly — that is correct as-is.
-  return _multiActionPenaltyFor(actor, _getActionCount(actor) + 1);
+/** The dialog's fire-mode values mapped to the base fire method the roll will go through. The rule only
+ *  asks "is this one semi-auto shot", so every other mode maps to a method that spends the action. */
+const FIRE_METHOD_BY_MODE = { SemiAuto: "__semiAuto", FullAuto: "__fullAuto", ThreeRoundBurst: "__threeRoundBurst", Suppressive: "__suppressive" };
+/**
+ * What the roll being DECLARED in the attack dialog would do to the counter, and the penalty it carries.
+ * The counter is stamped AFTER the roll (on the weaponFired hook), so at dialog time it holds the PRIOR
+ * actions; a roll that opens a new action is action count+1, a roll that continues or joins the open
+ * attack action is still action `count` (and for the first action that is no penalty at all). The
+ * combat-tracker BADGE shows actions already taken and uses _multiActionPenaltyFor(count) directly.
+ */
+function _dialogActionEval(actor, weapon, { fireMode = null, dualWield = false } = {}) {
+  const round    = game?.combat?.round ?? 0;
+  const sys      = weapon?._getWeaponSystem?.() ?? weapon?.system ?? {};
+  const isRanged = weapon?.isRanged?.() ?? true;
+  const fireMethod = !isRanged ? "__meleeBonk" : (FIRE_METHOD_BY_MODE[fireMode] ?? SEMI_AUTO_METHOD);
+  const step  = attackActionStep(_attackState(actor, round), { itemId: weapon?.id ?? "", round, fireMethod, rof: sys.rof, shots: 1, dualWield, fireId: null });
+  const count = _getActionCount(actor);
+  const declaring = step.newAction ? count + 1 : count;
+  return { step, count, declaring, penalty: _multiActionPenaltyFor(actor, declaring) };
+}
+/** The labelled line for the dialog, by what the roll does to the counter. Pre-localized HTML. */
+function _multiActionNoteFor(actor, ev) {
+  const { step, declaring, penalty } = ev;
+  const penaltyText = penalty ? String(penalty) : localize("MultiActionPenaltyNoneLong");
+  const name = actor.name;
+  if (step.kind === "continue") {
+    let line = localizeParam("MultiActionContinueNote", { name, shot: step.firedInAction, rof: step.rof, count: declaring, penalty: penaltyText });
+    if (step.firedInRound > step.rof) line += localizeParam("MultiActionRofRoundClause", { fired: step.firedInRound, rof: step.rof });
+    return line;
+  }
+  if (step.kind === "join") return localizeParam("MultiActionJoinNote", { name, count: declaring, penalty: penaltyText });
+  if (step.kind === "rofSpent") return localizeParam("MultiActionRofSpentNote", { name, fired: step.firedInRound, rof: step.rof, count: declaring, penalty });
+  return _isAcpa(actor)
+    ? localizeParam("MultiActionAcpaDialogNote", { name, count: declaring, penalty, max: _acpaMaxActions(actor) })
+    : localizeParam("MultiActionDialogNote",     { name, count: declaring, penalty });
 }
 
 // ---------------------------------------------------------------------------
@@ -4383,30 +4519,29 @@ function _hookMultiActionPenalty() {
   // round this is, and the value that was seeded. Clearing or overtyping the field is the per-roll
   // opt-out that the retired on/off keys used to provide world-wide.
   Hooks.on("renderModifiersDialog", async (app, html) => {
-    const actor = (app._weapon ?? app.options?.weapon)?.actor;
-    if (!actor) return;
-    const penalty = _getMultiActionPenalty(actor);
-    if (penalty === 0) return;
+    if (!_isMultiActionEnabled()) return;
+    const weapon = app._weapon ?? app.options?.weapon;
+    const actor  = weapon?.actor;
+    if (!actor || !weapon) return;
+    // Nothing acted yet this round: the first action is free and needs no line. From the second roll on
+    // the line is always drawn, even when it says "no penalty" - a shot that continues the open attack
+    // action is exactly the case the table asked to have explained (an ROF-2 pistol's second shot).
+    if (_getActionCount(actor) < 1) return;
     const root  = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
     if (!root?.querySelector) return;
     // Second render pass over the same DOM: re-running would fold the value in twice. The line is the receipt.
     if (root.querySelector(".cp-multi-action-note")) return;
     const input = root.querySelector("input[name='extraMod']");
     if (!input) return;
-    const existing = Number(input.value) || 0;
-    input.value = String(existing + penalty);
-
-    // The number the note quotes must be the one the field was seeded with, so it reads the SAME
-    // count+1 the penalty helper used: this dialog is the action being DECLARED, and the counter is not
-    // stamped until the roll goes out.
-    const declaring = _getActionCount(actor) + 1;
-    const notes = [ _isAcpa(actor)
-      ? localizeParam("MultiActionAcpaDialogNote", { name: actor.name, count: declaring, penalty, max: _acpaMaxActions(actor) })
-      : localizeParam("MultiActionDialogNote",     { name: actor.name, count: declaring, penalty }) ];
+    // The two controls that change what this roll IS: the fire mode (a burst spends the action, a
+    // semi-auto shot may continue it) and Dual Wield (a second weapon joins). Same selectors the dialog
+    // itself uses to wire its visibility rules.
+    const fireModeEl  = root.querySelector('select[name="fields.fireMode"], select[name="fireMode"], .field[data-path="fireMode"] select');
+    const dualWieldEl = root.querySelector('input[name="fields.dualWield"], input[name="dualWield"], .field[data-path="dualWield"] input[type="checkbox"]');
 
     const render = foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate;
     const holder = document.createElement("div");
-    holder.innerHTML = await render("modules/cp2020-augmented/templates/dialog/declared-defense-note.hbs", { notes });
+    holder.innerHTML = await render("modules/cp2020-augmented/templates/dialog/declared-defense-note.hbs", { notes: [""] });
     const node = holder.firstElementChild;
     if (!node) return;
     // The shared note template carries the declared-defence hook's OWN idempotency marker classes. Both
@@ -4414,8 +4549,28 @@ function _hookMultiActionPenalty() {
     // other, like it had already run — and the loser would skip its own seeding. Re-tag to this line's
     // marker. Only the marker names change; `cp-field-note` (which carries the styling) stays.
     node.classList.replace("cp-declared-defense", "cp-multi-action-note");
-    node.querySelectorAll(".cp-declared-defense-note")
-        .forEach(p => p.classList.replace("cp-declared-defense-note", "cp-multi-action-note-line"));
+    const line = node.querySelector(".cp-declared-defense-note");
+    line?.classList.replace("cp-declared-defense-note", "cp-multi-action-note-line");
+
+    // Seed the field and write the line, and do it again whenever the two controls change: the value in
+    // the field is always (whatever else is there) + this roll's penalty, so re-seeding subtracts what
+    // was seeded last time before adding the new figure. A result of zero leaves the field as it was
+    // found, so a roll that carries no penalty shows the same empty field the first action does.
+    const foundEmpty = String(input.value ?? "").trim() === "";
+    let seeded = 0;
+    const apply = () => {
+      const ev = _dialogActionEval(actor, weapon, { fireMode: fireModeEl?.value ?? null, dualWield: !!dualWieldEl?.checked });
+      const base = (Number(input.value) || 0) - seeded;
+      const next = base + ev.penalty;
+      input.value = (next === 0 && foundEmpty) ? "" : String(next);
+      seeded = ev.penalty;
+      if (line) line.innerHTML = _multiActionNoteFor(actor, ev);
+      node.dataset.kind    = ev.step.kind;
+      node.dataset.penalty = String(ev.penalty);
+    };
+    apply();
+    fireModeEl?.addEventListener("change", apply);
+    dualWieldEl?.addEventListener("change", apply);
     // Sit directly above the confirm row so it is the last thing read before the roll goes out.
     const buttonRow = root.querySelector("button[type='submit']")?.closest(".flexrow") ?? null;
     if (buttonRow) buttonRow.before(node);
@@ -4423,8 +4578,11 @@ function _hookMultiActionPenalty() {
   });
 
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {
-    // Stamp the shared per-round action counter on weapon fire. This is the single increment site
-    // (a second listener would double-count), and it is UNCONDITIONAL.
+    // Record the weapon fire against the shared per-round action counter. This is the single weapon-fire
+    // site (a second listener would double-count), and it is UNCONDITIONAL: the counter always tracks.
+    // Whether the roll ADVANCES the count is the rule in attackActionStep - a semi-auto shot under the
+    // weapon's ROF continues the open action, a burst spends it, a second card of the same trigger pull
+    // is the same action (see _recordWeaponFire).
     // ⏪ It used to ask two questions first — multi-action auto-tracking, and the once-per-turn movement
     // rule, which reads this same counter. Both keys retired 2026-08-29 (settings-trim), and with the
     // counter always tracking the second clause is moot: the stamp lands for every reader.
@@ -4434,16 +4592,26 @@ function _hookMultiActionPenalty() {
     // never earned, and the ➕ control (fixed for the same reason) wrote somewhere else again.
     const actor = firingActorOf(payload);
     if (!actor) return;
-    _incrementActionCount(actor).catch(() => {});
+    _recordWeaponFire(actor, payload).catch(() => {});
   });
 
   const _clearActionCounts = async (combat) => {
     for (const combatant of combat.combatants) {
-      if (!combatant.actor) continue;
-      if ((combatant.actor.getFlag?.("cp2020-augmented", "actionCount") ?? 0) > 0) {
-        await combatant.actor.unsetFlag("cp2020-augmented", "actionCount").catch(() => {});
-        await combatant.actor.unsetFlag("cp2020-augmented", "actionCountRound").catch(() => {});
-      }
+      const actor = combatant.actor;
+      if (!actor) continue;
+      const hasCount  = (actor.getFlag?.("cp2020-augmented", "actionCount") ?? 0) > 0;
+      const hasAttack = actor.getFlag?.("cp2020-augmented", ATTACK_FLAG) !== undefined;
+      if (!hasCount && !hasAttack) continue;
+      // ONE write clears all three keys. As three sequential unsetFlag calls, the later ones were still
+      // in flight when a caller that had only watched the count moved on - a keeper deleted the actor
+      // under them and the server answered "Cannot read properties of undefined (reading '_id')" - and
+      // a reader could see the count gone with its round stamp still standing. Deleting a key that is
+      // already absent is a no-op, so the three go together unconditionally.
+      await actor.update({
+        "flags.cp2020-augmented.-=actionCount":      null,
+        "flags.cp2020-augmented.-=actionCountRound": null,
+        [`flags.cp2020-augmented.-=${ATTACK_FLAG}`]: null,
+      }).catch(() => {});
     }
   };
 
