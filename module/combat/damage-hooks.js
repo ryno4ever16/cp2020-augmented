@@ -30,6 +30,7 @@ import { onChatCardRender } from "../chat-render-compat.js";
 // The one-shot card stamp is ALSO the pattern lifecycle's "has this shot been dealt with?" reader:
 // a pattern whose card is still unresolved is a decision somebody has not made yet, and no expiry
 // clock may take that decision away from them (see _spreadZoneCardPending).
+import { setExtraPart, registerAttackBreakdownRender } from "./attack-breakdown.js";
 import { markCardResolved, isCardResolved } from "../card-lock.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES, _deriveLiveSP } from "./DamageApplicator.js";
 // The per-application severity cadence — one progression card and one mortal prompt per body per
@@ -1034,6 +1035,8 @@ function _hookRenderChatMessage() {
   // in, so a plain registration would miss every card already in the log — the reason a reload used
   // to strip the Apply control off existing cards. See module/chat-render-compat.js.
   onChatCardRender(_injectApplyDamageControl);
+  // The attack total's hover (combat/attack-breakdown.js) - same registration road, same reason.
+  registerAttackBreakdownRender();
 }
 
 /**
@@ -1775,6 +1778,8 @@ function _hookDeclaredDefensePrefill(isEnabled) {
     if (soleDodger) {
       const input = root.querySelector("input[name='extraMod']");
       if (input) input.value = String((Number(input.value) || 0) + DECLARED_DODGE_ATTACK_MOD);
+      // Named for the card's breakdown (combat/attack-breakdown.js): one of the parts folded into Extra Modifiers.
+      if (input) setExtraPart(app, "declaredDodge", localize("AttackBreakdownDeclaredDodge"), DECLARED_DODGE_ATTACK_MOD);
       notes.push(localizeParam("DeclaredDodgeDialogNote", { name: dodgers[0].name, mod }));
     } else {
       for (const d of dodgers) notes.push(localizeParam("DeclaredDodgeDialogNoteMulti", { name: d.name, mod }));
@@ -4567,6 +4572,8 @@ function _hookMultiActionPenalty() {
       if (line) line.innerHTML = _multiActionNoteFor(actor, ev);
       node.dataset.kind    = ev.step.kind;
       node.dataset.penalty = String(ev.penalty);
+      // Named for the card's breakdown: this is one of the parts folded into Extra Modifiers.
+      setExtraPart(app, "multiAction", localize("AttackBreakdownMultiAction"), ev.penalty);
     };
     apply();
     fireModeEl?.addEventListener("change", apply);

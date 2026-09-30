@@ -61,6 +61,8 @@ export async function installGoldenHydrator(page) {
         "@@TARGET_TOKEN@@": ids.targetTokenId ?? null,
         "@@TARGET_ACTOR@@": ids.targetActorId ?? null,
         "@@FIRED_BY_USER@@": ids.firedByUserId ?? game.user?.id ?? null,
+        // a fresh per-pull id for every replayed payload (see the capture's note on `fireId`)
+        "@@FIRE_ID@@": ids.fireId ?? (globalThis.foundry?.utils?.randomID?.() ?? `replay-${Math.random().toString(36).slice(2, 12)}`),
       };
       const fill = (v) => {
         if (typeof v === "string") return (v in map) ? map[v] : v;

@@ -333,6 +333,10 @@ let markedTotal = 0;
 for (const entry of Object.values(captured)) {
   const before = JSON.stringify(entry.values);
   entry.values = placeholderise(entry.values);
+  // The per-pull id (seam-shim `fireId`, 2026-09-30) is minted fresh at every trigger pull, so it can
+  // never be stable across captures either; stored as a marker, and the hydrator mints a fresh one per
+  // replayed payload (two replays sharing one id would read as one pull to the action counter).
+  if (entry.values && typeof entry.values.fireId === "string") entry.values.fireId = "@@FIRE_ID@@";
   markedTotal += (JSON.stringify(entry.values).match(/@@[A-Z_]+@@/g) ?? []).length;
   entry.placeholdersApplied = before !== JSON.stringify(entry.values);
 }

@@ -12,6 +12,7 @@ import { isUnreadableNumberField, refuseUnreadableNumberFields, refuseOutOfRange
 import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
 import { damageFormulaIsRollable, warheadDamageFor, weaponDetonates, areaDeliveryKind, wordWarheadOf, WORD_WARHEAD_FORMULA } from "../combat/area-delivery.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
+import { extraPartsOf } from "../combat/attack-breakdown.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
 import { cyberlimbSheetStatus, repairCyberlimb, clearFleshLimb, contributingItems, fleshLimbStatusLabel, severFleshUnder, cyberlimbZoneOf, fleshLimbSetZones, openFleshLimbStateDialog } from "../mech/cyberlimb.js";
@@ -1155,6 +1156,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           const effective = gearProviders.filter(g => !g.dualWieldOnly || fireOptions.dualWield);
           fireOptions.extraMod = (Number(fireOptions.extraMod) || 0) + gearModSum(fireOptions, effective);
         }
+        // The parts the module folded into Extra Modifiers, by name, for the card's breakdown
+        // (combat/attack-breakdown.js): what the dialog seeded (multi-action, declared dodge) and the
+        // gear rows that were ticked. The typed remainder is derived on the card, never stored.
+        fireOptions.cpExtraParts = [
+          ...extraPartsOf(dialog),
+          ...gearProviders.filter(g => (!g.dualWieldOnly || fireOptions.dualWield) && fireOptions[`gearMod_${g.id}`])
+                          .map(g => ({ key: `gear:${g.id}`, label: g.name, value: Number(g.mod) || 0 })),
+        ];
         // Get the window OFF THE SCREEN the moment the shot actually goes out — in the same frame, not
         // when the close finishes.
         //
@@ -2259,9 +2268,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         // a jump kick. (⚠ 1.2-COMPAT: a base system that prices the maneuver itself would double
         // this; drop this fold at that handoff.)
         const jumpKick = isFnff2Enabled() && action === martialActions.jumpKick;
+        // The parts the module folded into Extra Modifiers, by name, for the card's breakdown
+        // (combat/attack-breakdown.js): what the dialog seeded, plus the jump kick's own bonus.
+        const cpExtraParts = [
+          ...extraPartsOf(dialog),
+          ...(jumpKick ? [{ key: "jumpKick", label: game.i18n.localize("CYBERPUNK.AttackBreakdownJumpKick"), value: JUMP_KICK_TO_HIT }] : []),
+        ];
         const attackMods = jumpKick
-          ? { ...fireOptions, action, extraMod: (Number(fireOptions?.extraMod) || 0) + JUMP_KICK_TO_HIT }
-          : { ...fireOptions, action };
+          ? { ...fireOptions, action, cpExtraParts, extraMod: (Number(fireOptions?.extraMod) || 0) + JUMP_KICK_TO_HIT }
+          : { ...fireOptions, action, cpExtraParts };
         // Through the same damage guard the ranged gesture uses, so ONE rule answers for both windows.
         // Every martial implement carries a rollable formula (the catalog's, or the stand-in's own),
         // so this is a pass-through in practice — but the guard is where a word-instead-of-a-formula

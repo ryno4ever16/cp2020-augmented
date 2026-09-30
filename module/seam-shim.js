@@ -28,6 +28,7 @@ import { getWeaponLongRange } from "./combat/rangefinding.js";
 // see the "one derivation, one caller" note in combat/fumble-outcome.js. Its answer rides the payload
 // as `fumbleClass` and every consumer reads the FIELD, never the derivation.
 import { rangedFumbleClassFrom } from "./combat/fumble-outcome.js";
+import { buildAttackContext, attackBreakdownRows, injectAttackBreakdown } from "./combat/attack-breakdown.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -329,6 +330,10 @@ function installWeaponFiredShim(ItemProto) {
         // Dual Wield as ticked in the dialog. CP2020 p.98 makes a two-weapon attack one act at -3 on
         // both weapons, so a second weapon fired with this ticked JOINS the open attack action.
         dualWield: attackMods?.dualWield === true,
+        // The facts the card's attack breakdown needs, read NOW, at the trigger pull, the way the base
+        // reads them (combat/attack-breakdown.js). Null when the item cannot answer; the card is then
+        // left exactly as the base drew it.
+        attackContext: buildAttackContext(this, attackMods, name),
         fallbackTargetActorId: attackMods?.targetActor?.id ?? null,
         // The aimed-at token, captured for PRESENTATION only (see the two-field note at the emit below).
         // The base system hands its target-token list to __fullAuto ONLY, so the multi-hit card carries a
@@ -468,6 +473,17 @@ function installRenderEmit() {
     // ChatMessage content. First occurrence only: the template's root is its first <div>.
     if (path === SUPPRESSIVE_TEMPLATE && typeof out === "string") {
       out = out.replace("<div>", '<div class="cyberpunk">');
+    }
+    // ⭐ THE ATTACK FIGURE EXPLAINS ITSELF (2026-09-30, user-relayed request). The base prints the total
+    // and the bare terms; the labelled breakdown is derived from the context captured at the trigger
+    // pull, verified term by term against the roll THIS card carries, and written INTO the stored markup
+    // as an anchor on the total - so every client, now or after a reload, draws the same hover
+    // (combat/attack-breakdown.js). A card whose terms do not reconcile is left untouched.
+    if (_fireCtx?.attackContext && path === MULTI_HIT_TEMPLATE && typeof out === "string" && data?.attackRoll) {
+      try {
+        const breakdown = attackBreakdownRows(data.attackRoll, _fireCtx.attackContext, data);
+        if (breakdown) out = injectAttackBreakdown(out, breakdown);
+      } catch (e) { console.warn("cp2020-augmented | attack breakdown skipped", e); }
     }
     try {
       if (_fireCtx && path === MULTI_HIT_TEMPLATE && !(data && _emittedFor.has(data))) {

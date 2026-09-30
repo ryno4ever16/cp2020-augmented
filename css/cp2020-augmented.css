@@ -4359,3 +4359,16 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-data-review-source { opacity: 0.75; font-size: 0.95em; }
 .cp-data-review-confirm-body p { margin: 0 0 6px 0; }
 .cp-data-review-noask { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 0.9em; }
+
+/* ── Attack-roll breakdown (2026-09-30) ─────────────────────────────────────────────────────────
+   The Attack total on a fire card carries its labelled terms (module/combat/attack-breakdown.js);
+   hovering shows them in the same tooltip frame the damage figure uses (the base's .cp-dice-tooltip).
+   Zero terms leave the visible line (RYNO's call, 2026-09-30) and stay in the hover. */
+.chat-message .cp-attack-total { cursor: help; text-decoration: underline dotted; text-underline-offset: 2px; }
+.chat-message .roll-results .cp-zero-term { display: none; }
+.cp-dice-tooltip.cp-attack-tip { min-width: 200px; }
+.cp-attack-tip .cp-attack-row { display: flex; justify-content: space-between; gap: 14px; font-size: 12px; line-height: 1.35; white-space: nowrap; }
+.cp-attack-tip .cp-attack-row > span:last-child { font-variant-numeric: tabular-nums; }
+.cp-attack-tip .cp-attack-row-total { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--color-border-light-tertiary, rgba(255, 255, 255, 0.25)); font-weight: 600; }
+.cp-attack-tip .cp-attack-row-dc { opacity: 0.85; }
+
