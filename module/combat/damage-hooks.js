@@ -31,6 +31,8 @@ import { onChatCardRender } from "../chat-render-compat.js";
 // a pattern whose card is still unresolved is a decision somebody has not made yet, and no expiry
 // clock may take that decision away from them (see _spreadZoneCardPending).
 import { setExtraPart, registerAttackBreakdownRender } from "./attack-breakdown.js";
+import { correctedAttackType } from "../data-corrections.js";
+import { rangedAttackTypes } from "../lookups.js";
 import { markCardResolved, isCardResolved } from "../card-lock.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES, _deriveLiveSP } from "./DamageApplicator.js";
 // The per-application severity cadence — one progression card and one mortal prompt per body per
@@ -281,6 +283,14 @@ export function attackActionStep(state, roll) {
   const rof    = rofKnown ? rofNum : 1;
   const n      = Math.max(1, Math.floor(Number(roll?.shots) || 1));
   const semi   = roll?.fireMethod === SEMI_AUTO_METHOD;
+  // SINGLE SHOTS FROM AN AUTOMATIC WEAPON (RYNO's ruling 2026-10-01, replacing the one-action-each build of
+  // the day before): the book defines no such mode (p.106 lists burst, full auto and suppressive), so the
+  // module neither extends the semi-automatic count allowance to it NOR charges the general penalty for it.
+  // It ABSTAINS: the roll is invisible to the counter (no count, no tally, no state), nothing is pre-filled,
+  // and the dialog line says so and tells a table that treats each shot as an action what to add by hand.
+  // Charging it would be the module ruling on house territory; a GM who allows the mode would pay a tax on
+  // every roll or lose the feature. Warn and guide.
+  const autoSingle = semi && roll?.autoClass === true;
   const live   = (state && state.round === round) ? state : { round, active: [], shots: {}, roundShots: {}, lastFireId: null };
   // THE WEAPON'S ROF COUNT IS THE UNIT (RYNO's ruling, 2026-09-30): `shots` holds each weapon's position in its
   // CURRENT count and persists through other actions in the round; `active` names the weapons in the attack
@@ -291,6 +301,9 @@ export function attackActionStep(state, roll) {
   const active     = Array.isArray(live.active) ? live.active : [];
   const shots      = live.shots ?? {};
   const roundShots = live.roundShots ?? {};
+  if (autoSingle) {
+    return { kind: "abstain", newAction: false, resumed: false, autoSingle: true, state: live, firedInCount: 0, firedInRound: Number(live.roundShots?.[id]) || 0, rof };
+  }
   if (roll?.fireId && live.lastFireId === roll.fireId) {
     return { kind: "sameTrigger", newAction: false, resumed: false, state: live, firedInCount: Number(shots[id]) || 0, firedInRound: Number(roundShots[id]) || 0, rof };
   }
@@ -313,6 +326,7 @@ export function attackActionStep(state, roll) {
     kind,
     newAction: kind === "new" || kind === "rofSpent",
     resumed: kind === "new" && semi && rofKnown && pos > 0,   // a new action that goes on with an interrupted count
+    autoSingle: false,
     state: { round, active: nextActive, shots: nextShots, roundShots: nextRound, lastFireId: roll?.fireId ?? null },
     firedInCount: id ? nextPos : 0,
     firedInRound: cum,
@@ -336,6 +350,12 @@ function _incrementActionCount(actor) {
     });
   });
 }
+/** Is this weapon automatic by its tag - the registry's corrected tag first (Tilt's CAWS is stored as a plain
+ *  shotgun), then the stored one? The same question the module's fire-mode list asks (lookups.js). */
+function _isAutoClassWeapon(item, sys) {
+  const atk = correctedAttackType(item) || String(sys?.attackType ?? "");
+  return atk === rangedAttackTypes.auto || atk === rangedAttackTypes.autoshotgun;
+}
 /** The weapon-fire increment path: runs the rule against the open attack action and advances the counter
  *  only when the roll opened a new action. Same per-actor chain as the declared actions, same guard. */
 function _recordWeaponFire(actor, payload) {
@@ -351,7 +371,9 @@ function _recordWeaponFire(actor, payload) {
       shots: payload?.shotsFired,
       dualWield: payload?.dualWield === true,
       fireId: payload?.fireId ?? null,
+      autoClass: item ? _isAutoClassWeapon(item, sys) : false,
     });
+    if (step.kind === "abstain") return;   // a single shot from an automatic weapon: the counter leaves it alone
     const update = { [`flags.cp2020-augmented.${ATTACK_FLAG}`]: JSON.stringify(step.state) };
     if (step.newAction) {
       update["flags.cp2020-augmented.actionCount"]      = _getActionCount(actor) + 1;
@@ -391,15 +413,22 @@ const FIRE_METHOD_BY_MODE = { SemiAuto: "__semiAuto", FullAuto: "__fullAuto", Th
  * attack action is still action `count` (and for the first action that is no penalty at all). The
  * combat-tracker BADGE shows actions already taken and uses _multiActionPenaltyFor(count) directly.
  */
-function _dialogActionEval(actor, weapon, { fireMode = null, dualWield = false } = {}) {
+function _dialogActionEval(actor, weapon, { fireMode = null, dualWield = false, rounds = null } = {}) {
   const round    = game?.combat?.round ?? 0;
   const sys      = weapon?._getWeaponSystem?.() ?? weapon?.system ?? {};
   const isRanged = weapon?.isRanged?.() ?? true;
   const fireMethod = !isRanged ? "__meleeBonk" : (FIRE_METHOD_BY_MODE[fireMode] ?? SEMI_AUTO_METHOD);
-  const step  = attackActionStep(_attackState(actor, round), { itemId: weapon?.id ?? "", round, fireMethod, rof: sys.rof, shots: 1, dualWield, fireId: null });
+  // The rounds this roll will spend, for the round tally: a burst fires three, full auto the chosen count
+  // (the base caps it at the ROF and the loaded rounds), anything else one.
+  const rof = Math.max(0, Math.floor(Number(sys.rof) || 0));
+  const shots = fireMethod === "__threeRoundBurst" ? 3
+              : fireMethod === "__fullAuto" ? Math.max(1, Math.min(rof || 1, Math.floor(Number(rounds)) || rof || 1))
+              : 1;
+  const step  = attackActionStep(_attackState(actor, round), { itemId: weapon?.id ?? "", round, fireMethod, rof: sys.rof, shots, dualWield, fireId: null, autoClass: isRanged && _isAutoClassWeapon(weapon, sys) });
   const count = _getActionCount(actor);
   const declaring = step.newAction ? count + 1 : count;
-  return { step, count, declaring, penalty: _multiActionPenaltyFor(actor, declaring) };
+  const penalty = step.kind === "abstain" ? 0 : _multiActionPenaltyFor(actor, declaring);
+  return { step, count, declaring, penalty };
 }
 /** The labelled line for the dialog, by what the roll does to the counter. Pre-localized HTML. */
 function _multiActionNoteFor(actor, ev) {
@@ -414,9 +443,18 @@ function _multiActionNoteFor(actor, ev) {
   if (step.kind === "join") return localizeParam("MultiActionJoinNote", { name, count: declaring, penalty: penaltyText });
   if (step.kind === "rofSpent") return localizeParam("MultiActionRofSpentNote", { name, fired: step.firedInRound - 1, rof: step.rof, count: declaring, penalty });
   if (step.resumed) return localizeParam("MultiActionResumeNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty });
-  return _isAcpa(actor)
+  if (step.kind === "abstain") {
+    // What the general rule WOULD give the next action, so a table that treats each shot as one can type it.
+    const standard = _multiActionPenaltyFor(actor, ev.count + 1);
+    return localizeParam("MultiActionAutoSingleNote", { name, standard: standard || "−3" });
+  }
+  let line = _isAcpa(actor)
     ? localizeParam("MultiActionAcpaDialogNote", { name, count: declaring, penalty, max: _acpaMaxActions(actor) })
     : localizeParam("MultiActionDialogNote",     { name, count: declaring, penalty });
+  // THE ROUND'S CEILING (RYNO's ruling 2026-09-30): the ROF is the most a weapon fires in a round. A second
+  // burst, or any roll, that takes this weapon's round tally past it gets the clause - advisory, nothing refused.
+  if (step.rof > 1 && step.firedInRound > step.rof) line += localizeParam("MultiActionRofRoundClause", { fired: step.firedInRound, rof: step.rof });
+  return line;
 }
 
 // ---------------------------------------------------------------------------
@@ -4538,10 +4576,6 @@ function _hookMultiActionPenalty() {
     const weapon = app._weapon ?? app.options?.weapon;
     const actor  = weapon?.actor;
     if (!actor || !weapon) return;
-    // Nothing acted yet this round: the first action is free and needs no line. From the second roll on
-    // the line is always drawn, even when it says "no penalty" - a shot that continues the open attack
-    // action is exactly the case the table asked to have explained (an ROF-2 pistol's second shot).
-    if (_getActionCount(actor) < 1) return;
     const root  = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
     if (!root?.querySelector) return;
     // Second render pass over the same DOM: re-running would fold the value in twice. The line is the receipt.
@@ -4553,6 +4587,7 @@ function _hookMultiActionPenalty() {
     // itself uses to wire its visibility rules.
     const fireModeEl  = root.querySelector('select[name="fields.fireMode"], select[name="fireMode"], .field[data-path="fireMode"] select');
     const dualWieldEl = root.querySelector('input[name="fields.dualWield"], input[name="dualWield"], .field[data-path="dualWield"] input[type="checkbox"]');
+    const roundsEl    = root.querySelector('input[name="fields.fullAutoRoundsFired"], input[name="fullAutoRoundsFired"], .field[data-path="fullAutoRoundsFired"] input');
 
     const render = foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate;
     const holder = document.createElement("div");
@@ -4574,24 +4609,36 @@ function _hookMultiActionPenalty() {
     const foundEmpty = String(input.value ?? "").trim() === "";
     let seeded = 0;
     const apply = () => {
-      const ev = _dialogActionEval(actor, weapon, { fireMode: fireModeEl?.value ?? null, dualWield: !!dualWieldEl?.checked });
+      const ev = _dialogActionEval(actor, weapon, { fireMode: fireModeEl?.value ?? null, dualWield: !!dualWieldEl?.checked, rounds: roundsEl?.value ?? null });
+      // Nothing acted yet this round: the first action is free and needs no line - except the warning for a
+      // mode the book does not define, which is drawn on every such roll, the first included. From the
+      // second roll on the line is always drawn, even when it says "no penalty": a shot that continues the
+      // open attack action is exactly the case the table asked to have explained.
+      const silent = ev.step.kind !== "abstain" && ev.count < 1;
       const base = (Number(input.value) || 0) - seeded;
       const next = base + ev.penalty;
       input.value = (next === 0 && foundEmpty) ? "" : String(next);
       seeded = ev.penalty;
-      if (line) line.innerHTML = _multiActionNoteFor(actor, ev);
+      if (line) line.innerHTML = silent ? "" : _multiActionNoteFor(actor, ev);
+      if (silent) node.remove(); else attach();
       node.dataset.kind    = ev.step.kind;
       node.dataset.penalty = String(ev.penalty);
       // Named for the card's breakdown: this is one of the parts folded into Extra Modifiers.
       setExtraPart(app, "multiAction", localize("AttackBreakdownMultiAction"), ev.penalty);
     };
+    // Sit directly above the confirm row so it is the last thing read before the roll goes out. A silent
+    // evaluation takes the node out again, so a first action's dialog is exactly what it was before.
+    const attach = () => {
+      if (node.isConnected) return;
+      const buttonRow = root.querySelector("button[type='submit']")?.closest(".flexrow") ?? null;
+      if (buttonRow) buttonRow.before(node);
+      else (root.querySelector(".weapon-modifiers") ?? root).append(node);
+    };
     apply();
     fireModeEl?.addEventListener("change", apply);
     dualWieldEl?.addEventListener("change", apply);
-    // Sit directly above the confirm row so it is the last thing read before the roll goes out.
-    const buttonRow = root.querySelector("button[type='submit']")?.closest(".flexrow") ?? null;
-    if (buttonRow) buttonRow.before(node);
-    else (root.querySelector(".weapon-modifiers") ?? root).append(node);
+    roundsEl?.addEventListener("change", apply);
+    roundsEl?.addEventListener("input", apply);
   });
 
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {

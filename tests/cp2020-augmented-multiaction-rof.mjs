@@ -65,6 +65,11 @@ const r = await p.evaluate(async () => {
     out.pure.resumed    = pick(step(st({ p: 1 }, { active: [] }), semi()));          // shot 2 of 2 as a NEW action
     out.pure.resumedSpent = pick(step(st({ p: 2 }, { active: [] }), semi()));        // count used up → new count
     out.pure.afterBurst = pick(step(st({ s: 25 }, { active: [] }), semi({ itemId: "s", rof: 25 })));   // a burst spent the count
+    // single shots from an automatic weapon: the counter ABSTAINS - no action, no state change (RYNO 2026-10-01)
+    const before = st({ p: 1 });
+    const abst = step(before, semi({ itemId: "s", rof: 25, autoClass: true }));
+    out.pure.abstain = { kind: abst.kind, newAction: abst.newAction, autoSingle: abst.autoSingle, stateUntouched: JSON.stringify(abst.state) === JSON.stringify(before) };
+    out.pure.abstainFresh = pick(step(null, semi({ itemId: "s", rof: 25, autoClass: true })));
   }
 
   // ── E: the real dialog + cards inside a started combat ────────────────────
@@ -82,7 +87,7 @@ const r = await p.evaluate(async () => {
     const created = await actor.createEmbeddedDocuments("Item", [
       mk("__PW__MAR Pistol A", { weaponType: "Pistol", attackType: "SemiAuto", rof: 2, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),   // 40: the legs fire fourteen times
       mk("__PW__MAR Pistol B", { weaponType: "Pistol", attackType: "SemiAuto", rof: 2, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),   // 40: the legs fire fourteen times
-      mk("__PW__MAR SMG",      { weaponType: "SMG",    attackType: "Auto",     rof: 25, shots: 30, shotsLeft: 30, damage: "2d6+1", range: 150, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
+      mk("__PW__MAR SMG",      { weaponType: "SMG",    attackType: "Auto",     rof: 25, shots: 120, shotsLeft: 120, damage: "2d6+1", range: 150, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
       mk("__PW__MAR Knife",    { weaponType: "Melee",  attackType: "Melee",    rof: 1, damage: "1d6", range: 1, accuracy: 0, reliability: "ST" }),
     ]);
     const byName = (n) => actor.items.find(i => i.name === `__PW__MAR ${n}`);
@@ -183,6 +188,16 @@ const r = await p.evaluate(async () => {
     o = await open(SMG); await setControl(o.d, { fireMode: "FullAuto" }); out.e.e5.burst2 = { pre: readDialog(o.d) }; out.e.e5.burst2.fired = await fire(o.d);
     Hooks.off("cyberpunk2020.weaponFired", cap);
 
+    // E8: single shots from the SMG: the counter leaves them alone, the warning draws on every one (the first too)
+    out.e.e8 = { start: await nextRound() };
+    o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e8.s1 = { pre: readDialog(o.d) }; out.e.e8.s1.fired = await fire(o.d);
+    o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e8.s2 = { pre: readDialog(o.d) }; out.e.e8.s2.fired = await fire(o.d);
+    o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e8.s3 = { pre: readDialog(o.d) }; out.e.e8.s3.fired = await fire(o.d);
+    // E9: two bursts whose rounds pass the weapon's ROF for the round draw the ceiling clause on the second
+    out.e.e9 = { start: await nextRound() };
+    const setRounds = async (d, v) => { const el = d.element?.querySelector('input[name="fields.fullAutoRoundsFired"], input[name="fullAutoRoundsFired"]'); if (!el) return false; el.value = String(v); el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); await sleep(200); return true; };
+    o = await open(SMG); await setControl(o.d, { fireMode: "FullAuto" }); out.e.e9.b1 = { rounds: await setRounds(o.d, 20), pre: readDialog(o.d) }; out.e.e9.b1.fired = await fire(o.d);
+    o = await open(SMG); await setControl(o.d, { fireMode: "FullAuto" }); out.e.e9.b2 = { rounds: await setRounds(o.d, 20), pre: readDialog(o.d) }; out.e.e9.b2.fired = await fire(o.d);
     // E6: the switch off - nothing seeded, no note, the counter still tracks
     out.e.e6 = { start: await nextRound() };
     await game.settings.set(SCOPE, "multiActionPenaltyEnabled", false);
@@ -226,6 +241,7 @@ if (P.exported) {
   ok("P12 after an interruption the shot is a new action that goes on with the count (resumed, shot 2 of 2)", P.resumed.kind === "new" && P.resumed.newAction && P.resumed.resumed === true && P.resumed.firedInCount === 2 && J(P.resumed.active) === '["p"]', J(P.resumed));
   ok("P13 after an interruption with the count used up, firing again starts a new count", P.resumedSpent.kind === "rofSpent" && P.resumedSpent.newAction && P.resumedSpent.firedInCount === 1, J(P.resumedSpent));
   ok("P14 a burst spent the count: the next semi-auto shot from that weapon starts a new count", P.afterBurst.kind === "rofSpent" && P.afterBurst.newAction, J(P.afterBurst));
+  ok("P15 single shots from an automatic weapon: the counter abstains - no new action, the state untouched, flagged autoSingle", P.abstain.kind === "abstain" && !P.abstain.newAction && P.abstain.autoSingle === true && P.abstain.stateUntouched === true && P.abstainFresh.kind === "abstain", J({ a: P.abstain, b: P.abstainFresh }));
 }
 const E = r.e;
 ok("E0 fixtures + started combat with the shooter as combatant", E.fixtures?.created === 4 && E.combat?.started && E.combat?.isMine && E.combat?.combatant && E.fixtures?.knifeRanged === false, J({ f: E.fixtures, c: E.combat, err: E.error }));
@@ -247,6 +263,10 @@ ok("E4c unticking restores the -3; re-ticking and firing keeps the counter at 1 
 const e5 = E.e5 ?? {};
 ok("E5a two full-auto rolls are two actions (second seeds -3)", e5.burst1?.pre?.extraMod === "" && e5.burst2?.pre?.extraMod === "-3" && e5.burst2?.fired?.after?.count === 2, J({ b1: e5.burst1?.pre, b2: e5.burst2?.pre, after: e5.burst2?.fired?.after }));
 ok("E5b the fire payload carries a per-pull id, the method name and the Dual Wield state", e5.payloads?.length >= 2 && e5.payloads.every(x => typeof x.fireId === "string" && x.fireId.length > 0 && x.fireMethod === "__fullAuto" && x.dualWield === false) && e5.payloads[0].fireId !== e5.payloads[1].fireId, J(e5.payloads));
+const e8 = E.e8 ?? {};
+ok("E8 single shots from an automatic weapon: nothing pre-filled on any of three, the warning names the missing mode on every one (the first included), the counter never moves", e8.s1?.pre?.extraMod === "" && e8.s2?.pre?.extraMod === "" && e8.s3?.pre?.extraMod === "" && [e8.s1, e8.s2, e8.s3].every(s => s?.pre?.kind === "abstain" && /automatic weapon/i.test(s?.pre?.note ?? "")) && e8.s3?.fired?.after?.count === null, J({ s1: e8.s1?.pre, s2: e8.s2?.pre, s3: e8.s3?.pre, after: e8.s3?.fired?.after }));
+const e9 = E.e9 ?? {};
+ok("E9 a second burst past the round's ROF carries the ceiling clause; the first does not", e9.b1?.rounds && e9.b2?.rounds && !/past its ROF/.test(e9.b1?.pre?.note ?? "") && /past its ROF/.test(e9.b2?.pre?.note ?? "") && e9.b2?.pre?.extraMod === "-3" && e9.b2?.fired?.after?.count === 2, J({ b1: e9.b1?.pre, b2: e9.b2?.pre, after: e9.b2?.fired?.after, r1: e9.b1?.rounds, r2: e9.b2?.rounds }));
 const e6 = E.e6 ?? {};
 ok("E6 switch off: nothing seeded and no note on shots 2 and 3, the counter still reads 2", e6.shot2?.pre?.extraMod === "" && e6.shot2?.pre?.note === null && e6.shot3?.pre?.extraMod === "" && e6.shot3?.pre?.note === null && e6.shot3?.fired?.after?.count === 2, J(e6));
 const e7 = E.e7 ?? {};
