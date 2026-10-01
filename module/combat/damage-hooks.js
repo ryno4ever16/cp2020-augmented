@@ -263,13 +263,15 @@ function _attackState(actor, round) {
  * opens a NEW action or continues the open one, and return the next state. Exported for the keeper.
  *
  *   roll = { itemId, round, fireMethod, rof, shots, dualWield, fireId }
- *   kind = "continue"    same weapon, semi-auto, still under its ROF        -> no new action
- *          "join"        another weapon with Dual Wield ticked (p.98)       -> no new action
- *          "sameTrigger" another card of the same trigger pull (multi-target burst) -> no new action
- *          "rofSpent"    same weapon, semi-auto, already at its ROF         -> new action (the note names it)
- *          "new"         everything else: first shot, other weapon, burst / full auto / melee, unknown ROF
- * Burst, full auto and melee spend the whole allowance (`consume = rof`), so the next roll from that weapon
- * is a new action - p.106 makes a burst one action, and p.98 allows one melee attack per action.
+ *   kind = "continue"    same weapon, semi-auto, in the open action, its count not used up -> no new action
+ *          "join"        another weapon with Dual Wield ticked (p.98)                       -> no new action
+ *          "sameTrigger" another card of the same trigger pull (multi-target burst)         -> no new action
+ *          "rofSpent"    semi-auto, the weapon's ROF count is used up: firing again starts a NEW count
+ *                        -> new action (the note names it)
+ *          "new"         everything else: first shot, other weapon, burst / full auto / melee, unknown ROF,
+ *                        and a shot that RESUMES an interrupted count (`resumed`: shot 2 of 2 after a kick)
+ * Burst, full auto and melee spend the whole count, so the next semi-auto shot from that weapon starts a new
+ * one - p.106 makes a burst one action, and p.98 allows one melee attack per action.
  */
 export function attackActionStep(state, roll) {
   const round  = roll?.round ?? 0;
@@ -279,34 +281,41 @@ export function attackActionStep(state, roll) {
   const rof    = rofKnown ? rofNum : 1;
   const n      = Math.max(1, Math.floor(Number(roll?.shots) || 1));
   const semi   = roll?.fireMethod === SEMI_AUTO_METHOD;
-  const live   = (state && state.round === round) ? state : { round, shots: {}, roundShots: {}, lastFireId: null };
-  const shots  = live.shots ?? {};
+  const live   = (state && state.round === round) ? state : { round, active: [], shots: {}, roundShots: {}, lastFireId: null };
+  // THE WEAPON'S ROF COUNT IS THE UNIT (RYNO's ruling, 2026-09-30): `shots` holds each weapon's position in its
+  // CURRENT count and persists through other actions in the round; `active` names the weapons in the attack
+  // action that is open right now (a kick, a dodge, a burst empty it); `roundShots` is the cumulative tally for
+  // the note. Another action breaks the ACTION, not the count: a shot after a kick is a new action that goes
+  // on with the count (shot 2 of 2). Only a count that is used up, and the choice to fire again, starts a new
+  // count - and that is a new action too.
+  const active     = Array.isArray(live.active) ? live.active : [];
+  const shots      = live.shots ?? {};
   const roundShots = live.roundShots ?? {};
   if (roll?.fireId && live.lastFireId === roll.fireId) {
-    return { kind: "sameTrigger", newAction: false, state: live, firedInAction: Number(shots[id]) || 0, firedInRound: Number(roundShots[id]) || 0, rof };
+    return { kind: "sameTrigger", newAction: false, resumed: false, state: live, firedInCount: Number(shots[id]) || 0, firedInRound: Number(roundShots[id]) || 0, rof };
   }
-  const inAction      = !!id && Object.prototype.hasOwnProperty.call(shots, id);
-  const firedInAction = inAction ? (Number(shots[id]) || 0) : 0;
-  const firedInRound  = (Number(roundShots[id]) || 0) + n;
-  const consume       = semi ? n : rof;
-  const openWeapons   = Object.keys(shots).length > 0;
+  const inAction    = !!id && active.includes(id);
+  const pos         = id ? (Number(shots[id]) || 0) : 0;      // shots already spent in the current count
+  const cum         = (Number(roundShots[id]) || 0) + n;       // this round, this roll included
+  const openWeapons = active.length > 0;
   let kind;
-  if (!id || !rofKnown)                          kind = "new";
-  else if (inAction && semi)                     kind = firedInAction < rof ? "continue" : "rofSpent";
-  else if (!inAction && roll?.dualWield && openWeapons) kind = "join";
-  else                                           kind = "new";
-  let nextShots;
-  if (!id)                      nextShots = {};
-  else if (kind === "continue") nextShots = { ...shots, [id]: firedInAction + consume };
-  else if (kind === "join")     nextShots = { ...shots, [id]: consume };
-  else                          nextShots = { [id]: consume };
-  const nextRound = id ? { ...roundShots, [id]: firedInRound } : { ...roundShots };
+  if (!id || !rofKnown)                                     kind = "new";
+  else if (semi && pos >= rof)                              kind = "rofSpent";   // the count is used up: firing again starts a new one
+  else if (semi && inAction)                                kind = "continue";
+  else if (!inAction && roll?.dualWield && openWeapons)     kind = "join";
+  else                                                      kind = "new";
+  // A semi-auto shot advances the count (from one, after rofSpent); a burst, full auto or melee roll spends it whole.
+  const nextPos = !semi ? rof : (kind === "rofSpent" ? n : pos + n);
+  const nextShots = { ...shots }; if (id) nextShots[id] = nextPos;
+  const nextRound = { ...roundShots }; if (id) nextRound[id] = cum;
+  const nextActive = (kind === "continue" || kind === "join") ? (inAction ? active : [...active, id]) : (id ? [id] : []);
   return {
     kind,
     newAction: kind === "new" || kind === "rofSpent",
-    state: { round, shots: nextShots, roundShots: nextRound, lastFireId: roll?.fireId ?? null },
-    firedInAction: id ? (nextShots[id] ?? 0) : 0,
-    firedInRound,
+    resumed: kind === "new" && semi && rofKnown && pos > 0,   // a new action that goes on with an interrupted count
+    state: { round, active: nextActive, shots: nextShots, roundShots: nextRound, lastFireId: roll?.fireId ?? null },
+    firedInCount: id ? nextPos : 0,
+    firedInRound: cum,
     rof,
   };
 }
@@ -314,12 +323,12 @@ function _incrementActionCount(actor) {
   // Single choke point for every NON-attack increment (aim / dodge / parry / manual +action): the counter
   // only advances inside a combat this actor is part of. Out of combat it is a no-op so the penalty never
   // accrues with no round boundary to reset it. A declared action CLOSES the open attack action - a shot
-  // after a kick is a new action (p.98) - while the per-round shot tally is kept.
+  // after a kick is a new action (p.98) - while every weapon's ROF count and the round tally are kept.
   if (!_inActiveCombat(actor)) return Promise.resolve();
   return _chainActionWrite(actor, () => {
     const round  = game?.combat?.round ?? 0;
     const st     = _attackState(actor, round);
-    const closed = { round, shots: {}, roundShots: st?.roundShots ?? {}, lastFireId: null };
+    const closed = { round, active: [], shots: st?.shots ?? {}, roundShots: st?.roundShots ?? {}, lastFireId: null };
     return actor.update({
       "flags.cp2020-augmented.actionCount":      _getActionCount(actor) + 1,
       "flags.cp2020-augmented.actionCountRound": round,
@@ -398,12 +407,13 @@ function _multiActionNoteFor(actor, ev) {
   const penaltyText = penalty ? String(penalty) : localize("MultiActionPenaltyNoneLong");
   const name = actor.name;
   if (step.kind === "continue") {
-    let line = localizeParam("MultiActionContinueNote", { name, shot: step.firedInAction, rof: step.rof, count: declaring, penalty: penaltyText });
+    let line = localizeParam("MultiActionContinueNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty: penaltyText });
     if (step.firedInRound > step.rof) line += localizeParam("MultiActionRofRoundClause", { fired: step.firedInRound, rof: step.rof });
     return line;
   }
   if (step.kind === "join") return localizeParam("MultiActionJoinNote", { name, count: declaring, penalty: penaltyText });
-  if (step.kind === "rofSpent") return localizeParam("MultiActionRofSpentNote", { name, fired: step.firedInRound, rof: step.rof, count: declaring, penalty });
+  if (step.kind === "rofSpent") return localizeParam("MultiActionRofSpentNote", { name, fired: step.firedInRound - 1, rof: step.rof, count: declaring, penalty });
+  if (step.resumed) return localizeParam("MultiActionResumeNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty });
   return _isAcpa(actor)
     ? localizeParam("MultiActionAcpaDialogNote", { name, count: declaring, penalty, max: _acpaMaxActions(actor) })
     : localizeParam("MultiActionDialogNote",     { name, count: declaring, penalty });

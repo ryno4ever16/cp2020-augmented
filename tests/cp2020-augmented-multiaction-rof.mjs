@@ -6,10 +6,12 @@
  * at -3 on both weapons. The counter used to advance once per fire ROLL, and the base rolls a semi-auto
  * weapon one shot per roll, so an ROF-2 pistol's second shot pre-filled -3 (rig-proven before the fix).
  *
- * Now a fire roll CONTINUES the open attack action while the same weapon is fired semi-auto under its
- * ROF; burst / full auto / melee spend the whole action; a second weapon joins the action only with Dual
- * Wield ticked; any other tracked action (dodge, parry, aim, manual +) closes it; a shot past the ROF is a
- * new action with a note; every card of ONE trigger pull (a multi-target burst) is one action.
+ * Now the weapon's ROF COUNT is the unit (RYNO's ruling 2026-09-30): a fire roll CONTINUES the open attack
+ * action while the same weapon is fired semi-auto and its count is not used up; another tracked action
+ * (dodge, parry, aim, manual +, another weapon, a melee swing, a burst) breaks the ACTION but not the count -
+ * the next shot is a new action that goes on with the count (shot 2 of 2); a count that is used up and the
+ * choice to fire again starts a new count, as a new action; a second weapon joins the action only with Dual
+ * Wield ticked; every card of ONE trigger pull (a multi-target burst) is one action.
  *
  * Legs:
  *   P  pure step function (attackActionStep), one leg per branch
@@ -46,8 +48,8 @@ const r = await p.evaluate(async () => {
   out.pure.exported = typeof step === "function";
   if (out.pure.exported) {
     const semi = (over = {}) => ({ itemId: "p", round: 1, fireMethod: "__semiAuto", rof: 2, shots: 1, dualWield: false, fireId: null, ...over });
-    const st = (shots, extra = {}) => ({ round: 1, shots, roundShots: { ...shots }, lastFireId: null, ...extra });
-    const pick = (s) => ({ kind: s.kind, newAction: s.newAction, shots: s.state.shots, roundShots: s.state.roundShots, firedInAction: s.firedInAction, firedInRound: s.firedInRound });
+    const st = (shots, extra = {}) => ({ round: 1, active: Object.keys(shots), shots, roundShots: { ...shots }, lastFireId: null, ...extra });
+    const pick = (s) => ({ kind: s.kind, newAction: s.newAction, resumed: s.resumed, active: s.state.active, shots: s.state.shots, roundShots: s.state.roundShots, firedInCount: s.firedInCount, firedInRound: s.firedInRound });
     out.pure.fresh      = pick(step(null, semi()));
     out.pure.cont       = pick(step(st({ p: 1 }), semi()));
     out.pure.rofSpent   = pick(step(st({ p: 2 }), semi()));
@@ -59,6 +61,10 @@ const r = await p.evaluate(async () => {
     out.pure.melee      = pick(step(st({ k: 1 }), semi({ itemId: "k", fireMethod: "__meleeBonk", rof: 1 })));
     out.pure.samePull   = pick(step(st({ s: 25 }, { lastFireId: "F1" }), semi({ itemId: "s", fireMethod: "__fullAuto", rof: 25, fireId: "F1" })));
     out.pure.noRof      = pick(step(st({ p: 1 }), semi({ rof: null })));
+    // the interrupted count: the weapon is no longer in the open action, its count position persists
+    out.pure.resumed    = pick(step(st({ p: 1 }, { active: [] }), semi()));          // shot 2 of 2 as a NEW action
+    out.pure.resumedSpent = pick(step(st({ p: 2 }, { active: [] }), semi()));        // count used up → new count
+    out.pure.afterBurst = pick(step(st({ s: 25 }, { active: [] }), semi({ itemId: "s", rof: 25 })));   // a burst spent the count
   }
 
   // ── E: the real dialog + cards inside a started combat ────────────────────
@@ -74,8 +80,8 @@ const r = await p.evaluate(async () => {
     await actor.update({ "system.stats.ref.base": 8 });
     const mk = (name, system) => ({ name, type: "weapon", system });
     const created = await actor.createEmbeddedDocuments("Item", [
-      mk("__PW__MAR Pistol A", { weaponType: "Pistol", attackType: "SemiAuto", rof: 2, shots: 12, shotsLeft: 12, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
-      mk("__PW__MAR Pistol B", { weaponType: "Pistol", attackType: "SemiAuto", rof: 2, shots: 12, shotsLeft: 12, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
+      mk("__PW__MAR Pistol A", { weaponType: "Pistol", attackType: "SemiAuto", rof: 2, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),   // 40: the legs fire fourteen times
+      mk("__PW__MAR Pistol B", { weaponType: "Pistol", attackType: "SemiAuto", rof: 2, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),   // 40: the legs fire fourteen times
       mk("__PW__MAR SMG",      { weaponType: "SMG",    attackType: "Auto",     rof: 25, shots: 30, shotsLeft: 30, damage: "2d6+1", range: 150, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
       mk("__PW__MAR Knife",    { weaponType: "Melee",  attackType: "Melee",    rof: 1, damage: "1d6", range: 1, accuracy: 0, reliability: "ST" }),
     ]);
@@ -143,19 +149,22 @@ const r = await p.evaluate(async () => {
     let o = await open(A); const s1 = { pre: readDialog(o.d), opened: o.ok }; s1.fired = await fire(o.d);
     o = await open(A);     const s2 = { pre: readDialog(o.d), opened: o.ok }; s2.fired = await fire(o.d);
     o = await open(A);     const s3 = { pre: readDialog(o.d), opened: o.ok }; s3.fired = await fire(o.d);
-    out.e.e1 = { s1, s2, s3 };
+    o = await open(A);     const s4 = { pre: readDialog(o.d), opened: o.ok }; s4.fired = await fire(o.d);
+    out.e.e1 = { s1, s2, s3, s4 };
 
     // E2: shoot / melee / shoot
     out.e.e2 = { start: await nextRound() };
     o = await open(A); out.e.e2.shot1 = { pre: readDialog(o.d) }; out.e.e2.shot1.fired = await fire(o.d);
     o = await open(K); out.e.e2.knife = { pre: readDialog(o.d), opened: o.ok }; out.e.e2.knife.fired = await fire(o.d);
     o = await open(A); out.e.e2.shot2 = { pre: readDialog(o.d) }; out.e.e2.shot2.fired = await fire(o.d);
+    o = await open(A); out.e.e2.shot3 = { pre: readDialog(o.d) }; out.e.e2.shot3.fired = await fire(o.d);
 
     // E3: shoot / dodge / shoot
     out.e.e3 = { start: await nextRound() };
     o = await open(A); out.e.e3.shot1 = { pre: readDialog(o.d) }; out.e.e3.shot1.fired = await fire(o.d);
     out.e.e3.dodge = await dodgeViaTracker();
     o = await open(A); out.e.e3.shot2 = { pre: readDialog(o.d) }; out.e.e3.shot2.fired = await fire(o.d);
+    o = await open(A); out.e.e3.shot3 = { pre: readDialog(o.d) }; out.e.e3.shot3.fired = await fire(o.d);
     await actor.unsetFlag(SCOPE, "dodging").catch(() => {});
 
     // E4: second weapon joins under Dual Wield (live re-evaluation in the open dialog)
@@ -204,8 +213,8 @@ const P = r.pure;
 ok("P0 attackActionStep is exported", P.exported, J(P));
 if (P.exported) {
   ok("P1 first shot opens an action holding one shot", P.fresh.kind === "new" && P.fresh.newAction && P.fresh.shots.p === 1, J(P.fresh));
-  ok("P2 same weapon under ROF continues (no new action, shot 2 of 2)", P.cont.kind === "continue" && !P.cont.newAction && P.cont.shots.p === 2 && P.cont.firedInAction === 2, J(P.cont));
-  ok("P3 same weapon past ROF opens a new action and the round tally reads 3", P.rofSpent.kind === "rofSpent" && P.rofSpent.newAction && P.rofSpent.firedInRound === 3, J(P.rofSpent));
+  ok("P2 same weapon under ROF continues (no new action, shot 2 of 2)", P.cont.kind === "continue" && !P.cont.newAction && P.cont.shots.p === 2 && P.cont.firedInCount === 2, J(P.cont));
+  ok("P3 a used-up count: firing again starts a new count as a new action, the round tally reads 3", P.rofSpent.kind === "rofSpent" && P.rofSpent.newAction && P.rofSpent.firedInRound === 3 && P.rofSpent.shots.p === 1 && P.rofSpent.firedInCount === 1, J(P.rofSpent));
   ok("P4 another weapon without Dual Wield opens a new action", P.other.kind === "new" && P.other.newAction, J(P.other));
   ok("P5 another weapon with Dual Wield joins (both weapons in the action)", P.join.kind === "join" && !P.join.newAction && P.join.shots.p === 1 && P.join.shots.q === 1, J(P.join));
   ok("P6 Dual Wield with no open action opens one", P.joinNoOpen.kind === "new" && P.joinNoOpen.newAction, J(P.joinNoOpen));
@@ -214,21 +223,27 @@ if (P.exported) {
   ok("P9 a second melee swing is a new action (never continues)", P.melee.kind === "new" && P.melee.newAction, J(P.melee));
   ok("P10 a second card of the same trigger pull is the same action", P.samePull.kind === "sameTrigger" && !P.samePull.newAction, J(P.samePull));
   ok("P11 an unknown ROF never continues (falls back to one action per roll)", P.noRof.kind === "new" && P.noRof.newAction, J(P.noRof));
+  ok("P12 after an interruption the shot is a new action that goes on with the count (resumed, shot 2 of 2)", P.resumed.kind === "new" && P.resumed.newAction && P.resumed.resumed === true && P.resumed.firedInCount === 2 && J(P.resumed.active) === '["p"]', J(P.resumed));
+  ok("P13 after an interruption with the count used up, firing again starts a new count", P.resumedSpent.kind === "rofSpent" && P.resumedSpent.newAction && P.resumedSpent.firedInCount === 1, J(P.resumedSpent));
+  ok("P14 a burst spent the count: the next semi-auto shot from that weapon starts a new count", P.afterBurst.kind === "rofSpent" && P.afterBurst.newAction, J(P.afterBurst));
 }
 const E = r.e;
 ok("E0 fixtures + started combat with the shooter as combatant", E.fixtures?.created === 4 && E.combat?.started && E.combat?.isMine && E.combat?.combatant && E.fixtures?.knifeRanged === false, J({ f: E.fixtures, c: E.combat, err: E.error }));
 const e1 = E.e1 ?? {};
 ok("E1a shot 1: nothing seeded, no note; counter 1 after", e1.s1?.pre?.extraMod === "" && e1.s1?.pre?.note === null && e1.s1?.fired?.after?.count === 1, J(e1.s1));
 ok("E1b shot 2 continues: nothing seeded, note reads shot 2 of 2; counter still 1", e1.s2?.pre?.kind === "continue" && Number(e1.s2?.pre?.extraMod || 0) === 0 && /shot 2 of 2/i.test(e1.s2?.pre?.note ?? "") && e1.s2?.fired?.after?.count === 1 && e1.s2?.fired?.after?.attack?.shots && Object.values(e1.s2.fired.after.attack.shots)[0] === 2, J(e1.s2));
-ok("E1c shot 3 past the ROF: -3 seeded, note names the ROF; counter 2 after", e1.s3?.pre?.kind === "rofSpent" && e1.s3?.pre?.extraMod === "-3" && /ROF/.test(e1.s3?.pre?.note ?? "") && e1.s3?.fired?.after?.count === 2, J(e1.s3));
+ok("E1c shot 3, the count used up: a new count as action 2, -3 seeded, note names the ROF; counter 2 after", e1.s3?.pre?.kind === "rofSpent" && e1.s3?.pre?.extraMod === "-3" && /ROF/.test(e1.s3?.pre?.note ?? "") && e1.s3?.fired?.after?.count === 2, J(e1.s3));
+ok("E1d shot 4 continues the second count (shot 2 of 2, still action 2 at -3); counter still 2", e1.s4?.pre?.kind === "continue" && e1.s4?.pre?.extraMod === "-3" && /shot 2 of 2/.test(e1.s4?.pre?.note ?? "") && e1.s4?.fired?.after?.count === 2, J(e1.s4));
 const e2 = E.e2 ?? {};
-ok("E2 shoot / melee / shoot seeds 0 / -3 / -6 and the counter ends at 3", e2.shot1?.pre?.extraMod === "" && e2.knife?.pre?.extraMod === "-3" && /action 2/.test(e2.knife?.pre?.note ?? "") && e2.shot2?.pre?.extraMod === "-6" && /action 3/.test(e2.shot2?.pre?.note ?? "") && e2.shot2?.fired?.after?.count === 3, J(e2));
+ok("E2a shoot / melee / shoot seeds 0 / -3 / -6; the shot after the swing is a new action that goes on with the count (shot 2 of 2)", e2.shot1?.pre?.extraMod === "" && e2.knife?.pre?.extraMod === "-3" && /action 2/.test(e2.knife?.pre?.note ?? "") && e2.shot2?.pre?.extraMod === "-6" && /action 3/.test(e2.shot2?.pre?.note ?? "") && /shot 2 of 2/.test(e2.shot2?.pre?.note ?? "") && e2.shot2?.fired?.after?.count === 3, J({ s1: e2.shot1?.pre, k: e2.knife?.pre, s2: e2.shot2?.pre, after: e2.shot2?.fired?.after }));
+ok("E2b one more shot: the count is used up, so firing again starts a new count as action 4 at -9", e2.shot3?.pre?.extraMod === "-9" && e2.shot3?.pre?.kind === "rofSpent" && /ROF/.test(e2.shot3?.pre?.note ?? "") && e2.shot3?.fired?.after?.count === 4, J({ s3: e2.shot3?.pre, after: e2.shot3?.fired?.after }));
 const e3 = E.e3 ?? {};
-ok("E3 a declared dodge closes the attack action: the next shot is action 3 at -6", e3.dodge?.clicked && e3.dodge?.dodging && e3.dodge?.flags?.count === 2 && e3.shot2?.pre?.extraMod === "-6" && e3.shot2?.pre?.kind === "new" && e3.shot2?.fired?.after?.count === 3, J(e3));
+ok("E3a a declared dodge closes the attack action: the next shot is action 3 at -6 and goes on with the count", e3.dodge?.clicked && e3.dodge?.dodging && e3.dodge?.flags?.count === 2 && e3.shot2?.pre?.extraMod === "-6" && e3.shot2?.pre?.kind === "new" && /shot 2 of 2/.test(e3.shot2?.pre?.note ?? "") && e3.shot2?.fired?.after?.count === 3, J({ d: e3.dodge, s2: e3.shot2?.pre, after: e3.shot2?.fired?.after }));
+ok("E3b the shot after that starts a new count: action 4 at -9", e3.shot3?.pre?.kind === "rofSpent" && e3.shot3?.pre?.extraMod === "-9" && e3.shot3?.fired?.after?.count === 4, J({ s3: e3.shot3?.pre, after: e3.shot3?.fired?.after }));
 const e4 = E.e4 ?? {};
 ok("E4a second weapon without Dual Wield reads as action 2 at -3", e4.bBefore?.extraMod === "-3" && e4.bBefore?.kind === "new", J(e4.bBefore));
 ok("E4b ticking Dual Wield re-evaluates live: joins the action, seed removed, note says Dual Wield", e4.bTicked?.kind === "join" && Number(e4.bTicked?.extraMod || 0) === 0 && /Dual Wield/i.test(e4.bTicked?.note ?? ""), J(e4.bTicked));
-ok("E4c unticking restores the -3; re-ticking and firing keeps the counter at 1 with both weapons in the action", e4.bUnticked?.extraMod === "-3" && e4.bFired?.after?.count === 1 && Object.keys(e4.bFired?.after?.attack?.shots ?? {}).length === 2, J({ un: e4.bUnticked, fired: e4.bFired }));
+ok("E4c unticking restores the -3; re-ticking and firing keeps the counter at 1 with both weapons in the action", e4.bUnticked?.extraMod === "-3" && e4.bFired?.after?.count === 1 && (e4.bFired?.after?.attack?.active ?? []).length === 2, J({ un: e4.bUnticked, fired: e4.bFired }));
 const e5 = E.e5 ?? {};
 ok("E5a two full-auto rolls are two actions (second seeds -3)", e5.burst1?.pre?.extraMod === "" && e5.burst2?.pre?.extraMod === "-3" && e5.burst2?.fired?.after?.count === 2, J({ b1: e5.burst1?.pre, b2: e5.burst2?.pre, after: e5.burst2?.fired?.after }));
 ok("E5b the fire payload carries a per-pull id, the method name and the Dual Wield state", e5.payloads?.length >= 2 && e5.payloads.every(x => typeof x.fireId === "string" && x.fireId.length > 0 && x.fireMethod === "__fullAuto" && x.dualWield === false) && e5.payloads[0].fireId !== e5.payloads[1].fireId, J(e5.payloads));
