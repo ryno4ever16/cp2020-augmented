@@ -37,7 +37,7 @@
     "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 800,
-    "attackType": "",
+    "attackType": "SemiAuto",
     "attackSkill": "Rifle"
   },
   "effects": [],

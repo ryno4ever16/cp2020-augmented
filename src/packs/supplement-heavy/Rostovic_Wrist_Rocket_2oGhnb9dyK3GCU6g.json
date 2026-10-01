@@ -36,7 +36,7 @@
     "burstCapable": false,
     "reliability": "Standard",
     "range": 250,
-    "attackType": "",
+    "attackType": "RPG",
     "attackSkill": "Heavy Weapons"
   },
   "effects": [],

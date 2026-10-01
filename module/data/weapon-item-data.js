@@ -16,6 +16,14 @@
 import { canonicalWeaponEnums } from "./enum-spellings.js";
 
 const WEAPON_AUGMENT_FIELDS = {
+  // ⭐ BURST CAPABLE (2026-09-30, source-checked attack-type review): the weapon sheet has carried this box
+  // (templates/item/parts/weapon/settings.hbs) and 248 pack sources carry the value, but the field had no
+  // schema home, so the base model stripped it from every document - the box was inert and the data only
+  // survived as raw pack bytes. It marks the select-fire pistols and rifles the books describe as single
+  // shot OR three-round burst and never full auto (3-Spot, Glock 30, .357 carbine, M-2012); the module's
+  // fire-mode list (lookups.js rangedModifiers) offers Three-Round Burst to a semi-automatic that carries
+  // it. Additive with a behaviour-preserving default - no migration.
+  burstCapable: (f) => new f.BooleanField({ initial: false }),
   edged:  (f) => new f.BooleanField({ initial: false }),
   mono:   (f) => new f.BooleanField({ initial: false }),
   broken: (f) => new f.BooleanField({ initial: false }),

@@ -33,10 +33,10 @@
     "shots": 24,
     "rof": 3,
     "fullAutoCapable": false,
-    "burstCapable": false,
+    "burstCapable": true,
     "reliability": "Standard",
     "range": 50,
-    "attackType": "",
+    "attackType": "SemiAuto",
     "attackSkill": "Handgun"
   },
   "effects": [],

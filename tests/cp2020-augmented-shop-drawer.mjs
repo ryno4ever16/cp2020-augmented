@@ -156,7 +156,7 @@ try {
     const only = (p, cell, n) => { const c = cells(p); return Object.keys(c).length === 1 && c[cell] === n; };
 
     const pinned = [
-      ["supplement-pistols", "Weapons/Pistols", 68], ["supplement-submachineguns", "Weapons/SMGs", 21],
+      ["supplement-pistols", "Weapons/Pistols", 67], ["supplement-submachineguns", "Weapons/SMGs", 21],   // 67 since 2026-09-30: the Teen Dream/Teen Dreem duplicate was removed (attack-type review)
       ["supplement-rifles", "Weapons/Rifles", 43], ["supplement-shotguns", "Weapons/Shotguns", 19],
       ["supplement-heavy", "Weapons/Heavy", 68],
       // ⏪ 19 → 20 (2026-08-29, found by this sweep): NOT a settings-trim change and not a regression.

@@ -11,6 +11,7 @@ import { apiHelper } from "./system-api.js";
 // here that is computed from an area-delivery export: that WOULD run during evaluation and would read
 // undefined on one of the two load orders.
 import { weaponDetonates } from "./combat/area-delivery.js";
+import { correctedAttackType } from "./data-corrections.js";
 
 // Prefer the base system's lookup helpers (game.cyberpunk.api.lookups) at call time; fall back to the
 // local copies (the _-prefixed functions below). See module/system-api.js. (Data tables stay local.)
@@ -136,6 +137,8 @@ export let fireModes = {
     // Really semi auto is any none auto with RoF with more than 1
     semiAuto: "SemiAuto"
 }
+// The same enum under a name no function shadows (rangedModifiers keeps a local `fireModes` ARRAY).
+const FIRE_MODE = fireModes;
 
 // Vehicle class suggestions for the item sheet's soft-enum datalist (VEHICLE-SPEC.md §4/§6:
 // `vehicleType` is a free string so the books' own type vocabulary survives — "Super-heavy
@@ -1270,6 +1273,20 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
     const sys = weapon._getWeaponSystem?.() ?? weapon.system ?? {};
     let range = sys.range || 50;
     let fireModes = weapon.__getFireModes() || [];
+    // THE MODES THE BOOK GIVES THIS WEAPON (2026-09-30, source-checked review, import-staging/
+    // ATTACKTYPE-SOURCE-REVIEW.md). The base keys its list on the stored attackType alone. Two things it
+    // cannot see are read here: the registry's corrected attack type for a mis-tagged base weapon (the
+    // CAWS, Core p.109's own autoshotgun example), and the weapon sheet's Burst Capable box, which marks
+    // the select-fire pistols and rifles the books describe as single shot OR three-round burst and
+    // never full auto (3-Spot, Glock 30, .357 carbine, M-2012). An automatic weapon keeps the base's
+    // full list; a burst-capable semi-automatic gets Semi-Auto and Three-Round Burst, nothing more.
+    const bookAtk = correctedAttackType(weapon) || String(sys.attackType ?? "");
+    const autoClass = bookAtk === rangedAttackTypes.auto || bookAtk === rangedAttackTypes.autoshotgun;
+    if (autoClass) {
+      if (!fireModes.includes(FIRE_MODE.fullAuto)) fireModes = [FIRE_MODE.fullAuto, FIRE_MODE.suppressive, FIRE_MODE.threeRoundBurst, FIRE_MODE.semiAuto];
+    } else if (sys.burstCapable === true && fireModes.includes(FIRE_MODE.semiAuto) && !fireModes.includes(FIRE_MODE.threeRoundBurst)) {
+      fireModes = [...fireModes, FIRE_MODE.threeRoundBurst];
+    }
     const rof = Math.max(0, Math.floor(Number(sys.rof) || 0));
     const shotsLeft = Math.max(0, Math.floor(Number(sys.shotsLeft) || 0));
     // Suppressive/rounds-fired can never exceed the loaded rounds (base semantics): cap at min(rof, shotsLeft).

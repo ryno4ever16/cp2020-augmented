@@ -37,7 +37,7 @@
     "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 50,
-    "attackType": "",
+    "attackType": "SemiAuto",
     "attackSkill": "Handgun"
   },
   "effects": [],

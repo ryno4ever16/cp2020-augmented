@@ -37,7 +37,7 @@
     "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 450,
-    "attackType": "",
+    "attackType": "Auto",
     "attackSkill": "Heavy Weapons"
   },
   "effects": [],

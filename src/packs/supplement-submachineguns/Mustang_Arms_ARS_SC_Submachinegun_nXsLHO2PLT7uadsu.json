@@ -37,7 +37,7 @@
     "burstCapable": true,
     "reliability": "VeryReliable",
     "range": 100,
-    "attackType": "",
+    "attackType": "Auto",
     "attackSkill": "Submachinegun"
   },
   "effects": [],

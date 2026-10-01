@@ -34,10 +34,10 @@
     "shots": 100,
     "rof": 10,
     "fullAutoCapable": true,
-    "burstCapable": true,
+    "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 650,
-    "attackType": "",
+    "attackType": "Auto",
     "attackSkill": "Heavy Weapons"
   },
   "effects": [],

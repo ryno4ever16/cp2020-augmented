@@ -451,6 +451,15 @@ export const DATA_CORRECTIONS = {
    * flak vest/pants · ballistic nylon helmet. (Metal Gear already resolved hard by name and needs
    * no entry.) Its SOFT row — kevlars, the M-78, heavy leather, SkinTight padding, the armor
    * jackets — matches what the fallback already returns, so no soft entries are needed either. */
+  /* Autoshotguns tagged as plain shotguns (2026-09-30, source-checked review `import-staging/
+     ATTACKTYPE-SOURCE-REVIEW.md`). Core p.109 names the CAWS in its own autoshotgun example ("Ripperjack
+     opens up with a CAWS, firing 5 shots"), and Home of the Brave p.83 calls it "the first combat
+     automatic shotgun". The tag decides which fire modes the dialog offers: `patch` writes it onto a copy
+     at create time; `correctedAttackType` (below) reads it for a compendium document or an older copy. */
+  "cyberpunk2020.shotguns": {
+    vWOoylh5RXN5GC5c: { attackType: "Autoshotgun", patch: { attackType: "Autoshotgun" } },   // CAWS — Core p.66 entry, p.109 rule
+  },
+
   "cyberpunk2020.armor": {
     aiehEkbdjqqYZD9j: { armorType: "hard" },   // Flack Vest — the book's "flak vest" HARD row
     IBWsFBQDEZveDNJP: { armorType: "hard" },   // Flack Pants — the book's "flak pants" HARD row
@@ -539,6 +548,18 @@ export function correctedArmorType(item) {
   if (!src) return "";
   const t = String(correctionFor(src.packId, src.itemId)?.armorType ?? "").toLowerCase();
   return (t === "hard" || t === "soft") ? t : "";
+}
+
+/**
+ * The book-corrected attack type for a weapon, or "" when the registry says nothing. READ-TIME, same
+ * match as `correctedArmorType`: an owned copy by its `_stats.compendiumSource`, a compendium document by
+ * its own uuid. The module's fire-mode list reads it (lookups.js) so a mis-tagged base weapon gets the
+ * modes the book gives it even on a copy made before the entry existed.
+ */
+export function correctedAttackType(item) {
+  const src = parseCompendiumSource(item?._stats?.compendiumSource ?? item?._source?._stats?.compendiumSource ?? item?.uuid);
+  if (!src) return "";
+  return String(correctionFor(src.packId, src.itemId)?.attackType ?? "");
 }
 
 /** The base packs that ARE the book's services list: a row with no entry is a one-off, never gear. */
