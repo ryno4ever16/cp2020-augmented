@@ -193,6 +193,15 @@ const r = await p.evaluate(async () => {
     o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e8.s1 = { pre: readDialog(o.d) }; out.e.e8.s1.fired = await fire(o.d);
     o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e8.s2 = { pre: readDialog(o.d) }; out.e.e8.s2.fired = await fire(o.d);
     o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e8.s3 = { pre: readDialog(o.d) }; out.e.e8.s3.fired = await fire(o.d);
+    // E10: an automatic with a PRINTED semi-auto rate (rofSemi 3): single shots get the count at that rate
+    out.e.e10 = { start: await nextRound() };
+    await SMG.update({ "system.rofSemi": 3 }); await sleep(300);
+    out.e.e10.stored = actor.items.get(SMG.id)?.system?.rofSemi;
+    o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e10.s1 = { pre: readDialog(o.d) }; out.e.e10.s1.fired = await fire(o.d);
+    o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e10.s2 = { pre: readDialog(o.d) }; out.e.e10.s2.fired = await fire(o.d);
+    o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e10.s3 = { pre: readDialog(o.d) }; out.e.e10.s3.fired = await fire(o.d);
+    o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e10.s4 = { pre: readDialog(o.d) }; out.e.e10.s4.fired = await fire(o.d);
+    await SMG.update({ "system.rofSemi": 0 }); await sleep(300);
     // E9: two bursts whose rounds pass the weapon's ROF for the round draw the ceiling clause on the second
     out.e.e9 = { start: await nextRound() };
     const setRounds = async (d, v) => { const el = d.element?.querySelector('input[name="fields.fullAutoRoundsFired"], input[name="fullAutoRoundsFired"]'); if (!el) return false; el.value = String(v); el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); await sleep(200); return true; };
@@ -265,6 +274,8 @@ ok("E5a two full-auto rolls are two actions (second seeds -3)", e5.burst1?.pre?.
 ok("E5b the fire payload carries a per-pull id, the method name and the Dual Wield state", e5.payloads?.length >= 2 && e5.payloads.every(x => typeof x.fireId === "string" && x.fireId.length > 0 && x.fireMethod === "__fullAuto" && x.dualWield === false) && e5.payloads[0].fireId !== e5.payloads[1].fireId, J(e5.payloads));
 const e8 = E.e8 ?? {};
 ok("E8 single shots from an automatic weapon: nothing pre-filled on any of three, the warning names the missing mode on every one (the first included), the counter never moves", e8.s1?.pre?.extraMod === "" && e8.s2?.pre?.extraMod === "" && e8.s3?.pre?.extraMod === "" && [e8.s1, e8.s2, e8.s3].every(s => s?.pre?.kind === "abstain" && /automatic weapon/i.test(s?.pre?.note ?? "")) && e8.s3?.fired?.after?.count === null, J({ s1: e8.s1?.pre, s2: e8.s2?.pre, s3: e8.s3?.pre, after: e8.s3?.fired?.after }));
+const e10 = E.e10 ?? {};
+ok("E10 an automatic with a printed semi-auto rate of 3: shots 2 and 3 continue the action at that rate (the line names it), shot 4 starts a new count at -3; the field survives on the document", e10.stored === 3 && e10.s1?.pre?.extraMod === "" && e10.s2?.pre?.kind === "continue" && /semi-auto rate of 3/i.test(e10.s2?.pre?.note ?? "") && /shot 2 of 3/.test(e10.s2?.pre?.note ?? "") && e10.s3?.pre?.kind === "continue" && e10.s4?.pre?.kind === "rofSpent" && e10.s4?.pre?.extraMod === "-3" && e10.s4?.fired?.after?.count === 2, J({ stored: e10.stored, s1: e10.s1?.pre, s2: e10.s2?.pre, s3: e10.s3?.pre, s4: e10.s4?.pre, after: e10.s4?.fired?.after }));
 const e9 = E.e9 ?? {};
 ok("E9 a second burst past the round's ROF carries the ceiling clause; the first does not", e9.b1?.rounds && e9.b2?.rounds && !/past its ROF/.test(e9.b1?.pre?.note ?? "") && /past its ROF/.test(e9.b2?.pre?.note ?? "") && e9.b2?.pre?.extraMod === "-3" && e9.b2?.fired?.after?.count === 2, J({ b1: e9.b1?.pre, b2: e9.b2?.pre, after: e9.b2?.fired?.after, r1: e9.b1?.rounds, r2: e9.b2?.rounds }));
 const e6 = E.e6 ?? {};

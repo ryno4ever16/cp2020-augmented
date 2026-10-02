@@ -562,6 +562,18 @@ export function correctedAttackType(item) {
   return String(correctionFor(src.packId, src.itemId)?.attackType ?? "");
 }
 
+/**
+ * The book-printed single-shot rate for an automatic weapon in a BASE pack (Tilt's core weapons cannot carry the
+ * module's `rofSemi` field in their pack data), or 0 when the registry says nothing. READ-TIME, same match as
+ * `correctedAttackType`. The action counter reads it before the item's own field.
+ */
+export function correctedRofSemi(item) {
+  const src = parseCompendiumSource(item?._stats?.compendiumSource ?? item?._source?._stats?.compendiumSource ?? item?.uuid);
+  if (!src) return 0;
+  const n = Math.floor(Number(correctionFor(src.packId, src.itemId)?.rofSemi));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /** The base packs that ARE the book's services list: a row with no entry is a one-off, never gear. */
 const SERVICE_LIST_PACKS = new Set(["cyberpunk2020.rentalandservices"]);
 

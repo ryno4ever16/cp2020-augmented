@@ -31,7 +31,7 @@ import { onChatCardRender } from "../chat-render-compat.js";
 // a pattern whose card is still unresolved is a decision somebody has not made yet, and no expiry
 // clock may take that decision away from them (see _spreadZoneCardPending).
 import { setExtraPart, registerAttackBreakdownRender } from "./attack-breakdown.js";
-import { correctedAttackType } from "../data-corrections.js";
+import { correctedAttackType, correctedRofSemi } from "../data-corrections.js";
 import { rangedAttackTypes } from "../lookups.js";
 import { markCardResolved, isCardResolved } from "../card-lock.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES, _deriveLiveSP } from "./DamageApplicator.js";
@@ -356,6 +356,24 @@ function _isAutoClassWeapon(item, sys) {
   const atk = correctedAttackType(item) || String(sys?.attackType ?? "");
   return atk === rangedAttackTypes.auto || atk === rangedAttackTypes.autoshotgun;
 }
+/** The printed single-shot rate of an automatic weapon: the registry's figure for a base-pack weapon, else the
+ *  item's own `rofSemi`; 0 when the book prints none. */
+function _rofSemiOf(item, sys) {
+  const fromRegistry = correctedRofSemi(item);
+  if (fromRegistry > 0) return fromRegistry;
+  const n = Math.floor(Number(sys?.rofSemi));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+/** The rule's view of a roll from an automatic weapon fired semi-auto (RYNO's ruling 2026-10-02): with a PRINTED
+ *  single-shot rate the weapon is treated as a semi-automatic at that rate - the "attack up to your ROF" allowance is
+ *  book data for it; without one the counter abstains and the dialog warns. Returns the `rof` and `autoClass` the
+ *  rule should see. */
+function _semiAutoView(item, sys, fireMethod) {
+  const autoClass = !!item && _isAutoClassWeapon(item, sys);
+  if (!autoClass || fireMethod !== SEMI_AUTO_METHOD) return { rof: sys?.rof, autoClass, printedSemi: 0 };
+  const printedSemi = _rofSemiOf(item, sys);
+  return printedSemi > 0 ? { rof: printedSemi, autoClass: false, printedSemi } : { rof: sys?.rof, autoClass: true, printedSemi: 0 };
+}
 /** The weapon-fire increment path: runs the rule against the open attack action and advances the counter
  *  only when the roll opened a new action. Same per-actor chain as the declared actions, same guard. */
 function _recordWeaponFire(actor, payload) {
@@ -364,14 +382,15 @@ function _recordWeaponFire(actor, payload) {
     const round = game?.combat?.round ?? 0;
     const item  = payload?.weaponId ? actor.items?.get?.(payload.weaponId) : null;
     const sys   = item?._getWeaponSystem?.() ?? item?.system ?? {};
+    const view  = item ? _semiAutoView(item, sys, payload?.fireMethod ?? null) : { rof: null, autoClass: false, printedSemi: 0 };
     const step  = attackActionStep(_attackState(actor, round), {
       itemId: payload?.weaponId || item?.id || "", round,
       fireMethod: payload?.fireMethod ?? null,
-      rof: item ? sys.rof : null,          // an unresolvable weapon never continues: one action per roll, as before
+      rof: item ? view.rof : null,         // an unresolvable weapon never continues: one action per roll, as before
       shots: payload?.shotsFired,
       dualWield: payload?.dualWield === true,
       fireId: payload?.fireId ?? null,
-      autoClass: item ? _isAutoClassWeapon(item, sys) : false,
+      autoClass: view.autoClass,
     });
     if (step.kind === "abstain") return;   // a single shot from an automatic weapon: the counter leaves it alone
     const update = { [`flags.cp2020-augmented.${ATTACK_FLAG}`]: JSON.stringify(step.state) };
@@ -424,11 +443,12 @@ function _dialogActionEval(actor, weapon, { fireMode = null, dualWield = false, 
   const shots = fireMethod === "__threeRoundBurst" ? 3
               : fireMethod === "__fullAuto" ? Math.max(1, Math.min(rof || 1, Math.floor(Number(rounds)) || rof || 1))
               : 1;
-  const step  = attackActionStep(_attackState(actor, round), { itemId: weapon?.id ?? "", round, fireMethod, rof: sys.rof, shots, dualWield, fireId: null, autoClass: isRanged && _isAutoClassWeapon(weapon, sys) });
+  const view  = isRanged ? _semiAutoView(weapon, sys, fireMethod) : { rof: sys.rof, autoClass: false, printedSemi: 0 };
+  const step  = attackActionStep(_attackState(actor, round), { itemId: weapon?.id ?? "", round, fireMethod, rof: view.rof, shots, dualWield, fireId: null, autoClass: view.autoClass });
   const count = _getActionCount(actor);
   const declaring = step.newAction ? count + 1 : count;
   const penalty = step.kind === "abstain" ? 0 : _multiActionPenaltyFor(actor, declaring);
-  return { step, count, declaring, penalty };
+  return { step, count, declaring, penalty, printedSemi: view.printedSemi };
 }
 /** The labelled line for the dialog, by what the roll does to the counter. Pre-localized HTML. */
 function _multiActionNoteFor(actor, ev) {
@@ -436,7 +456,9 @@ function _multiActionNoteFor(actor, ev) {
   const penaltyText = penalty ? String(penalty) : localize("MultiActionPenaltyNoneLong");
   const name = actor.name;
   if (step.kind === "continue") {
-    let line = localizeParam("MultiActionContinueNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty: penaltyText });
+    let line = ev.printedSemi > 0
+      ? localizeParam("MultiActionAutoSemiNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty: penaltyText })
+      : localizeParam("MultiActionContinueNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty: penaltyText });
     if (step.firedInRound > step.rof) line += localizeParam("MultiActionRofRoundClause", { fired: step.firedInRound, rof: step.rof });
     return line;
   }

@@ -24,6 +24,13 @@ const WEAPON_AUGMENT_FIELDS = {
   // fire-mode list (lookups.js rangedModifiers) offers Three-Round Burst to a semi-automatic that carries
   // it. Additive with a behaviour-preserving default - no migration.
   burstCapable: (f) => new f.BooleanField({ initial: false }),
+  // ⭐ SEMI-AUTO ROF (RYNO's data-model ruling 2026-10-02, after a source sweep of every automatic we ship). The
+  // books print a second figure beside many automatics' rate of fire - "3/30", "1/3/20" - the single-shot rate.
+  // The base schema has one `rof`, which holds the full-auto figure on an automatic; this field holds the printed
+  // single-shot figure, and 0 means the book prints none. Only the action counter reads it: a single shot from an
+  // automatic weapon with a printed figure gets the "attack up to your ROF" allowance at that figure (book data),
+  // one without it gets the warning instead. Additive with a default - no migration.
+  rofSemi: (f) => new f.NumberField({ initial: 0, integer: true, min: 0, nullable: false }),
   edged:  (f) => new f.BooleanField({ initial: false }),
   mono:   (f) => new f.BooleanField({ initial: false }),
   broken: (f) => new f.BooleanField({ initial: false }),

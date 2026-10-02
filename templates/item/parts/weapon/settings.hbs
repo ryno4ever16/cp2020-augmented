@@ -16,6 +16,8 @@
     {{> (template "fields/number") label="ShotsLeft" edit="system.shotsLeft"}}
     {{> (template "fields/number") label="Shots" edit="system.shots"}}
     {{> (template "fields/number") label="RoF" edit="system.rof"}}
+    {{!-- The printed single-shot rate of an automatic weapon (0 = the book prints none); read by the action counter --}}
+    {{> (template "fields/number") label="RofSemi" edit="system.rofSemi"}}
     {{> (template "fields/select") label="Ammo" edit="system.ammoItemId" choices=ammoChoices allowBlank=true}}
     {{!-- Fire-mode capability (our net-new). Full auto also grants Suppressive; burst is separate (e.g. M16A4). --}}
     {{> (template "fields/boolean") label="FullAutoCapable" edit="system.fullAutoCapable"}}
