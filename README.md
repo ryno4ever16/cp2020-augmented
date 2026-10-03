@@ -85,7 +85,8 @@ The **compendium item icons** in [`img/icons/`](img/icons) are from
 [game-icons.net](https://game-icons.net), licensed under
 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) (full text in
 [`img/icons/LICENSE.txt`](img/icons/LICENSE.txt)). The 35 glyphs shipped are the work of
-**Lorc**, **Delapouite**, **Skoll**, **sbed**, **John Colburn** and **Carl Olsen**.
+**Lorc**, **Delapouite**, **Skoll**, **sbed**, **John Colburn** and **Carl Olsen**; they are
+recoloured white here to match Foundry's own item icons.
 
 ## Legal / content policy
 

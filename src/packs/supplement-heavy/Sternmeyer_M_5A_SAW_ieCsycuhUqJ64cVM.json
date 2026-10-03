@@ -2,7 +2,7 @@
   "_id": "ieCsycuhUqJ64cVM",
   "name": "Sternmeyer M-5A SAW",
   "type": "weapon",
-  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
+  "img": "modules/cp2020-augmented/img/icons/machine-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

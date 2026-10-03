@@ -3974,6 +3974,21 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .field-list .field {
 }
 .cyberpunk.damage-dialog .cp-blocked-wall-note > span { white-space: normal; flex: 1 1 auto; min-width: 0; }
 
+/* == COMPENDIUM GLYPHS FOLLOW THE NEAREST COLOUR SCHEME (2026-10-03) ==
+ * The 35 glyphs in img/icons/ are white on transparent, like core's own icons/svg/*: right on a dark
+ * ground, near-invisible on core's light parchment. An <img> can only be recoloured by a filter, so
+ * each scheme hands one down as a custom property and the glyph reads it.
+ *
+ * The property is set on the SAME selectors core defines its scheme variables on (`body.theme-*` for
+ * the applications scheme, `.themed.theme-*` for the interface and for any window carrying its own
+ * theme), so a glyph takes the scheme of its nearest themed ancestor by plain inheritance: a dark
+ * sidebar on a light page keeps its glyphs white, and the reverse. The `none` fallback is the shipped
+ * white. Scoped by `src`, so the rule follows a glyph onto every surface that draws one (directories,
+ * sheets, catalog rows, chat, the hotbar) and touches no other image. */
+body.theme-dark, .themed.theme-dark { --cp-glyph-filter: none; }
+body.theme-light, .themed.theme-light { --cp-glyph-filter: invert(1); }
+img[src*="modules/cp2020-augmented/img/icons/"] { filter: var(--cp-glyph-filter, none); }
+
 /* â•â• LIGHT-SCHEME PARITY LAYER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
  * Under Foundry's LIGHT applications colour scheme the module must read as the base system
  * does. Two things get it there:

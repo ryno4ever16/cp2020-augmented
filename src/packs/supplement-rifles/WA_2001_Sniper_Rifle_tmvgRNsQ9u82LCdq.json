@@ -2,7 +2,7 @@
   "_id": "tmvgRNsQ9u82LCdq",
   "name": "WA 2001 Sniper Rifle",
   "type": "weapon",
-  "img": "modules/cp2020-augmented/img/icons/winchester-rifle.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "",
     "notes": "<p>RGUK p.37 older-weapons table. | [Audit row +367 — Rough Guide to the UK p.37]</p>",

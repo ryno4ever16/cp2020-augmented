@@ -2,7 +2,7 @@
   "_id": "wiTd3zqkxMTq9c6L",
   "name": "M-134 Minigun",
   "type": "weapon",
-  "img": "modules/cp2020-augmented/img/icons/minigun.svg",
+  "img": "modules/cp2020-augmented/img/icons/machine-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",
