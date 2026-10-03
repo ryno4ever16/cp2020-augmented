@@ -158,7 +158,10 @@
         <input class="textsize" name="system.mechConsumable.durationTurns" type="text"
                value="{{system.mechConsumable.durationTurns}}" placeholder="1d6+2"/>
     </div>
-    {{> (template "fields/string") label="MechConsumableNote" edit="system.mechConsumable.note"}}
+    <div class="field span-two-cells cp-mech-note-row">
+        <label for="system.mechConsumable.note">{{CPLocal "MechConsumableNote"}}</label>
+        <textarea class="cp-mech-note" name="system.mechConsumable.note" rows="2">{{system.mechConsumable.note}}</textarea>
+    </div>
     {{#unless (equals system.EffectMode "Activatable")}}
     <div class="field">
         <label>{{CPLocal "MechConsumableUseHint"}}</label>
@@ -188,7 +191,12 @@
         <input class="textsize" name="system.mechDrug.addictionDifficulty" type="number"
                value="{{system.mechDrug.addictionDifficulty}}"/>
     </div>
-    {{> (template "fields/string") label="MechDrugNote" edit="system.mechDrug.note"}}
+    {{!-- The effect note is a sentence, so it gets the list's full width and a box that wraps;
+         a half-width one-line input cut off 17 of the 21 shipped drugs' notes. --}}
+    <div class="field span-two-cells cp-mech-note-row">
+        <label for="system.mechDrug.note">{{CPLocal "MechDrugNote"}}</label>
+        <textarea class="cp-mech-note" name="system.mechDrug.note" rows="2">{{system.mechDrug.note}}</textarea>
+    </div>
     <div class="field">
         <label>{{CPLocal "MechDrugUseHint"}}</label>
         <span class="flex-pad"></span>

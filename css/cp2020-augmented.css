@@ -637,6 +637,47 @@
   width: auto;
 }
 
+/* --- Effect-note row (drug / consumable), 2026-10-03 -------------------------------------------
+   An effect note is a sentence, not a value: 17 of the 21 shipped drugs carry one longer than the
+   one-line box a half-width cell leaves (rig-measured 115px of box for a 430px sentence, and still
+   clipped with the window dragged to 1300px). The row takes the list's full width (the system's own
+   `span-two-cells`) and the text WRAPS in a box that grows with it: `field-sizing: content` where
+   the browser has it, the template's `rows` as the floor where it does not.
+   LOOK: a `.field > *` child is painted as a label chip by the base stylesheet and a bare textarea
+   wears core's bordered-box chrome, so the box restates the base's own `.cyberpunk .field > input`
+   declarations value for value (rig-read: no border, no ground, black ink, the ExtraBold face, 6px
+   side padding) and the skin's one override of them (#cccccc ink). One 20px line plus 2px above and
+   below is the 24px a one-line input stands, so a short note sits exactly where it used to.
+   The label keeps the row's full height and centres its text in it, which is what the sheet's other
+   tall rows do (a two-line label beside a one-line value): under the light scheme the chip is then a
+   whole block down the row's left edge rather than a stub in its corner. */
+.cyberpunk .field.cp-mech-note-row { align-items: stretch; }
+.cyberpunk .field.cp-mech-note-row > label { flex: 0 0 auto; white-space: nowrap; display: flex; align-items: center; }
+.cyberpunk .field.cp-mech-note-row > textarea.cp-mech-note {
+  flex: 1 1 0;
+  min-width: 6em;
+  width: auto;
+  box-sizing: border-box;
+  field-sizing: content;
+  min-height: 24px;
+  height: auto;
+  resize: none;
+  overflow: hidden auto;
+  margin: 0;
+  border: 0 none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: black;
+  font: inherit;
+  font-family: "Open Sans ExtraBold", sans-serif;
+  line-height: 20px;
+  padding: 2px 6px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+body.cp-carolingian .cyberpunk .field.cp-mech-note-row > textarea.cp-mech-note { color: #cccccc; }
+
 /* --- In-sheet Recurring Services panel (injected into the gear tab body; NOT a nav tab). --- */
 .cp2020ae-services-panel { margin-top: 8px; border-top: 1px solid rgba(184,145,106,0.4); padding-top: 6px; }
 .cp2020ae-services-header .larger { font-weight: bold; }
