@@ -33,6 +33,7 @@
     "shotsLeft": 0,
     "shots": 40,
     "rof": 25,
+    "rofSemi": 2,
     "fullAutoCapable": true,
     "burstCapable": false,
     "reliability": "Standard",

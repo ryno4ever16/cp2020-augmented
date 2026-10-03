@@ -331,6 +331,9 @@ export const DATA_CORRECTIONS = {
   },
   "cyberpunk2020.pistols": {
     ghAVVP4pbH2zOIx6: { name: "Llama Comanche" },  // PR #43: was "Commanche"
+    // Tagged automatic in the pack. Core p.62 lists it under Medium Autopistols with a lone ROF 2, and p.60
+    // defines a pistol as "any type of single shot (or semiautomatic) weapon" (user ruling R10, 2026-10-03).
+    miHuq7WJQLR1g3gB: { attackType: "SemiAuto", patch: { attackType: "SemiAuto" } },   // Federated Arms X-9mm
   },
 
   // ── Embedded cyberweapons: attackSkill authored in Russian → the English skill name ──
@@ -458,6 +461,26 @@ export const DATA_CORRECTIONS = {
      at create time; `correctedAttackType` (below) reads it for a compendium document or an older copy. */
   "cyberpunk2020.shotguns": {
     vWOoylh5RXN5GC5c: { attackType: "Autoshotgun", patch: { attackType: "Autoshotgun" } },   // CAWS — Core p.66 entry, p.109 rule
+    // The other direction: tagged an autoshotgun in the pack. Core p.63 prints a lone ROF 2 and calls it a
+    // "light duty stakeout shotgun"; only the Rapid Assault Shot 12 is an auto-shotgun there (R10, 2026-10-03).
+    nqd8bUXwHf1NV1ek: { attackType: "Shotgun", patch: { attackType: "Shotgun" } },           // Sternmeyer Stakeout 10
+    Tq1XUDo1GXYdCvHv: { rofSemi: 2, patch: { rofSemi: 2 } },                                 // Arasaka Rapid Assault Shot 12 — Blackhand's 2/10
+  },
+
+  /* Semi-auto ROF for core automatics (user ruling R1, 2026-10-03). The Core book prints one figure for each
+     of these, the automatic rate the pack already holds. Blackhand's Street Weapons reprints them with a
+     second, single-shot figure in front of the same automatic rate (AKR-20 1/30, Ronin 3/30, A-80 3/25,
+     FN-RAL 3/30, SMG 21 3/15); the ruling adopts that figure as a supplement, since nothing in the Core
+     contradicts it. A base pack cannot carry the module's `rofSemi` field, so the figure lives here:
+     `correctedRofSemi` reads it for a compendium document or an older copy, `patch` writes it onto a new copy. */
+  "cyberpunk2020.rifles": {
+    TzBQU8QE29sMdWko: { rofSemi: 1, patch: { rofSemi: 1 } },   // AKR-20 Medium Assault
+    oIIcr5mXDberOjPD: { rofSemi: 3, patch: { rofSemi: 3 } },   // Militech Ronin Light Assault
+    udyCQW4Qz1W1kQ1w: { rofSemi: 3, patch: { rofSemi: 3 } },   // Kalashnikov A-80 Hvy. Assault Rifle
+    wgcoPBqDeqMCPKQX: { rofSemi: 3, patch: { rofSemi: 3 } },   // FN-RAL Heavy Assault Rifle
+  },
+  "cyberpunk2020.submachineguns": {
+    "1e2iCQ9nvy2Xmput": { rofSemi: 3, patch: { rofSemi: 3 } }, // Sternmeyer SMG 21
   },
 
   "cyberpunk2020.armor": {

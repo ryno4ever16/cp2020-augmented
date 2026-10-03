@@ -49,7 +49,8 @@ const r = await p.evaluate(async () => {
       jZ3tSjanmVa1fJrq: { name: "Tsunami Express Racegun", atk: "SemiAuto", burst: false },
     },
     "cp2020-augmented.supplement-submachineguns": {
-      Cg8Oe9Vb9mGxZBBf: { atk: "Auto" }, LNB6USobTaWUOddr: { atk: "Auto" }, Os19st71TvwDtryE: { atk: "Auto", burst: false },
+      // IMI Gamdall (Cg8Oe9Vb9mGxZBBf) left this table on 2026-10-03: a second record of the Gamdaii, removed.
+      LNB6USobTaWUOddr: { atk: "Auto" }, Os19st71TvwDtryE: { atk: "Auto", burst: false },
       lu45fPUYlFWf6oGs: { atk: "Auto" }, nXsLHO2PLT7uadsu: { atk: "Auto" },
     },
     "cp2020-augmented.supplement-rifles": {
@@ -57,7 +58,8 @@ const r = await p.evaluate(async () => {
     },
     "cp2020-augmented.supplement-heavy": {
       "2oGhnb9dyK3GCU6g": { atk: "RPG" }, IgdWVnAo8lb8paws: { atk: "Auto", burst: false }, ecSQRLzbxcvLkOfa: { atk: "Auto", burst: false },
-      nF83fKgGZBChUsR2: { atk: "Auto" }, wYynTF43e7yGVHzM: { atk: "Auto" }, whr4LIFDRnXpVIij: { atk: "Auto", src: "Chromebook 1 p.53" },
+      // The G-6 Advanced Squad Automatic (wYynTF43e7yGVHzM) left on 2026-10-03: a second record of the G-6 SAW, removed.
+      nF83fKgGZBChUsR2: { atk: "Auto" }, whr4LIFDRnXpVIij: { atk: "Auto", src: "Chromebook 1 p.53" },
     },
   };
   const mismatches = []; let checked = 0;
@@ -147,7 +149,7 @@ const legs = [];
 const ok = (name, cond, got) => legs.push([name, !!cond, got]);
 const J = (x) => JSON.stringify(x);
 const D = r.data ?? {};
-ok("D1 the served packs carry the approved tags, burst boxes, ROFs, reliability and source for every reviewed weapon", D.checked === 21 && D.mismatches?.length === 0, J(D));
+ok("D1 the served packs carry the approved tags, burst boxes, ROFs, reliability and source for every reviewed weapon", D.checked === 19 && D.mismatches?.length === 0, J(D));
 ok("D2 the Blackhand's duplicate is gone and the book's Teen Dreem entry is the only one", D.teenDreamGone === true && J(D.teenEntries) === '["Teen Dreem"]', J({ gone: D.teenDreamGone, entries: D.teenEntries }));
 const M = r.modes ?? {};
 ok("M1 a burst-capable semi-automatic offers Semi-Auto and Three-Round Burst, nothing more (the base alone offered one)", J(M.spot) === '["SemiAuto","ThreeRoundBurst"]' && J(M.spotBase) === '["SemiAuto"]', J({ spot: M.spot, base: M.spotBase, err: r.error }));

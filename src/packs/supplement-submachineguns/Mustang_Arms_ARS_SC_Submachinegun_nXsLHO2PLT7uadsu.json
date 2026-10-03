@@ -1,6 +1,6 @@
 {
   "_id": "nXsLHO2PLT7uadsu",
-  "name": "Mustang Arms ARS-SC Submachinegun",
+  "name": "Mustang Arms ARS-5C Submachinegun",
   "type": "weapon",
   "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
@@ -9,7 +9,7 @@
     "cost": 600,
     "weight": 0,
     "equipped": false,
-    "source": "Blackhand's Street Weapons p.20",
+    "source": "Blackhand's Street Weapons p.19",
     "lastOwnerId": "",
     "weaponType": "SMG",
     "accuracy": 1,
@@ -33,6 +33,7 @@
     "shotsLeft": 0,
     "shots": 40,
     "rof": 40,
+    "rofSemi": 3,
     "fullAutoCapable": true,
     "burstCapable": true,
     "reliability": "VeryReliable",

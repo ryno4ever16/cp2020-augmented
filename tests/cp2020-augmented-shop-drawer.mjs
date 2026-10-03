@@ -156,9 +156,11 @@ try {
     const only = (p, cell, n) => { const c = cells(p); return Object.keys(c).length === 1 && c[cell] === n; };
 
     const pinned = [
-      ["supplement-pistols", "Weapons/Pistols", 67], ["supplement-submachineguns", "Weapons/SMGs", 21],   // 67 since 2026-09-30: the Teen Dream/Teen Dreem duplicate was removed (attack-type review)
+      // 2026-10-03, the ROF data pass removed three records by ruling: the fan-listing section heading from pistols
+      // (67 → 66), the second Gamdaii record from SMGs (21 → 20), the second G-6 record from heavy (68 → 67).
+      ["supplement-pistols", "Weapons/Pistols", 66], ["supplement-submachineguns", "Weapons/SMGs", 20],
       ["supplement-rifles", "Weapons/Rifles", 43], ["supplement-shotguns", "Weapons/Shotguns", 19],
-      ["supplement-heavy", "Weapons/Heavy", 68],
+      ["supplement-heavy", "Weapons/Heavy", 67],
       // ⏪ 19 → 20 (2026-08-29, found by this sweep): NOT a settings-trim change and not a regression.
       //    Commit ed1e3cd split the two-blade entry into its two printed blades, so the pack source and
       //    the compiled pack both carry one more row than this pinned count was written against.

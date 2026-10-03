@@ -1,6 +1,6 @@
 {
   "_id": "mQ4BhRYOf5V5hC6z",
-  "name": "BudgetArms Laser-9",
+  "name": "BudgetArms Laser-Niner",
   "type": "weapon",
   "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
@@ -31,7 +31,8 @@
     "isEdged": false,
     "shotsLeft": 15,
     "shots": 15,
-    "rof": 1,
+    "rof": 20,
+    "rofSemi": 1,
     "fullAutoCapable": true,
     "burstCapable": true,
     "reliability": "Standard",

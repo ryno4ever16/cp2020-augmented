@@ -352,6 +352,11 @@ try {
                 flag("attackSkill", `${wt}|${ask}`, where);
               }
             }
+            /* The base system sizes a three-round burst as min(shotsLeft, rof, 3) (item.js `__threeRoundBurst`),
+               so a Burst Capable weapon stored with ROF 1 or 2 fires a one- or two-round "burst". The printed
+               single-shot figure of such a weapon belongs in `rofSemi`, never in `rof` (found 2026-10-03, when a
+               data pass moved five burst weapons' ROF to their printed single-shot rate). */
+            if (wb.burstCapable === true && Number(wb.rof) < 3) flag("burstRof", `rof ${wb.rof}`, where);
           }
 
           /* module-owned document types: their schema differs, so the damage fields are found by
@@ -423,6 +428,7 @@ try {
       legFor("ammo", "caliber registry resolves every non-blank ammoType");
       legFor("damage", "damage formula parses (weapon, cyberweapon, and module document types)");
       legFor("attackSkill", "attack-skill legality for the weapon type");
+      legFor("burstRof", "a Burst Capable weapon holds a ROF of 3 or more (the base sizes a burst by it)");
 
       /* the ratified alias tier still resolves — a revert of the alias block turns this red */
       const aliasUnresolved = AL.RATIFIED_ALIAS_SPELLINGS.filter(s =>

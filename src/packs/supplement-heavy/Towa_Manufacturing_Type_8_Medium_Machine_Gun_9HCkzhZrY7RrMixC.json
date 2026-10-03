@@ -56,7 +56,7 @@
     "isEdged": false,
     "shotsLeft": 100,
     "shots": 100,
-    "rof": 35,
+    "rof": 33,
     "fullAutoCapable": true,
     "burstCapable": false,
     "reliability": "VeryReliable",

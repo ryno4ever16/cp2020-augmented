@@ -57,11 +57,12 @@
     "shotsLeft": 12,
     "shots": 12,
     "rof": 3,
+    "rofSemi": 1,
     "fullAutoCapable": false,
     "burstCapable": true,
     "reliability": "Standard",
     "range": 150,
-    "attackType": "Auto",
+    "attackType": "SemiAuto",
     "attackSkill": "Heavy Weapons"
   },
   "_stats": {},

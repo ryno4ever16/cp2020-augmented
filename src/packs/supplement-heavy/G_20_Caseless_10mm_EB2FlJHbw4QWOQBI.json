@@ -33,7 +33,7 @@
     "shots": 200,
     "rof": 20,
     "fullAutoCapable": true,
-    "burstCapable": true,
+    "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 600,
     "attackType": "Auto",
