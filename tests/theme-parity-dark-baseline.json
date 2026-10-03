@@ -729,6 +729,10 @@
    "color": "rgb(204, 204, 204)"
   },
   {
+   "name": "system.rofSemi",
+   "color": "rgb(204, 204, 204)"
+  },
+  {
    "name": "system.ammoType",
    "color": "rgb(204, 204, 204)"
   },
