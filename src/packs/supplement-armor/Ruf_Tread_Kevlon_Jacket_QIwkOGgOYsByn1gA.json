@@ -1,0 +1,67 @@
+{
+  "_id": "QIwkOGgOYsByn1gA",
+  "name": "Ruf Tread Kevlon Jacket",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>From the Edgerunner sample outfits: \"this jacket and bodysuit combo by Ruf Tread. The coat is medium Kevlon (SP18), with a polylog cover to hold up to four different color schemes.\" The book prints no price; the GM sets one.</p>",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0,
+    "armorType": "soft",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "manufacturer": "Ruf Tread",
+      "importReview": {
+        "level": "user-eyes",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Chromebook 4"
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9500000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!QIwkOGgOYsByn1gA"
+}

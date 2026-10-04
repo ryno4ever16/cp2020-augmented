@@ -157,8 +157,9 @@ try {
   const namedRows = A.bought;
   chk("A/source: every base-pack armor document still materializes equipped:true (the RED)",
     A.sourceRed.length === 16 && A.sourceRed.every(r => r.equipped), `${A.sourceRed.filter(r => r.equipped).length}/${A.sourceRed.length}`);
-  chk("A/source: our own 85 armor entries are already false (unaffected by the fix)",
-    A.oursSource.length === 85 && A.oursSource.every(v => v === false), `${A.oursSource.filter(v => v === false).length}/${A.oursSource.length}`);
+  // 85 → 96 (2026-10-04): eleven held armor records were promoted into the pack after a book check.
+  chk("A/source: our own 96 armor entries are already false (unaffected by the fix)",
+    A.oursSource.length === 96 && A.oursSource.every(v => v === false), `${A.oursSource.filter(v => v === false).length}/${A.oursSource.length}`);
   for (const r of namedRows) {
     chk(`A/${r.label}: source document reads equipped:true (red staged)`, r.sourceEquipped === true, r.sourceEquipped);
     chk(`A/${r.label}: delivered copy reads equipped:false`, r.ok && r.deliveredEquipped === false, `ok=${r.ok} equipped=${r.deliveredEquipped}`);

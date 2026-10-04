@@ -1,0 +1,67 @@
+{
+  "_id": "uZZWfzRomAAYZFSo",
+  "name": "Plastech Duster",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>From the Edgerunner sample outfits: \"a Plastech Duster (SP18)\". The coat's illumi panels can be shut off with a button, cutting down the wearer's target profile. The book prints no price; the GM sets one.</p>",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 18,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0,
+    "armorType": "soft",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "manufacturer": "Plastech",
+      "importReview": {
+        "level": "user-eyes",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Chromebook 4"
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9600000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!uZZWfzRomAAYZFSo"
+}

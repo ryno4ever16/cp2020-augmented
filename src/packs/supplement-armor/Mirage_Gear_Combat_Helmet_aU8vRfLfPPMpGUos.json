@@ -1,0 +1,68 @@
+{
+  "_id": "aU8vRfLfPPMpGUos",
+  "name": "Mirage Gear Combat Helmet",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Sold with the Militech M73 Mirage Gear: \"An SP24 Combat Helmet (EV -1) with transparent face shield can be bought for 140eb\". (Chromebook 2 p.28)</p>",
+    "cost": 140,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 24,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 1,
+    "armorType": "hard",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Chromebook 2",
+        "page": 28
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8700000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!aU8vRfLfPPMpGUos"
+}

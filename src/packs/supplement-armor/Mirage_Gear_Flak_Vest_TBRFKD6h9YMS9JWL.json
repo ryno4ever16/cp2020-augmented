@@ -1,0 +1,68 @@
+{
+  "_id": "TBRFKD6h9YMS9JWL",
+  "name": "Mirage Gear Flak Vest",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Sold with the Militech M73 Mirage Gear: \"an SP18 Flak Vest (EV -1) with utility harness is available for 275eb\". (Chromebook 2 p.28)</p>",
+    "cost": 275,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 18,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 1,
+    "armorType": "hard",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Chromebook 2",
+        "page": 28
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8600000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!TBRFKD6h9YMS9JWL"
+}

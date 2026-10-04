@@ -1,0 +1,67 @@
+{
+  "_id": "rO0aytZgfRZLtkZ9",
+  "name": "Police Issue Riot Helmet",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Identical to the Patrol helmet (SP 25), except that the Riot helmet is environmentally sealed and has a built-in 10 minute air supply for use in hostile environments (riot gases, poison gases, smoke, etc.). (Protect &amp; Serve p.39)</p>",
+    "cost": 650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Protect & Serve",
+        "page": 39
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9300000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!rO0aytZgfRZLtkZ9"
+}

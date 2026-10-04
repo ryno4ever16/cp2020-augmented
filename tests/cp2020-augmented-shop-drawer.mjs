@@ -158,15 +158,19 @@ try {
     const pinned = [
       // 2026-10-03, the ROF data pass removed three records by ruling: the fan-listing section heading from pistols
       // (67 → 66), the second Gamdaii record from SMGs (21 → 20), the second G-6 record from heavy (68 → 67).
-      ["supplement-pistols", "Weapons/Pistols", 66], ["supplement-submachineguns", "Weapons/SMGs", 20],
+      // 2026-10-04, held items promoted after a book check (the Phase-2 pen): pistols 66 → 67 (Sliver Gun), heavy
+      // 67 → 68 (electro-thermal Barrett), melee 20 → 22 (Tessen, SPM-2), exotics 27 → 28 (Stun Knuks), armor 85 → 96.
+      ["supplement-pistols", "Weapons/Pistols", 67], ["supplement-submachineguns", "Weapons/SMGs", 20],
       ["supplement-rifles", "Weapons/Rifles", 43], ["supplement-shotguns", "Weapons/Shotguns", 19],
-      ["supplement-heavy", "Weapons/Heavy", 67],
+      ["supplement-heavy", "Weapons/Heavy", 68],
       // ⏪ 19 → 20 (2026-08-29, found by this sweep): NOT a settings-trim change and not a regression.
       //    Commit ed1e3cd split the two-blade entry into its two printed blades, so the pack source and
       //    the compiled pack both carry one more row than this pinned count was written against.
-      ["supplement-melee", "Weapons/Melee", 20],
-      ["supplement-exotics", "Weapons/Exotic", 27], ["supplement-chipware", "Cyberware/Chipware", 205],
-      ["supplement-armor", "Armor/", 85], ["supplement-gear", "Gear/Other", 505],
+      ["supplement-melee", "Weapons/Melee", 22],
+      ["supplement-exotics", "Weapons/Exotic", 28], ["supplement-chipware", "Cyberware/Chipware", 205],
+      // ⏪ gear 505 → 508 (2026-10-03): the core price list's three weapon options joined the pack
+      //    (Silencer, Holster, Shoulder Sling - Cyberpunk 2020 p.64).
+      ["supplement-armor", "Armor/", 96], ["supplement-gear", "Gear/Other", 508],
       ["supplement-programs", "Programs/", 221],
     ];
     for (const [p, cell, n] of pinned) chk(`cell count: ${p} → ${n} in ${cell}, and nowhere else`, only(p, cell, n), JSON.stringify(cells(p)));

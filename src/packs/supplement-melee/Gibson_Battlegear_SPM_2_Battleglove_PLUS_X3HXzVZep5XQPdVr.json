@@ -1,0 +1,62 @@
+{
+  "_id": "X3HXzVZep5XQPdVr",
+  "name": "Gibson Battlegear SPM-2 Battleglove-PLUS",
+  "type": "weapon",
+  "img": "modules/cp2020-augmented/img/icons/baton.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>The New and Improved Battleglove. The armor is hardened to SP15, with spiked knuckles (AP damage). Basic abilities are the same as the SPM-1 (2D6 punch, 3D6 crush), and it has 3 cyberarm option slots. Type: Punch. Style: ALL. Printed damage: 2d6*/3d6. (Pacific Rim p.150, 152)</p>",
+    "cost": 970,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim",
+    "weaponType": "Melee",
+    "accuracy": -1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "2d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": true,
+    "isEdged": false,
+    "shotsLeft": 1,
+    "shots": 1,
+    "rof": 1,
+    "reliability": "VeryReliable",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Melee"
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Gibson Battlegear",
+      "importReview": {
+        "level": "user-eyes",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Pacific Rim",
+        "page": 152
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13000000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!X3HXzVZep5XQPdVr"
+}

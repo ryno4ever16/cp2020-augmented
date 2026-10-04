@@ -1,0 +1,67 @@
+{
+  "_id": "kpI9y52OU1xDxGWl",
+  "name": "Moto-Cross Armor",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>A specially padded and articulated set of Metalgear hard armor; does not include a helmet. 750eb. The book prints no SP: the figures are Metal Gear's from the core rulebook (SP 25, EV +2), without the head. (Neo Tribes p.56)</p>",
+    "cost": 750,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 25,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 2,
+    "armorType": "hard",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "importReview": {
+        "level": "user-ruling",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Neo Tribes",
+        "page": 56
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9400000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!kpI9y52OU1xDxGWl"
+}

@@ -1,0 +1,62 @@
+{
+  "_id": "t0pbAIDrcTqSROcs",
+  "name": "Barrett-Arasaka Light 20mm (Electro-Thermal)",
+  "type": "weapon",
+  "img": "modules/cp2020-augmented/img/icons/cannon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>The Barrett-Arasaka Light 20mm with the electro-thermal modification. Electro-Thermal Modified Weapons table: WA +1, 6D10AP (vehicle penetration 6), 10 shots, ROF 1, 750m, 3800eb. Listed damage is for armor-piercing discarding sabot. Ammo for electro-thermal weapons costs twice the normal ammunition price. Concealability, availability and reliability follow the standard gun. (Solo of Fortune 2 p.83)</p>",
+    "cost": 3800,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2",
+    "weaponType": "Heavy",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "20mm",
+    "ammoItemId": "",
+    "damage": "6d10",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": true,
+    "isEdged": false,
+    "shotsLeft": 10,
+    "shots": 10,
+    "rof": 1,
+    "reliability": "VeryReliable",
+    "range": 750,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Barrett-Arasaka",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Solo of Fortune 2",
+        "page": 83
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17800000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!t0pbAIDrcTqSROcs"
+}

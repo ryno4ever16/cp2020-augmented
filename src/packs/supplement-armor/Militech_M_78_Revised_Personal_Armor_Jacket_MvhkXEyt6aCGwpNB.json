@@ -1,0 +1,68 @@
+{
+  "_id": "MvhkXEyt6aCGwpNB",
+  "name": "Militech M-78 Revised Personal Armor (Jacket)",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Advanced-polymer armor: \"a jacket, (SP 14, EV +1)\". Stays at full resistance vs. armor piercing bullets and bladed weapon attacks. Jacket cost: 300eb. (Corpbook 2 p.63)</p>",
+    "cost": 300,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 2",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 14,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 14,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 14,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 1,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Corpbook 2",
+        "page": 63
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9100000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!MvhkXEyt6aCGwpNB"
+}

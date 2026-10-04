@@ -1,0 +1,63 @@
+{
+  "_id": "jeffcLaRDp2lkSp1",
+  "name": "Malorian Arms Sliver Gun",
+  "type": "weapon",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>A flywheel presses against a polyceramic block, throwing 2cm x 2cm fragments; as effective as a shotgun but no louder than an electric toothbrush. Game notes: 2D6 fragments per hit, each 1D6/2 damage; treat as knife for armor penetration. The damage roll here is all fragments together; by the book armor is taken off each fragment separately. The internal power cell spins the flywheel for up to eighteen minutes (7eb per cell). A cyberarm version retails at 550eb (HC 1D6+2). The book's stat row prints no range; 40m is the Reference Book's figure. (Chromebook 1 p.42)</p>",
+    "cost": 375,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "weaponType": "Pistol",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "(2d6)d6/2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "edged": true,
+    "shotsLeft": 7,
+    "shots": 7,
+    "rof": 2,
+    "reliability": "Unreliable",
+    "range": 40,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Malorian Arms",
+      "importReview": {
+        "level": "user-eyes",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Chromebook 1",
+        "page": 42
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 22200000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!jeffcLaRDp2lkSp1"
+}

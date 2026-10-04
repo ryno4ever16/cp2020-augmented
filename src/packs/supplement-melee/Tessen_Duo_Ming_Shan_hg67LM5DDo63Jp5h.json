@@ -1,0 +1,61 @@
+{
+  "_id": "hg67LM5DDo63Jp5h",
+  "name": "Tessen / Duo Ming Shan",
+  "type": "weapon",
+  "img": "modules/cp2020-augmented/img/icons/baton.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Looks like a simple folding fan, but is made of steel or iron. They never think it is a weapon at first glance, so you get a +3 surprise bonus to initiative the first round. Used opened or closed, to Strike or Hold or Choke (1D6+2 damage). Type: Strike. Style: Animal Kung Fu, Choi Li Fut, Ninjutsu. (Pacific Rim p.149, 152)</p>",
+    "cost": 60,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim",
+    "weaponType": "Melee",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "1d6+2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "reliability": "",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Melee"
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "user-eyes",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Pacific Rim",
+        "page": 152
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12900000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!hg67LM5DDo63Jp5h"
+}

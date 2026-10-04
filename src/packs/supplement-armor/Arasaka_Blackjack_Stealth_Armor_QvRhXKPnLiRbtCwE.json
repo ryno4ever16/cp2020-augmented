@@ -1,0 +1,67 @@
+{
+  "_id": "QvRhXKPnLiRbtCwE",
+  "name": "Arasaka \"Blackjack\" Stealth Armor",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SP 16 soft armor, EV +2, made entirely of circuit-embedded Kevlar; an integral hood and breathing mask cover the face. +3 to noise-related Stealth rolls, 90% invisible to radar, optics (low-lite, anti-dazzle, targeting scope, Times Square Plus). Same game effects as the Militech M96 Ghostsuit and the Gibson Sneak Suit: -4 to visual and infrared Awareness checks to spot, a further -1 per ten meters (Chromebook 2 p.27-28). Filtered environment, 95% immune to airborne gases and agents; a 4-hour rebreather can be fitted to the utility backpack. Two holsters included; scabbards for knives and short swords 1,000eb each.</p>",
+    "cost": 10000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 16,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 16,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 16,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 16,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 16,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 16,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 2,
+    "armorType": "soft",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "manufacturer": "Arasaka",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Firestorm: Shockwave"
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8800000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!QvRhXKPnLiRbtCwE"
+}

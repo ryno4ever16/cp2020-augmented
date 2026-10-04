@@ -1,0 +1,67 @@
+{
+  "_id": "dOmCAzSTMRMSO9EM",
+  "name": "Standard Field Armor (Suit and Helmet)",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>U.S. Army and U.S.M.C. issue: a kevlar jumpsuit covering arms, legs, torso and abdomen with SP 14, EV +0. Armor inserts bring the leg, torso and abdomen protection up to SP 20, EV +1; without the inserts the suit's SP is halved by knives and other edged weapons. The SP 20, EV +0 nylon/composite helmet has an SP 20 faceplate, 20-power binoculars, radio, anti-dazzle and low-light; the Targeting option for the binogoggles is 200eb more. The ensemble is fitted for NBC duty. The suit and helmet cost 1,500eb; the cooling unit (100eb) is a separate item. (Home of the Brave p.87)</p>",
+    "cost": 1500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Home of the Brave",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 20,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 14,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 14,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 14,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 14,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 14,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0,
+    "armorType": "soft",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Home of the Brave",
+        "page": 87
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9000000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!dOmCAzSTMRMSO9EM"
+}

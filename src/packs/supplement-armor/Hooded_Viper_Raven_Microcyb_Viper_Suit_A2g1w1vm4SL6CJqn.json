@@ -1,0 +1,68 @@
+{
+  "_id": "A2g1w1vm4SL6CJqn",
+  "name": "Hooded Viper (Raven Microcyb Viper Suit)",
+  "type": "armor",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Command and special-operations model of the Viper suit. Strength 16, Tough -5, Dam D6+2, SP 30, DFB +3, SJB +3, REF +2, lift 500, carry 240, weight 350, cost 48,000eb. Features as the Pit Viper, plus Sat uplink, Laser communicator, Remote targeting link, two EMP Sponges, VR Interface, High Boost and C3 unit; sensors add Teleoptics and Thermal Imaging. A housing on each wrist takes one 1/2-space external weapon or device (usually a one-handed combat blade and a 14mm pistol, 3,500eb extra). (Solo of Fortune 2 p.22)</p>",
+    "cost": 48000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": 30,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 30,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 30,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 30,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 30,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 30,
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "armor",
+      "manufacturer": "Raven Microcybernetics",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Solo of Fortune 2",
+        "page": 22
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8900000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!A2g1w1vm4SL6CJqn"
+}

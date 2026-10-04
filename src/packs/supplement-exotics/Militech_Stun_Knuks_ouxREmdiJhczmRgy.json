@@ -1,0 +1,61 @@
+{
+  "_id": "ouxREmdiJhczmRgy",
+  "name": "Militech Stun Knuks",
+  "type": "weapon",
+  "img": "modules/cp2020-augmented/img/icons/electric.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>From the Edgerunner sample outfits: \"His gloves are Stun Knuks by Militech (Stun damage as per Black Zap gloves, Chromebook 1, pg. 49)\". Only that line is printed, so the other figures follow the Techtronica Black-Zap Glove. The book prints no price; the GM sets one.</p>",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealPocket",
+    "availability": "Common",
+    "ammoType": "battery",
+    "ammoItemId": "",
+    "damage": "Stun",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "reliability": "Standard",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "user-eyes",
+        "weightSkimNotReviewed": true,
+        "ledger": "PHASE2-2026-10-04",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Chromebook 4"
+      }
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 3500000,
+  "ownership": {
+    "default": 0
+  },
+  "_stats": {},
+  "_key": "!items!ouxREmdiJhczmRgy"
+}
