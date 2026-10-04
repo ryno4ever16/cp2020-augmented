@@ -72,7 +72,18 @@ const snapshot = () => p.evaluate(async () => {
     const r = rows.find(r => r.packId === "cp2020-augmented.supplement-gear" && r.id === id);
     return r ? `${r.name}|${r.cost}|${r.canon}|${r.category}|${r.unpriced ? "unpriced" : "priced"}` : `missing ${id}`;
   });
+  // Products the base data files under one shared name carry a label saying which is which
+  // (data-corrections.js, "Same name, different product").
+  const labelled = [
+    ["cyberpunk2020.cyberlimbs", "5UnuXWjcxoWOSm4x"], ["cyberpunk2020.implants", "5UnuXWjcxoWOSm4x"], ["cyberpunk2020.electronics", "Xio3gBvNHJYxUmTy"],
+    ["cyberpunk2020.cyberlimbs", "xYJeiaIBNYPhT4wU"], ["cyberpunk2020.implants", "xYJeiaIBNYPhT4wU"],
+    ["cyberpunk2020.cyberlimbs", "INUE0r0BNFPuj2k4"], ["cyberpunk2020.netrunningEquipment", "HUJQJcMw98KRF44R"], ["cyberpunk2020.netrunningEquipment", "WGUZO1PBwu8k1KKB"],
+    ["cyberpunk2020.netrunningEquipment", "KUfUIWFQNe2lzcHk"], ["cyberpunk2020.netrunningEquipment", "uvCzoIqA3CtV1T4i"],
+  ].map(([packId, id]) => all.find(i => i.packId === packId && i.id === id)?.name ?? `missing ${packId}.${id}`);
+  const sharedNames = {};
+  for (const r of rows) if (/^(Digital Recorder|Audio\/Video Recorder|Cybermodem|Cyberlimbed Deck|ChipLok)\b/i.test(r.name)) (sharedNames[r.name.toLowerCase()] ??= []).push(r.packId);
   return {
+    labelled, stillShared: Object.entries(sharedNames).filter(([, v]) => v.length > 1).map(([k, v]) => `${k} x${v.length}`),
     options,
     techniqueRows: rows.filter(isTechnique).map(r => r.name),
     techniqueIndex: all.filter(isTechnique).map(i => i.name).sort(),
@@ -102,6 +113,9 @@ try {
   check("A7 a name search does not bring one back", on.techniqueSearched.join(",") === "0,0", on.techniqueSearched.join(","));
   check("A8 the core price list's three weapon options are on the shelf, core book, at the printed price",
     on.options.join(" ; ") === "Silencer|100|core|Gear|priced ; Holster (all types)|20|core|Gear|priced ; Shoulder Sling|5|core|Gear|priced", on.options.join(" ; "));
+  check("A9 the four same-name product sets carry their labels, and none of them still shares a shelf name",
+    on.labelled.join(" | ") === "Digital Recorder (cyberlimb built-in) | Digital Recorder (implant) | Digital Recorder (handheld) | Audio/Video Recorder (cyberlimb built-in) | Audio/Video Recorder (implant) | Cybermodem (cyberlimb built-in) | Cybermodem (basic deck, used) | Cybermodem (basic deck, new) | Cyberlimbed Deck (basic) | Cyberlimbed Deck (cellular)"
+      && on.stillShared.length === 0, `${on.labelled.join(" | ")} ; still shared: ${on.stillShared.join(", ")}`);
   check("B1 the full index still holds the scraped packs' records", on.indexScraped > 100, `${on.indexScraped} records`);
   check("B2 every `duplicateOf` names a record that exists", on.dupRecords === 3 && on.dupTargetsExist === true, `${on.dupRecords} marked, targets exist: ${on.dupTargetsExist}`);
   check("B3 a shop stocking an item from a hidden pack still resolves it", on.vendor?.available === true && on.vendor.name === on.vendor.expected, JSON.stringify(on.vendor));

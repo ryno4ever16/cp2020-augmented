@@ -342,6 +342,14 @@ export const DATA_CORRECTIONS = {
 
   // ── Embedded cyberweapons: attackSkill authored in Russian → the English skill name ──
   "cyberpunk2020.cyberlimbs": {
+    // ── Same name, different product (2026-10-04) ──────────────────────────────────────────────────
+    // The base data files several distinct products under one name: a recorder built into a cyberlimb,
+    // the same recorder as a body implant, and a handheld one are three rows called "Digital Recorder"
+    // at three prices. Each gets a label saying which it is. The label shows in the shop and on a copy
+    // bought or dragged from the pack; the pack's own list keeps the base name.
+    "5UnuXWjcxoWOSm4x": { name: "Digital Recorder (cyberlimb built-in)" },
+    xYJeiaIBNYPhT4wU: { name: "Audio/Video Recorder (cyberlimb built-in)" },
+    INUE0r0BNFPuj2k4: { name: "Cybermodem (cyberlimb built-in)" },
     JJQxF1pH3sixjEeH: cwAttackSkill("Ближний бой"),  // BuzzHand → Melee
     WdE0SLOXaCxzF2fD: cwAttackSkill("Ближний бой"),  // Spike Hand → Melee
     ZPYXXzR9Uchj3sR5: cwAttackSkill("Ближний бой"),  // Hammer Hand → Melee
@@ -410,6 +418,9 @@ export const DATA_CORRECTIONS = {
     T7uGBTZgaeB7NKIm: skillAlias("svx86NhUYhqVlLNw", "Resist Torture/Drugs", 2),  // Biomonitor
   },
   "cyberpunk2020.implants": {
+    // Same name, different product: see the note in the cyberlimbs group above.
+    "5UnuXWjcxoWOSm4x": { name: "Digital Recorder (implant)" },
+    xYJeiaIBNYPhT4wU: { name: "Audio/Video Recorder (implant)" },
     i264oefxjekvVgnN: skillAlias("WotYfaW9pqhl7S6N", "Seduction", 1),  // Mr Studd Sexual Implant
     // P6: sealed internal air ("good for 10 to 25 minutes" — duration stays in the flavor).
     zOzfWnALVczrmjkZ: { patch: mechProtection({ gas: { immune: true } }) },  // Independent Air Supply
@@ -500,6 +511,16 @@ export const DATA_CORRECTIONS = {
    * not, and it is the same rigid-plate family, so it is recorded here. */
   "cyberpunk2020.other-cyberware": {
     nIxqf9f5cA5j7L1E: { armorType: "hard" },   // Cowl — body plating (p.92–93)
+  },
+  // Same name, different product: see the note in the cyberlimbs group above.
+  "cyberpunk2020.electronics": {
+    Xio3gBvNHJYxUmTy: { name: "Digital Recorder (handheld)" },
+  },
+  "cyberpunk2020.netrunningEquipment": {
+    HUJQJcMw98KRF44R: { name: "Cybermodem (basic deck, used)" },
+    WGUZO1PBwu8k1KKB: { name: "Cybermodem (basic deck, new)" },
+    KUfUIWFQNe2lzcHk: { name: "Cyberlimbed Deck (basic)" },
+    uvCzoIqA3CtV1T4i: { name: "Cyberlimbed Deck (cellular)" },
   },
 };
 
