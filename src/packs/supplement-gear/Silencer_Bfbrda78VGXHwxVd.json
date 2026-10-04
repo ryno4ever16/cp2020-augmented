@@ -1,0 +1,40 @@
+{
+  "_id": "Bfbrda78VGXHwxVd",
+  "name": "Silencer",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 49700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "core-weapon-options-2026-10",
+        "dirty": false
+      },
+      "sourcePage": {
+        "book": "Cyberpunk 2020",
+        "page": 64
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "<p>Weapon option from the core rulebook's weapons price list (p.64, \"Options\"): 100eb. The list prints a price only.</p>",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!Bfbrda78VGXHwxVd"
+}
