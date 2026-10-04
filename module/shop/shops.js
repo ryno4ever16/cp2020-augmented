@@ -227,16 +227,20 @@ export async function decrementShopStock(id, sourceKey, by = 1, { buyerName = ""
 }
 
 /**
- * Effective unit price for a stocked item: (per-item override OR catalog cost) × style × shop discount.
+ * Effective unit price for a stocked item: (the shop's own price OR the catalog price) × style × shop discount.
+ * `catalogPrice` is the RESOLVED catalog price (purchase.js resolveCatalogPrice: compendium cost, else the
+ * GM's saved override), or null when the item has none. An item with no price is not free: with no shop
+ * price either, this returns null and the caller routes the buy through the GM price request.
  * @param {ShopDef} def
  * @param {string} sourceKey
- * @param {number} catalogCost
+ * @param {number|null} catalogPrice
  * @param {number} [styleMult=1]
- * @returns {number}
+ * @returns {number|null}
  */
-export function effectivePrice(def, sourceKey, catalogCost, styleMult = 1) {
+export function effectivePrice(def, sourceKey, catalogPrice, styleMult = 1) {
   const e = normalizeShopItem(def?.items?.[sourceKey]);
-  const base = e.price != null ? e.price : (Number(catalogCost) || 0);
+  if (e.price == null && catalogPrice == null) return null;
+  const base = e.price != null ? e.price : (Number(catalogPrice) || 0);
   const disc = 1 - (Math.min(100, Math.max(0, Number(def?.discountPct) || 0)) / 100);
   return Math.max(0, Math.round(base * (Number(styleMult) || 1) * disc));
 }

@@ -126,7 +126,7 @@
             <div class="cp-catalog-row cp-vendor-row{{#if v.soldOut}} cp-shop-soldout{{/if}}{{#unless v.available}} cp-dimmed{{/unless}}" data-source-key="{{v.sourceKey}}" data-pack-id="{{v.packId}}" data-item-id="{{v.itemId}}">
                 <img class="cp-cat-thumb" src="{{v.img}}" width="24" height="24" title="{{localize "CYBERPUNK.ShopOpenDetails"}}"/>
                 <span class="cp-cat-itemname" title="{{localize "CYBERPUNK.ShopOpenDetails"}}">{{v.name}}</span>
-                <span class="cp-vendor-sells" title="{{localize "CYBERPUNK.ShopCatalogCost"}} {{v.catalogCost}}eb"><b>{{v.eff}}</b>eb</span>
+                <span class="cp-vendor-sells" title="{{localize "CYBERPUNK.ShopCatalogCost"}} {{v.catalogCost}}eb">{{#if v.unpriced}}<span class="cp-price-gm" title="{{localize "CYBERPUNK.ShopPriceUnsetHint"}}">{{localize "CYBERPUNK.ShopPriceUnset"}}</span>{{else}}<b>{{v.eff}}</b>eb{{/if}}</span>
                 <input type="number" class="cp-shop-price" value="{{v.override}}" placeholder="{{v.catalogCost}}" min="0" title="{{localize "CYBERPUNK.ShopPriceHint"}}"/>
                 <span class="cp-vendor-stock">
                     <input type="number" class="cp-shop-stock-qty{{#if v.unlimited}} cp-stock-inf{{/if}}" value="{{#unless v.unlimited}}{{v.qty}}{{/unless}}" min="0" placeholder="∞" title="{{localize "CYBERPUNK.ShopQtyHint"}}"/>
