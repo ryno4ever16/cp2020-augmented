@@ -325,9 +325,13 @@ export const DATA_CORRECTIONS = {
   "cyberpunk2020.smgs-add": {
     // Concealability was authored as free text; these are the enum values (lookups.js
     // `concealability`) the sheet's select and every other pack use.
-    Ubxx6nrlV5OVOrDS: { patch: { concealability: "ConcealJacket" } },     // H&K MP-2013 — was "jacket"
-    VCNhTdWnVoPTYYzi: { patch: { concealability: "ConcealJacket" } },     // H&K MPK-9 — was "jacket"
-    tUw3deoRLKzUbQEI: { patch: { concealability: "ConcealLongcoat" } },   // H&K MPK-11 — was "long coat"
+    // `duplicateOf` (2026-10-03): this pack's three weapons are second records of core SMGs the base's own
+    // `submachineguns` pack carries under "H&K ..." - same damage, cost, attack type and source. The shop
+    // catalog offers the named record only (catalog.js `browsable`); the document itself is untouched and
+    // an item a shop already stocks from here still resolves.
+    Ubxx6nrlV5OVOrDS: { duplicateOf: "cyberpunk2020.submachineguns.5PIcgtNXDW6FgPEo", patch: { concealability: "ConcealJacket" } },     // H&K MP-2013 — was "jacket"
+    VCNhTdWnVoPTYYzi: { duplicateOf: "cyberpunk2020.submachineguns.x0X4jTAKqegwNUPk", patch: { concealability: "ConcealJacket" } },     // H&K MPK-9 — was "jacket"
+    tUw3deoRLKzUbQEI: { duplicateOf: "cyberpunk2020.submachineguns.Y5Y4fkvE0YWeS5M8", patch: { concealability: "ConcealLongcoat" } },   // H&K MPK-11 — was "long coat"
   },
   "cyberpunk2020.pistols": {
     ghAVVP4pbH2zOIx6: { name: "Llama Comanche" },  // PR #43: was "Commanche"

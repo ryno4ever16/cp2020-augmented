@@ -279,7 +279,7 @@ try {
     const SUP = await import("/modules/cp2020-augmented/module/shop/supplements.js");
     const ST = await import("/modules/cp2020-augmented/module/settings.js");
     const cfg = ST.shopSourceConfig();
-    const visible = all.filter(i => SUP.isVisibleTo(i.supplement, i.canon, cfg, game.user.isGM));
+    const visible = all.filter(i => !i.duplicateOf && !ST.hiddenScrapedPackIds().includes(i.packId) && !(i.type === "weapon" && String(i.attackType).toLowerCase() === "martial")).filter(i => SUP.isVisibleTo(i.supplement, i.canon, cfg, game.user.isGM));
     const wantWeapons = visible.filter(i => i.category === "Weapons").length;
     const gotWeapons = Number(r.querySelector('.cp-cat-chip[data-cat="Weapons"]')?.dataset.count);
     chk("counts: the Weapons chip carries the live item count", gotWeapons === wantWeapons, `${gotWeapons} vs ${wantWeapons}`);
@@ -389,7 +389,7 @@ try {
     const SUP = await import("/modules/cp2020-augmented/module/shop/supplements.js");
     const ST = await import("/modules/cp2020-augmented/module/settings.js");
     const all = await CAT.getCatalogIndex();
-    const visible = all.filter(i => SUP.isVisibleTo(i.supplement, i.canon, ST.shopSourceConfig(), game.user.isGM));
+    const visible = all.filter(i => !i.duplicateOf && !ST.hiddenScrapedPackIds().includes(i.packId) && !(i.type === "weapon" && String(i.attackType).toLowerCase() === "martial")).filter(i => SUP.isVisibleTo(i.supplement, i.canon, ST.shopSourceConfig(), game.user.isGM));
 
     const census = () => Number(W.root()?.querySelector(".cp-catalog-list")?.dataset.total);
     const painted = () => W.root()?.querySelectorAll(".cp-catalog-list .cp-catalog-row").length ?? 0;
@@ -898,7 +898,7 @@ try {
     const ST = await import("/modules/cp2020-augmented/module/settings.js");
     const SETUP = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
     const all = await CAT.getCatalogIndex();
-    const visible = all.filter(i => SUP.isVisibleTo(i.supplement, i.canon, ST.shopSourceConfig(), game.user.isGM));
+    const visible = all.filter(i => !i.duplicateOf && !ST.hiddenScrapedPackIds().includes(i.packId) && !(i.type === "weapon" && String(i.attackType).toLowerCase() === "martial")).filter(i => SUP.isVisibleTo(i.supplement, i.canon, ST.shopSourceConfig(), game.user.isGM));
 
     // Prices must actually be charged for leg (f); restored at the end of the section.
     const setupWas = SETUP.isShopSetupMode();
@@ -1151,7 +1151,7 @@ try {
         const ST = await import("/modules/cp2020-augmented/module/settings.js");
         const all = await CAT.getCatalogIndex();
         const cfg = ST.shopSourceConfig();
-        const mine = all.filter(i => SUP.isVisibleTo(i.supplement, i.canon, cfg, false));
+        const mine = all.filter(i => !i.duplicateOf && !ST.hiddenScrapedPackIds().includes(i.packId) && !(i.type === "weapon" && String(i.attackType).toLowerCase() === "martial")).filter(i => SUP.isVisibleTo(i.supplement, i.canon, cfg, false));
         const wantWeapons = mine.filter(i => i.category === "Weapons").length;
 
         const r = await W.open("catalog", null, ".cp-catalog-row");

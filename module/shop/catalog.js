@@ -4,7 +4,7 @@ import { buyAndInstallCyberware, offerCyberwareChoice, resolveCyberChoice, resol
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, resolveCategory, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
-import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
+import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride, hiddenScrapedPackIds } from "../settings.js";
 import { weaponGlyphForIndexEntry } from "../item-glyphs.js";
 import { shimmerWindow } from "../shimmer.js";
 import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
@@ -234,6 +234,9 @@ async function buildCatalogIndex() {
       items.push({
         // A weapon carrying only a placeholder picture shows its category glyph (item-glyphs.js).
         id: e._id, packId: pack.collection, name: corr?.name ?? e.name, img: weaponGlyphForIndexEntry(e) ?? e.img,
+        // A second record of a weapon another pack carries (data-corrections.js `duplicateOf`): kept in the
+        // index so a shop that stocks it still resolves, left off the shelves by `browsable`.
+        duplicateOf: corr?.duplicateOf ?? null,
         cost: pr.price ?? 0, unpriced: !pr.purchasable, priceRange: corr?.priceRange ?? null,
         type, category, sub, supplement, supplementShort: shortSupplement(supplement), canon,
         attackType: e.system?.attackType ?? "", ammoType: e.system?.ammoType ?? "",
@@ -245,6 +248,24 @@ async function buildCatalogIndex() {
   const all = results.flat();
   all.sort((a, b) => a.name.localeCompare(b.name));
   return all;
+}
+
+/**
+ * The part of the index a catalog view may OFFER: everything except the packs the GM has hidden
+ * (settings.js `hiddenScrapedPackIds`, read live so toggling the setting needs no rebuild) and the
+ * records the corrections registry marks as a second copy of another record. The full index stays the
+ * lookup for a shop's own stock, so an item stocked from a hidden pack keeps its name, picture and price.
+ * An unarmed technique is left out too: it is something a character does, not something a shop sells.
+ */
+function browsable(all) {
+  const hidden = new Set(hiddenScrapedPackIds());
+  return all.filter(it => !it.duplicateOf && !hidden.has(it.packId) && !isUnarmedTechnique(it));
+}
+
+/** Is this index row an unarmed technique? The base melee pack files Strike and Kick as weapons with the
+ *  attack type "Martial" so a sheet can roll them; the attack type is what says so, not the name. PURE. */
+function isUnarmedTechnique(it) {
+  return it.type === "weapon" && String(it.attackType ?? "").trim().toLowerCase() === "martial";
 }
 
 export function getCatalogIndex() {
@@ -396,7 +417,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     const matchesCat = (it) => !catsActive || this._cats.has(it.category) || this._cats.has(`${it.category}/${it.sub}`);
     const matchesBook = (it) => !booksActive || (it.canon === "core" && this._books.has("__core__")) || this._books.has(it.supplement);
     const rows = [];
-    for (const it of all) {
+    for (const it of browsable(all)) {
       if (!isVisibleTo(it.supplement, it.canon, cfg, isGM)) continue;
       if (!matchesCat(it)) continue;
       if (!matchesBook(it)) continue;
@@ -430,7 +451,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    * would I get if I picked this next", which is the question a filter list is asked.
    */
   _facetCounts(all, { isGM, cfg }) {
-    const pool = all.filter(it => isVisibleTo(it.supplement, it.canon, cfg, isGM));
+    const pool = browsable(all).filter(it => isVisibleTo(it.supplement, it.canon, cfg, isGM));
     const booksActive = this._books.size > 0;
     const catsActive = this._cats.size > 0;
     const matchesBook = (it) => !booksActive || (it.canon === "core" && this._books.has("__core__")) || this._books.has(it.supplement);
@@ -498,6 +519,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    *  official, then homebrew). Each chip is a display filter; on the GM's catalog/build view each official
    *  /homebrew chip also carries an eye toggle for player visibility (the old per-source curation). */
   _booksPanel(all, { isGM, cfg, canCurate, counts }) {
+    all = browsable(all);   // a book whose only items sit in a hidden pack gets no chip
     const present = new Set(all.map(i => i.supplement + " " + i.canon));
     const enabled = cfg.enabledSources ?? {};
     const seen = (name, canon) => present.has(name + " " + canon) && (isGM || isVisibleTo(name, canon, cfg, false));

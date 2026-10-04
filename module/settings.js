@@ -966,6 +966,13 @@ export function cyberlimbRepairGmOnly() {
 export function hideScrapedPacks() {
   try { return game.settings.get(SCOPE, "hideScrapedPacks") !== false; } catch { return true; }
 }
+/** The pack ids the shop catalog leaves out of its shelves right now: the scraped packs while the hide is on,
+ *  none when it is off. "Hidden" has to mean the same thing in the shop as in the Compendium sidebar — a GM
+ *  who left the default on was still being offered both packs' rows, among them a second copy of some thirty
+ *  weapons the module's own packs carry from the books and of four the base system's core packs carry. */
+export function hiddenScrapedPackIds() {
+  return hideScrapedPacks() ? SCRAPED_PACK_IDS : [];
+}
 
 /** DOT stacking behavior for every damage-over-time payload: "stack" (default) / "reset" /
  *  "separate". One selector — replaced the identical acid/fire pair 2026-08-29 (settings-trim). */
