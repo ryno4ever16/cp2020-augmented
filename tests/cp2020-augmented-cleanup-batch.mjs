@@ -110,7 +110,9 @@ const r = await p.evaluate(async () => {
 
   // ── item 5 (enforce): an oversized option is blocked from a full borg zone; a fitting one installs ─
   await guard("item5-enforce", async () => {
-    const mk = (slots, tag) => ({ name: `__pw_arm_${tag}`, type: "cyberware", system: { equipped: false, MountZone: "Arm", CyberBodyType: { Type: "Arm" }, Module: { SlotsTaken: slots } } });
+    // Stamped as installed in this actor before (the install stamp, module/cyberware/install.js), so the
+    // drop is the zone-capacity check this leg is about rather than a first-install surgery dialog.
+    const mk = (slots, tag) => ({ name: `__pw_arm_${tag}`, type: "cyberware", flags: { "cp2020-augmented": { installedIn: actor.uuid } }, system: { equipped: false, MountZone: "Arm", CyberBodyType: { Type: "Arm" }, Module: { SlotsTaken: slots } } });
     const [big] = await actor.createEmbeddedDocuments("Item", [mk(10, "big")]);
     const [small] = await actor.createEmbeddedDocuments("Item", [mk(1, "small")]);
     await actor.sheet.render(true); await sleep(700);

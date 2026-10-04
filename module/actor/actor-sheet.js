@@ -23,6 +23,7 @@ import { hasLoadout, deactivateLoadout, loadoutOptionsOf } from "../mech/loadout
 import { getAutoLayerOrder, getArmorHardness, LAYER_LAW } from "../combat/armor-layers.js";
 import { layerEvPenalty } from "../combat/book-legality.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
+import { beginCyberwareInstall, wasInstalledHere } from "../cyberware/install.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
 import { ipDisplayForActor, levelUpSkill, toggleSkillLock, canEditSkillLevels } from "../ip/ip.js";
 import { shoppingEnabled, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
@@ -3366,10 +3367,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    *
    * @param {object} data
    * @param {{item: Item|null, itemData: object, sameActor: boolean}|null} resolved
+   * @param {{uninstalled?: boolean}} [opts]  uninstalled: an external cyberware drop is created NOT
+   *   installed (a body-zone / host drop: the install itself is the drop's own job, and a first install
+   *   is a surgery — module/cyberware/install.js beginCyberwareInstall)
    * @returns {Promise<{item: Item|null, itemData: object, sameActor: boolean}>}
    * @private
    */
-  async _cpEnsureDroppedItemOwned(data, resolved = null) {
+  async _cpEnsureDroppedItemOwned(data, resolved = null, { uninstalled = false } = {}) {
     const drop = resolved ?? await this._cpResolveDroppedItem(data);
     if (drop.item) return drop;
 
@@ -3378,7 +3382,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       return { item: existing, itemData: existing.toObject(), sameActor: drop.sameActor };
     }
 
-    const created = await this.actor.createEmbeddedDocuments("Item", [drop.itemData]);
+    let createData = drop.itemData;
+    if (uninstalled && createData?.type === "cyberware") {
+      createData = foundry.utils.deepClone(createData);
+      foundry.utils.setProperty(createData, "system.equipped", false);
+    }
+    const created = await this.actor.createEmbeddedDocuments("Item", [createData]);
     const item = created[0] ?? null;
     return { item, itemData: item?.toObject() ?? drop.itemData, sameActor: false };
   }
@@ -3594,7 +3603,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       if (itemData.type !== "cyberware") return warn(localize("OnlyCyberwareHere"));
 
-      const { item } = await this._cpEnsureDroppedItemOwned(data, resolved);
+      const { item } = await this._cpEnsureDroppedItemOwned(data, resolved, { uninstalled: true });
       if (!item || !host || item.id === host.id) return;
 
       const items = this.actor.items?.contents ?? [];
@@ -3612,6 +3621,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         };
         if (item.getFlag("cp2020-augmented", "origMountZone") === undefined) {
           nestUpdate["flags.cp2020-augmented.origMountZone"] = item.system?.MountZone ?? "";
+        }
+        // An option's first install is a surgery of its own (the install flow carries this nesting
+        // through to wherever it completes); one that has been in this body before just goes back in.
+        if (!wasInstalledHere(item)) {
+          await beginCyberwareInstall(this.actor, item, { placement: { updates: nestUpdate, severFlesh: false } });
+          return this.render(true);
         }
         await item.update(nestUpdate, { render: false });
         if (item.sheet?.rendered) item.sheet.render(true);
@@ -3638,7 +3653,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       if (itemData.type !== "cyberware") return warn(localize("OnlyCyberwareHere"));
 
-      const { item } = await this._cpEnsureDroppedItemOwned(data, resolved);
+      const { item } = await this._cpEnsureDroppedItemOwned(data, resolved, { uninstalled: true });
       if (!item) return;
 
       return this._cpEquipCyberIntoZone(item, itemData, zoneKey);
@@ -3718,6 +3733,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       }
     }
 
+    // Chrome going into this body for the first time is a surgery: the install flow asks (and, when
+    // approvals are on, the GM approves) and then applies exactly this placement, flesh sever included.
+    // Chrome that has been in this body before goes straight back in.
+    if (!wasInstalledHere(item)) {
+      await beginCyberwareInstall(this.actor, item, { placement: { updates, severFlesh: true } });
+      return this.render(true);
+    }
     await item.update(updates);
     // Fitting an SDP-bearing cyberlimb severs the meat limb it replaces — record it now, where the chosen
     // side is authoritative (the model create/equip hook fires before the side is finalized, so it cannot

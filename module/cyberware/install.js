@@ -1,9 +1,40 @@
 import { formulaHasDice } from "../dice.js";
-import { localize, tryLocalize, cappedWoundDamage } from "../utils.js";
-import { canShop } from "../settings.js";
-import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage } from "../compat.js";
+import { localize, tryLocalize, cappedWoundDamage, deleteFieldUpdate } from "../utils.js";
+import { canShop, shopBuySource } from "../settings.js";
+import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage, renderChatCard } from "../compat.js";
 import { correctionFor, applyCorrectionToItemData, markCorrectionApplied } from "../data-corrections.js";
 import { isShopSetupMode } from "../shop/setup-mode.js";
+import { severFleshUnder, cyberlimbZoneOf } from "../mech/cyberlimb.js";
+
+const SCOPE = "cp2020-augmented";
+// flags.cp2020-augmented.installedIn — the uuid of the actor this item was installed in. It is what
+// lets chrome come out and go back in without a second surgery.
+const STAMP_FLAG = "installedIn";
+// flags.cp2020-augmented.installRequestId — the id of the GM request card a first install is waiting on.
+const WAITING_FLAG = "installRequestId";
+
+/**
+ * Has this cyberware item been installed in the character holding it? PURE (reads the item only).
+ *
+ * True when its stamp names its current owner, OR it is installed right now, OR it carries a rolled
+ * Humanity loss. The last two cover chrome that was on sheets before the stamp existed and NPCs that
+ * were created with their chrome already fitted: none of those carry a stamp, and none of them should
+ * be sent back to the ripperdoc for something they already went through.
+ * @param {Item|object} item  an embedded cyberware item (or anything shaped like one)
+ */
+export function wasInstalledHere(item) {
+  if (!item) return false;
+  const stamp = item.flags?.[SCOPE]?.[STAMP_FLAG] ?? null;
+  const owner = item.parent?.uuid ?? null;
+  if (stamp && owner && stamp === owner) return true;
+  if (item.system?.equipped === true) return true;
+  return (Number(item.system?.humanityLoss) || 0) > 0;
+}
+
+/** The update that stamps `item` as installed in `actor`. */
+function stampUpdate(actor) {
+  return { [`flags.${SCOPE}.${STAMP_FLAG}`]: actor.uuid };
+}
 
 /**
  * Cyberware buy-and-install flow (Shopping #14 — [[shopping-design]]).
@@ -234,7 +265,7 @@ export async function installCyberware(actor, item, opts = {}) {
     name: item.name, fee: choices.paySurgery === false ? 0 : listedFee, available: funds });
   if (surgeryCost === null) return false;
   if (surgeryCost > 0) await actor.update({ "system.eurobucks": funds - surgeryCost });
-  if (item.system?.equipped !== true) await item.update({ "system.equipped": true });
+  if (item.system?.equipped !== true) await item.update({ "system.equipped": true, ...stampUpdate(actor) });
 
   let loss = Number(item.system?.humanityLoss) || 0;
   if (choices.rollHumanity) loss = (await rollCyberwareHumanity(item)).loss;
@@ -387,6 +418,9 @@ export async function chargeAndStockCyberware(actor, data, { charge = 0, install
     if (payload.flags?.["cp2020-augmented"]?.shop) delete payload.flags["cp2020-augmented"].shop;
     payload.system = payload.system ?? {};
     payload.system.equipped = installed;   // buy-only leaves it uninstalled (no EMP/Humanity hit yet)
+    // Installed at the counter = installed in this body: stamp it so it can come out and go back in
+    // without another surgery. Buy-only leaves no stamp, so its first fitting is still a surgery.
+    if (installed) foundry.utils.setProperty(payload, `flags.${SCOPE}.${STAMP_FLAG}`, actor.uuid);
     const [item] = await actor.createEmbeddedDocuments("Item", [payload]);
     return item;
   } catch (err) {
@@ -416,4 +450,215 @@ export async function completeCyberwareInstall(actor, item, { surgery, charged =
   await _postInstallSummary(actor, item, { surgery, charged, loss, dmg });
   ui.notifications?.info(localize("CyberInstalled", { item: item.name }));
   return true;
+}
+
+/* ══════════════════════ First install of chrome already owned ══════════════════════
+ *
+ * A piece of chrome the character is carrying goes into the body through a surgery the FIRST time
+ * only. The player decides on their own client (the install dialog and, when they are short, the fee
+ * question); when approvals are on (a player, `shopBuySource` = published shops only — the same switch
+ * the shop's purchase requests follow) the GM is then asked to approve on a whispered request card.
+ * After it has been in once (`wasInstalledHere`) it moves in and out of the body freely.
+ */
+
+// Items whose install dialog is open on THIS client, so a second drop while the first dialog is still
+// up cannot open a second one (and later a second request).
+const _askingInstall = new Set();
+
+/** The pending request card `item` is waiting on, or null. The waiting flag only counts while its card
+ *  still exists, is still pending, and is about this very item — a deleted or resolved card, or a flag
+ *  carried over on a copy, never blocks anything. */
+export function pendingInstallRequest(item) {
+  const id = item?.flags?.[SCOPE]?.[WAITING_FLAG];
+  if (!id) return null;
+  const message = game.messages?.get(id);
+  const req = message?.getFlag?.(SCOPE, "installRequest");
+  if (!req || req.status !== "pending" || req.itemId !== item.id || req.actorUuid !== item.parent?.uuid) return null;
+  return message;
+}
+
+/**
+ * The first install of a cyberware item the actor already holds: the sheet's body-zone and host-implant
+ * drops (`placement` = what that drop would have written, so the item ends up where it was dropped)
+ * and the item sheet's Install button (no placement). Until it completes the item stays uninstalled
+ * and where it was.
+ * @param {Actor} actor
+ * @param {Item}  item       a cyberware Item embedded on `actor`
+ * @param {object} [o]       { placement: { updates, severFlesh } | null }
+ * @returns {Promise<boolean>} true when it was installed here and now
+ */
+export async function beginCyberwareInstall(actor, item, { placement = null } = {}) {
+  if (!actor || !item || item.type !== "cyberware") return false;
+  if (item.system?.equipped === true) {
+    ui.notifications?.warn(localize("CyberAlreadyInstalled", { item: item.name }));
+    return false;
+  }
+  if (_askingInstall.has(item.uuid)) return false;   // its dialog is already open in front of them
+  if (pendingInstallRequest(item)) {
+    ui.notifications?.info(localize("CyberInstallPending", { item: item.name }));
+    return false;
+  }
+  _askingInstall.add(item.uuid);
+  try {
+    const surgery = getSurgery(item.system?.surgCode);
+    // GM setup mode waives the fee here exactly as it does on installCyberware (it is GM-only, so a
+    // player's request is never affected).
+    const listedFee = isShopSetupMode() ? 0 : surgery.cost;
+    const choices = await _confirmInstall({
+      title: localize("CyberInstallTitle", { item: item.name }),
+      item, surgery, surgeryCost: listedFee, showPart: false
+    });
+    if (!choices) return false;
+    const fee = await settleSurgeryFee({
+      name: item.name, fee: choices.paySurgery === false ? 0 : listedFee, available: Number(actor.system?.eurobucks) || 0 });
+    if (fee === null) return false;
+    // The placement travels on a chat-message flag when it goes to the GM, and a flag cannot hold
+    // dotted keys, so it is carried nested and flattened back when it is applied.
+    const job = {
+      fee, rollHumanity: choices.rollHumanity !== false, applyDamage: choices.applyDamage !== false,
+      placement: placement ? { updates: foundry.utils.expandObject(placement.updates ?? {}), severFlesh: placement.severFlesh === true } : null,
+    };
+    if (game.user.isGM || shopBuySource() !== "shops") return await _carryOutInstall(actor, item, job);
+    await _requestInstall(actor, item, job);
+    return false;
+  } finally {
+    _askingInstall.delete(item.uuid);
+  }
+}
+
+/** Do the install: charge the settled fee, put the item where it was dropped, mark it installed and
+ *  stamped (and no longer waiting), then the Humanity roll, surgical damage and summary card. Runs on
+ *  the acting client, or on the GM's when a request is approved. */
+async function _carryOutInstall(actor, item, { fee = 0, rollHumanity = true, applyDamage = true, placement = null } = {}) {
+  const surgery = getSurgery(item.system?.surgCode);
+  if (fee > 0) await actor.update({ "system.eurobucks": (Number(actor.system?.eurobucks) || 0) - fee });
+  await item.update({
+    ...foundry.utils.flattenObject(placement?.updates ?? {}),
+    "system.equipped": true,
+    ...stampUpdate(actor),
+    ...(item.flags?.[SCOPE]?.[WAITING_FLAG] ? deleteFieldUpdate(`flags.${SCOPE}.${WAITING_FLAG}`) : {}),
+  });
+  // A cyberlimb fitted into a body zone severs the meat limb it replaces — the same step the sheet's
+  // zone drop takes after its own update (actor-sheet.js _cpEquipCyberIntoZone).
+  if (placement?.severFlesh) {
+    try { await severFleshUnder(actor, cyberlimbZoneOf(item, actor.items?.contents ?? [])); }
+    catch (e) { console.warn(`${SCOPE} | flesh sever on install failed`, e); }
+  }
+  return completeCyberwareInstall(actor, item, { surgery, charged: fee, rollHumanity, applyDamage });
+}
+
+/** The line on the request card saying what surgery the GM is approving and whether its fee is paid. */
+function installRequestLine(req) {
+  const surgery = tryLocalize(getSurgery(req.surgCode).label);
+  return req.fee > 0
+    ? localize("CyberInstallRequestSurgery", { surgery, cost: req.fee })
+    : localize("CyberInstallRequestSurgeryUnpaid", { surgery });
+}
+
+/** Post the GM-whispered install request and mark the item as waiting on it. Modelled on the shop's
+ *  purchase request (shop/catalog.js requestPurchase): the flag carries the whole job, so approving it
+ *  needs nothing from the player's client. */
+async function _requestInstall(actor, item, job) {
+  const req = {
+    actorUuid: actor.uuid, itemId: item.id, itemName: item.name, actorName: actor.name,
+    surgCode: item.system?.surgCode ?? "", fee: job.fee, rollHumanity: job.rollHumanity, applyDamage: job.applyDamage,
+    placement: job.placement, requesterId: game.user.id, status: "pending",
+  };
+  const content = await renderChatCard("shop/install-request.hbs", {
+    requester: game.user.name, actor: actor.name, item: item.name, surgeryLine: installRequestLine(req), pending: true,
+  });
+  const message = await ChatMessage.create({
+    content, whisper: ChatMessage.getWhisperRecipients("GM").map((u) => u.id), speaker: ChatMessage.getSpeaker({ actor }),
+    flags: { [SCOPE]: { installRequest: req } },
+  });
+  if (message) await item.update({ [`flags.${SCOPE}.${WAITING_FLAG}`]: message.id });
+  ui.notifications?.info(localize("CyberInstallRequestSent"));
+}
+
+// Install requests already being resolved on THIS client: the synchronous claim makes a double click a
+// no-op; the early status flip guards a second GM (the purchase request's own idiom).
+const _resolvingInstallRequests = new Set();
+
+/**
+ * GM resolves a pending install request (the card's Approve / Deny, wired in shop/catalog.js
+ * `_wireShopCardControls`). Approve re-checks the item and re-settles the fee against the funds the
+ * patient has NOW (a shortfall is asked of the GM), then installs exactly as the player would have.
+ * @returns {Promise<boolean>} false only when the GM backed out of the fee question and may click again
+ */
+export async function resolveInstallRequest(message, approve) {
+  if (!game.user.isGM) return true;
+  const req = message?.getFlag?.(SCOPE, "installRequest");
+  if (!req || req.status !== "pending") return true;
+  if (_resolvingInstallRequests.has(message.id)) return true;
+  _resolvingInstallRequests.add(message.id);
+  try {
+    const actor = await fromUuid(req.actorUuid).catch(() => null);
+    const item = actor?.items?.get(req.itemId) ?? null;
+    const installable = !!item && item.system?.equipped !== true;
+    let fee = 0;
+    if (approve && installable) {
+      fee = await settleSurgeryFee({ name: req.itemName, fee: req.fee, available: Number(actor.system?.eurobucks) || 0 });
+      if (fee === null) return false;
+      if (message.getFlag(SCOPE, "installRequest")?.status !== "pending") return true;   // another GM got there first
+    }
+    // Flip the shared status before the install itself, so a second GM's guard fails.
+    await message.update({ [`flags.${SCOPE}.installRequest.status`]: approve ? "approved" : "denied" });
+    let ok = true;
+    if (approve) {
+      ok = installable;
+      if (ok) {
+        try { await _carryOutInstall(actor, item, { fee, rollHumanity: req.rollHumanity, applyDamage: req.applyDamage, placement: req.placement }); }
+        catch (e) { console.error(`${SCOPE} | approved cyberware install failed`, e); ok = false; }
+      }
+    }
+    // Denied, or approved but not carried out: the item stops waiting, so the player can try again.
+    if (!(approve && ok) && item?.flags?.[SCOPE]?.[WAITING_FLAG]) {
+      await item.update(deleteFieldUpdate(`flags.${SCOPE}.${WAITING_FLAG}`)).catch(() => {});
+    }
+    const player = game.users.get(req.requesterId);
+    const names = { item: foundry.utils.escapeHTML(req.itemName ?? ""), actor: foundry.utils.escapeHTML(req.actorName ?? "") };
+    if (approve && !ok) {
+      // The status was written before the install (it is the claim), so walk it back: the card must
+      // never read "Approved" for an install that did not happen. The requester is told too.
+      await message.update({ [`flags.${SCOPE}.installRequest.status`]: "failed" });
+      ChatMessage.create({
+        whisper: [...new Set([...game.users.filter((u) => u.isGM).map((u) => u.id), ...(player ? [player.id] : [])])],
+        content: localize("CyberInstallRequestFailedWhisper", names),
+      });
+    } else if (!approve && player) {
+      ChatMessage.create({ whisper: [player.id], content: localize("CyberInstallRequestDeniedWhisper", names) });
+    }
+    const content = await renderChatCard("shop/install-request.hbs", {
+      requester: player?.name ?? "", actor: req.actorName, item: req.itemName, surgeryLine: installRequestLine(req),
+      pending: false, approved: approve && ok, failed: approve && !ok, resolvedBy: game.user.name,
+    });
+    await message.update({ content });
+  } finally {
+    _resolvingInstallRequests.delete(message.id);
+  }
+  return true;
+}
+
+/** Init-time hooks that keep the stamp honest. */
+export function registerCyberwareInstallHooks() {
+  // A copy is not the chrome that was installed: an item stamped for ANOTHER character (dragged from
+  // that sheet, or duplicated from it) arrives uninstalled, unstamped and with no Humanity loss of its
+  // own, so its first fitting in this body is a surgery. Unstamped items are left exactly as they come
+  // — compendium entries, NPC generators and tests create installed chrome on purpose.
+  Hooks.on("preCreateItem", (doc, data) => {
+    if (doc?.type !== "cyberware" || doc.parent?.documentName !== "Actor") return;
+    const stamp = foundry.utils.getProperty(data ?? {}, `flags.${SCOPE}.${STAMP_FLAG}`);
+    if (!stamp || stamp === doc.parent.uuid) return;
+    doc.updateSource({ "system.equipped": false, "system.humanityLoss": 0, ...deleteFieldUpdate(`flags.${SCOPE}.${STAMP_FLAG}`) });
+  });
+  // Uninstalling installed chrome that carries no stamp for this owner (on the sheet before the stamp
+  // existed, or fitted at creation) stamps it in the same update, so it does not look new afterwards —
+  // which matters for chrome whose Humanity loss was never rolled. Every uninstall path goes through
+  // an item update, so one hook covers them all.
+  Hooks.on("preUpdateItem", (item, changes) => {
+    if (item?.type !== "cyberware" || item.parent?.documentName !== "Actor") return;
+    if (item.system?.equipped !== true || foundry.utils.getProperty(changes, "system.equipped") !== false) return;
+    if (item.flags?.[SCOPE]?.[STAMP_FLAG] === item.parent.uuid) return;
+    foundry.utils.setProperty(changes, `flags.${SCOPE}.${STAMP_FLAG}`, item.parent.uuid);
+  });
 }

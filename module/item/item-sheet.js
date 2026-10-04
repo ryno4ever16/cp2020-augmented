@@ -2,7 +2,7 @@ import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, conceal
 import { canBuyAmmo, applyAmmoModifierUpdate } from "../dialog/buy-ammo.js";
 import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
-import { installCyberware } from "../cyberware/install.js";
+import { beginCyberwareInstall, wasInstalledHere } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, localizeParam, cwHasType, getSkillIndex, pickCwType } from "../utils.js";
 import { MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { VISION_DEVICE_MODES } from "../mech/vision.js";
@@ -2227,7 +2227,14 @@ async _prepareCyberware(sheet) {
 
       const actor = this.item?.actor;
       if (!actor) { ui.notifications?.warn(localize("ShopNoActor")); return; }
-      await installCyberware(actor, this.item, { confirm: true });
+      // Chrome that has been in this body before goes back in without a second surgery; a first install
+      // is the shared install flow (the install dialog, and the GM's approval when approvals are on).
+      if (wasInstalledHere(this.item) && this.item.system?.equipped !== true) {
+        await this.item.update({ "system.equipped": true });
+        ui.notifications?.info(localize("CyberReinstalled", { item: this.item.name }));
+        return;
+      }
+      await beginCyberwareInstall(actor, this.item);
     }, true);
   }
 

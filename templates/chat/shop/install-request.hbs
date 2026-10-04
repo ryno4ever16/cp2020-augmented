@@ -1,0 +1,24 @@
+{{!-- Cyberware install request: a player asks the GM to approve the first install of chrome their
+      character already holds. Whispered to the GMs; built and resolved in module/cyberware/install.js
+      (beginCyberwareInstall / resolveInstallRequest); the Approve/Deny buttons are bound for GMs by the
+      same pass that binds the purchase request (shop/catalog.js _wireShopCardControls), and share its
+      styling (.cp-shop-request). Text from lang/en.json (CYBERPUNK.CyberInstallRequest*). --}}
+<div class="cp-shop-request cp-shop-install-request">
+  <p class="cp-shop-request-head"><i class="fas fa-syringe"></i> {{localize "CYBERPUNK.CyberInstallRequestTitle"}}</p>
+  <p class="cp-shop-request-body">{{CPLocal "CyberInstallRequestBody" requester=requester actor=actor item=item}}</p>
+  <p class="cp-shop-request-note cp-shop-request-cyber">{{surgeryLine}}</p>
+  {{#if pending}}
+  <div class="cp-shop-request-actions">
+    <button type="button" class="cp-shop-request-btn cp-approve" data-action="approve"><i class="fas fa-check"></i> {{localize "CYBERPUNK.ShopRequestApprove"}}</button>
+    <button type="button" class="cp-shop-request-btn cp-deny" data-action="deny"><i class="fas fa-xmark"></i> {{localize "CYBERPUNK.ShopRequestDeny"}}</button>
+  </div>
+  {{else}}
+  {{#if approved}}
+  <p class="cp-shop-request-status cp-approved">{{CPLocal "ShopRequestApproved" by=resolvedBy}}</p>
+  {{else}}{{#if failed}}
+  <p class="cp-shop-request-status cp-denied cp-failed">{{CPLocal "CyberInstallRequestFailed" by=resolvedBy}}</p>
+  {{else}}
+  <p class="cp-shop-request-status cp-denied">{{CPLocal "ShopRequestDenied" by=resolvedBy}}</p>
+  {{/if}}{{/if}}
+  {{/if}}
+</div>

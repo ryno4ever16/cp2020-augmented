@@ -76,6 +76,7 @@ import { migrateEnumSpellings, reviewSuspectWeapons, registerDataReviewButtons, 
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
 import { registerRadiationZoneBehavior, registerRadiationZoneVisibilityDefault } from "./radiation/radiation-zone-behavior.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
+import { registerCyberwareInstallHooks } from "./cyberware/install.js";
 import { registerPaSkillBackfill } from "./mech/pa-skills.js";
 import { registerPaCombatSense } from "./mech/pa-combat-sense.js";
 import { registerMartialDefense } from "./martial/martial.js";
@@ -352,6 +353,9 @@ Hooks.once("init", function () {
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).
   registerMechCyberlimb();
+  // Cyberware install stamp: a copy arriving from another character comes off its old body, and
+  // installed chrome without a stamp gets one when it is taken out (module/cyberware/install.js).
+  registerCyberwareInstallHooks();
   // Offered contested defense: the delegated click wiring for the martial defense-offer/result
   // chat cards (the roll is the defender's choice; the outcome is the GM's adjudication).
   registerMartialDefense();

@@ -1,6 +1,6 @@
 import { buyItem, FASHION_STYLES, styleMultOf, resolveCatalogPrice, isValidPrice } from "./purchase.js";
 import { correctionFor, correctedCost } from "../data-corrections.js";
-import { buyAndInstallCyberware, askCyberwareChoice } from "../cyberware/install.js";
+import { buyAndInstallCyberware, askCyberwareChoice, resolveInstallRequest } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, resolveCategory, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
@@ -2246,8 +2246,9 @@ export async function publishShop(shopId) {
  */
 function _wireShopCardControls(message, html) {
   // Cheap first-line bail (perf audit S9), matching the other two chat-card passes: this runs for
-  // EVERY message the log renders, including a whole scrollback batch at load. Both controls it wires
-  // live only on the two shop cards, and `cp-shop-` appears in no other chat template — so scanning
+  // EVERY message the log renders, including a whole scrollback batch at load. The controls it wires
+  // live only on the shop's own cards (the shop link, the purchase request and the cyberware install
+  // request), and `cp-shop-` appears in no other chat template — so scanning
   // the stored content string settles it, and a non-shop card costs one property read instead of two
   // querySelectorAll walks over its subtree.
   if (!message?.content?.includes("cp-shop-")) return;
@@ -2272,7 +2273,11 @@ function _wireShopCardControls(message, html) {
       const btns = card ? [...card.querySelectorAll(".cp-shop-request-btn")] : [btn];
       btns.forEach(b => b.disabled = true);
       const price = card?.querySelector(".cp-shop-request-price")?.value;
-      const resolved = await resolvePurchaseRequest(message, btn.dataset.action === "approve", price);
+      // The cyberware install request (module/cyberware/install.js) shares this card shape and these
+      // buttons; its flag says which resolver owns it.
+      const resolved = message.getFlag("cp2020-augmented", "installRequest")
+        ? await resolveInstallRequest(message, btn.dataset.action === "approve")
+        : await resolvePurchaseRequest(message, btn.dataset.action === "approve", price);
       if (resolved === false) btns.forEach(b => b.disabled = false);   // retriable bail (e.g. a price is still needed)
     });
   });

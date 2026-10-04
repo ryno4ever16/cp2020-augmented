@@ -36,6 +36,9 @@ const r = await p.evaluate(async () => {
   }]);
   const [scope] = await actor.createEmbeddedDocuments("Item", [{
     name: "__pw_scope", type: "cyberware",
+    // Stamped as installed in this actor before (module/cyberware/install.js), so the nest drop below is
+    // the nesting this suite is about, not a first-install surgery dialog.
+    flags: { "cp2020-augmented": { installedIn: actor.uuid } },
     system: { equipped: false, cyberwareType: "CyberOptic", MountZone: "Head", CyberBodyType: { Type: "Head" }, Module: { IsModule: true, SlotsTaken: 1, AllowedParentCyberwareType: "CyberOptic" } }
   }]);
   const [arm] = await actor.createEmbeddedDocuments("Item", [{
@@ -68,7 +71,7 @@ const r = await p.evaluate(async () => {
   await guard("reject-reverse-nest", async () => {
     root = actor.sheet.element;
     const [mount] = await actor.createEmbeddedDocuments("Item", [{
-      name: "__pw_mount", type: "cyberware",
+      name: "__pw_mount", type: "cyberware", flags: { "cp2020-augmented": { installedIn: actor.uuid } },
       system: { equipped: false, cyberwareType: "CyberOptic", MountZone: "Head", CyberBodyType: { Type: "Head" }, CyberWorkType: { Types: ["Implant"], OptionsAvailable: 2 } }
     }]);
     const hostEl = root.querySelector(`[data-drop-target="host:${eye.id}"]`);
