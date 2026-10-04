@@ -13,7 +13,10 @@
     <span class="cp-cat-itemname" title="{{#if r.ammo}}{{localize "CYBERPUNK.AmmoBuyTitle"}}{{else}}{{localize "CYBERPUNK.ShopOpenDetails"}}{{/if}}">{{r.name}}{{#if r.featured}} ★{{/if}}</span>
     {{#if r.ammo}}<span class="cp-ammo-rounds" title="{{localize "CYBERPUNK.AmmoRoundsPerBox"}}">{{r.boxSize}}/box</span>{{/if}}
     {{#if @root.showSource}}{{#if r.supplement}}<span class="cp-src-badge" title="{{r.supplement}}">{{#if r.supplementShort}}{{r.supplementShort}}{{else}}{{r.supplement}}{{/if}}</span>{{/if}}{{/if}}
-    <span class="cp-cat-price">{{#if r.eff}}<b>{{r.eff}}</b>eb{{else}}{{#if r.unpriced}}<span class="cp-price-gm" title="{{localize "CYBERPUNK.ShopPriceUnsetHint"}}">{{localize "CYBERPUNK.ShopPriceUnset"}}</span>{{else}}<b>{{r.cost}}</b>eb{{#if r.priceRange}} <span class="cp-price-range" title="{{CPLocal "ShopPriceRangeTip" min=r.priceRange.min max=r.priceRange.max}}">({{r.priceRange.min}}–{{r.priceRange.max}})</span>{{/if}}{{/if}}{{/if}}</span>
+    {{!-- A shop row (curated) prices by its effective shop price `eff`, which can be a deliberate 0;
+          testing `eff` for truth read that 0 as "no shop price" and fell through to the catalog cost a
+          shop row does not carry, leaving a bare "eb". A shop row with no price at all is `unpriced`. --}}
+    <span class="cp-cat-price">{{#if r.unpriced}}<span class="cp-price-gm" title="{{localize "CYBERPUNK.ShopPriceUnsetHint"}}">{{localize "CYBERPUNK.ShopPriceUnset"}}</span>{{else if r.curated}}<b>{{r.eff}}</b>eb{{else}}<b>{{r.cost}}</b>eb{{#if r.priceRange}} <span class="cp-price-range" title="{{CPLocal "ShopPriceRangeTip" min=r.priceRange.min max=r.priceRange.max}}">({{r.priceRange.min}}–{{r.priceRange.max}})</span>{{/if}}{{/if}}</span>
 
     {{#if @root.isBuild}}
         {{#if r.inShop}}<span class="cp-inshop-mark" title="{{localize "CYBERPUNK.ShopInShop"}}">✓</span>
