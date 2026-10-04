@@ -178,8 +178,9 @@ try {
     // Cyberware: the pack names no sub, so item data still decides the shelf inside Cyberware.
     const cw = cells("supplement-cyberware");
     const cwTotal = Object.values(cw).reduce((a, x) => a + x, 0);
+    // 104 → 103 (2026-10-04): the untyped second ChipLok record left the pack (the chipware pack carries it).
     chk("cell count: supplement-cyberware stays inside Cyberware (plus any borg body)",
-      Object.keys(cw).every(k => k.startsWith("Cyberware/") || k === "FBC/") && cwTotal === 104, JSON.stringify(cw));
+      Object.keys(cw).every(k => k.startsWith("Cyberware/") || k === "FBC/") && cwTotal === 103, JSON.stringify(cw));
     chk("cell count: the chipware strays inside supplement-cyberware still shelve as Chipware",
       (cw["Cyberware/Chipware"] ?? 0) === 23, cw["Cyberware/Chipware"]);
 
