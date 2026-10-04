@@ -5,7 +5,7 @@ import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, resolveCategory, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride, hiddenScrapedPackIds } from "../settings.js";
-import { weaponGlyphForIndexEntry } from "../item-glyphs.js";
+import { glyphForIndexEntry } from "../item-glyphs.js";
 import { shimmerWindow } from "../shimmer.js";
 import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
 import { renderChatCard, getHtmlElement } from "../compat.js";
@@ -216,7 +216,7 @@ async function buildCatalogIndex() {
     // `system.attackType` + `system.ammoType` ride the index for the Goon Factory's chemical-posture
     // steer (npcgen/goon-factory.js chemicalCapableRow) — the delivery mechanism and the chambered
     // caliber are what identify a chemical-capable weapon without loading the document.
-    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "system.attackType", "system.ammoType", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
+    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "system.cyberwareSubtype", "system.attackType", "system.ammoType", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
     catch (e) { return []; }
     const items = [];
     for (const e of idx) {
@@ -232,8 +232,8 @@ async function buildCatalogIndex() {
       // variable-price item (corr.priceRange) the GM override wins instead (the range is a suggestion).
       const pr = resolveCatalogPrice(correctedCost(pack.collection, e._id, e.system?.cost), e._id, overrides, { preferOverride: !!corr?.priceRange });
       items.push({
-        // A weapon carrying only a placeholder picture shows its category glyph (item-glyphs.js).
-        id: e._id, packId: pack.collection, name: corr?.name ?? e.name, img: weaponGlyphForIndexEntry(e) ?? e.img,
+        // A weapon or a piece of cyberware carrying only a placeholder picture shows its glyph (item-glyphs.js).
+        id: e._id, packId: pack.collection, name: corr?.name ?? e.name, img: glyphForIndexEntry({ ...e, name: corr?.name ?? e.name }, pack.collection) ?? e.img,
         // A second record of a weapon another pack carries (data-corrections.js `duplicateOf`): kept in the
         // index so a shop that stocks it still resolves, left off the shelves by `browsable`.
         duplicateOf: corr?.duplicateOf ?? null,

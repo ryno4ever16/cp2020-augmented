@@ -1,7 +1,7 @@
 {
   "name": "Auto-Flechette Pistol",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "modules/cp2020-augmented/img/icons/turret.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "weight": 3,
     "magWeight": 2,

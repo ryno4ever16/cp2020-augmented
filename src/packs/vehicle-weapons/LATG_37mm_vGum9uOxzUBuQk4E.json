@@ -1,7 +1,7 @@
 {
   "name": "LATG 37mm",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "modules/cp2020-augmented/img/icons/turret.svg",
+  "img": "modules/cp2020-augmented/img/icons/cannon.svg",
   "system": {
     "flavor": "",
     "notes": "",

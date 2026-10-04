@@ -43,7 +43,8 @@ const check = (name, ok, detail) => { console.log(`${ok ? "PASS" : "FAIL"}  ${na
 const files = fs.readdirSync(ICONS).filter(f => f.endsWith(".svg"));
 const fills = files.map(f => ({ f, fills: fs.readFileSync(path.join(ICONS, f), "utf8").match(/fill="[^"]*"/g) ?? [] }));
 const notWhite = fills.filter(x => x.fills.length !== 1 || x.fills[0] !== 'fill="#fff"');
-check("A1 every glyph file carries one fill, and it is white", files.length === 35 && notWhite.length === 0,
+// 35 → 52 (2026-10-04): seventeen glyphs for cyberware and vehicle-weapon kinds joined the set.
+check("A1 every glyph file carries one fill, and it is white", files.length === 52 && notWhite.length === 0,
   `${files.length} files, ${notWhite.length} off: ${notWhite.slice(0, 4).map(x => `${x.f} ${x.fills.join("/")}`).join("; ")}`);
 
 // One glyph per weapon category (user ruling 2026-10-03: "visual consistency helps players see what an
@@ -153,6 +154,62 @@ check("D3 a weapon with art of its own keeps it", D.ownArt?.shown === D.ownArt?.
 check("D4 a new weapon with no picture shows its type's glyph and follows a change of type", D.world.plainShown === "fn-fal.svg" && D.world.afterRetype === "pistol-gun.svg" && !/img\/icons\//.test(D.world.plainStored), JSON.stringify(D.world));
 check("D5 no weapon row in the shop index carries a placeholder picture", D.shop.weapons > 300 && D.shop.placeholderCount === 0 && D.shop.mp5Row === "mp5.svg", JSON.stringify(D.shop));
 check("D6 a base compendium window lists its weapons under the category glyph", D.list.rows >= 16 && D.list.distinct.length === 1 && D.list.distinct[0] === "mp5.svg", JSON.stringify(D.list));
+
+// ── E. GLYPHS BY KIND: CYBERWARE AND VEHICLE WEAPONS ─────────────────────────────────────────────
+// (user ruling 2026-10-04: "by kind".) The base system's cyberware stores one generic implant icon; it
+// must SHOW the glyph for its kind, read from the type and subtype the record already carries, with
+// the stored picture untouched. The module's own cyberware and vehicle weapons store their glyph.
+const srcDocs = (pack) => fs.readdirSync(path.join(HERE, "..", "src", "packs", pack)).map(f => JSON.parse(fs.readFileSync(path.join(HERE, "..", "src", "packs", pack, f), "utf8")));
+const glyphOf = (d) => String(d.img).split("/").pop().replace(".svg", "");
+const vw = srcDocs("vehicle-weapons");
+const vwWant = [[/bomb$/i, "falling-bomb"], [/mortar/i, "mortar"], [/gatling|minigun/i, "minigun"], [/flechette cloud/i, "shatter"], [/minelet/i, "land-mine"], [/obstacle/i, "barbed-wire"], [/howitzer/i, "cannon"]];
+const vwOff = vw.flatMap(d => vwWant.filter(([rx, g]) => rx.test(d.name) && glyphOf(d) !== g).map(([, g]) => `${d.name}: ${glyphOf(d)} (want ${g})`));
+const vwTurret = vw.filter(d => glyphOf(d) === "turret").length;
+check("E1 vehicle weapons carry a glyph for their kind", vw.length > 90 && vwOff.length === 0 && vwTurret <= 6, `${vw.length} records, ${vwOff.length} off (${vwOff.slice(0, 3).join("; ")}), ${vwTurret} still on the generic turret`);
+const cw = srcDocs("supplement-cyberware");
+const borgOff = cw.filter(d => d.flags?.["cp2020-augmented"]?.borgBody && glyphOf(d) !== "cyborg-face").map(d => d.name);
+const armOnly = cw.filter(d => glyphOf(d) === "mechanical-arm").length;
+check("E2 the module's cyberware is spread over its kinds, full-body conversions under their own glyph", cw.length > 90 && borgOff.length === 0 && new Set(cw.map(glyphOf)).size >= 10 && armOnly < 20,
+  `${cw.length} records, ${new Set(cw.map(glyphOf)).size} glyphs, ${armOnly} on the arm, conversions off: ${borgOff.slice(0, 3).join("; ")}`);
+
+const E = await p.evaluate(async () => {
+  const tail = s => String(s ?? "").split("/").pop();
+  const G = await import("/modules/cp2020-augmented/module/item-glyphs.js");
+  const out = { pure: [], docs: [] };
+  const IMPLANT = "systems/cyberpunk2020/img/implant-icon-2.svg";
+  for (const [type, sub, name, want, packId] of [
+    ["CYBEROPTIC", "OPTION", "Low Lite", "cyber-eye.svg"], ["CyberAudio", "", "Basic Hearing Module", "human-ear.svg"],
+    ["NEURALWARE", "OPTION", "Kerenzikov", "brain.svg"], ["CHIPWARE", "OPTION", "Chip", "microchip.svg"],
+    ["CYBERLIMB", "BUILTIN", "Cybermodem", "mechanical-arm.svg"], ["CYBERLIMB", "OPTION", "Reinforced Leg Joints", "robot-leg.svg"],
+    ["CyberLeg", "", "Cyberleg", "robot-leg.svg"], ["CYBERHAND", "", "Ripper Hand", "mechanical-arm.svg"],
+    ["CYBERWEAPON", "", "Scratchers", "wolverine-claws.svg"], ["CYBERLIMB", "WEAPON", "Popup Gun", "wolverine-claws.svg"],
+    ["IMPLANT", "", "Nasal Filters", "internal-organ.svg"], ["IMPLANT", "SUBDERMAL ARMOR", "Torso Plate", "muscular-torso.svg"],
+    ["BIOWARE", "", "Grafted Muscle", "dna1.svg"], ["BIOWARE", "SKINWEAVE", "Skinweave", "muscular-torso.svg"],
+    ["FASHIONWARE", "", "Techhair", "lipstick.svg"], ["BODY PLATING", "", "Cowl", "muscular-torso.svg"], ["LINEAR FRAMES", "", "Sigma", "cyborg-face.svg"],
+    ["CYBERNETIC SYSTEM", "OPTION", "Waterproofing", "mechanical-arm.svg"],
+    ["", "", "Unknown", null],
+    ["", "", "Low Lite", "cyber-eye.svg", "cyberpunk2020.cyberoptic"],          // no type: the pack answers
+    ["BIOWARE", "", "Grafted Muscle", "dna1.svg", "cyberpunk2020.cyberoptic"],   // a type always wins over the pack
+  ]) out.pure.push({ type, sub, want, got: tail(G.cyberwareGlyph({ img: IMPLANT, cyberwareType: type, cyberwareSubtype: sub, name, packId })) || null });
+  out.ownArt = G.cyberwareGlyph({ img: "icons/svg/explosion.svg", cyberwareType: "CYBEROPTIC" });
+  for (const [packId, want] of [["cyberpunk2020.cyberoptic", "cyber-eye.svg"], ["cyberpunk2020.cyberaudio", "human-ear.svg"], ["cyberpunk2020.neuralware", "brain.svg"], ["cyberpunk2020.fashonware", "lipstick.svg"]]) {
+    const pack = game.packs.get(packId);
+    const idx = await pack.getIndex({ fields: ["system.cyberwareType", "img"] });
+    const e = idx.find(x => String(x.system?.cyberwareType ?? "").trim() !== "");
+    const doc = e ? await pack.getDocument(e._id) : null;
+    out.docs.push({ packId, want, shown: tail(doc?.img), stored: doc?._source.img, exportedSame: doc ? doc.toObject().img === doc._source.img : null });
+  }
+  const cat = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+  const all = await cat.getCatalogIndex();
+  const base = all.filter(r => r.type === "cyberware" && r.packId.startsWith("cyberpunk2020."));
+  out.shop = { rows: base.length, placeholders: base.filter(r => G.isPlaceholderIcon(r.img)).map(r => `${r.name} (${r.packId})`).slice(0, 6), placeholderCount: base.filter(r => G.isPlaceholderIcon(r.img)).length };
+  return out;
+});
+const pureOff = E.pure.filter(r => r.got !== r.want);
+check("E3 each cyberware type and subtype resolves to the glyph of its kind", E.pure.length === 21 && pureOff.length === 0, pureOff.map(r => `${r.type}/${r.sub}: ${r.got} (want ${r.want})`).join("; "));
+check("E4 cyberware with art of its own is left alone", E.ownArt === null, String(E.ownArt));
+check("E5 a base cyberware document shows its kind glyph and its stored picture is untouched", E.docs.length === 4 && E.docs.every(d => d.shown === d.want && /implant-icon/.test(d.stored) && d.exportedSame === true), JSON.stringify(E.docs));
+check("E6 base cyberware rows in the shop index carry a kind glyph", E.shop.rows > 80 && E.shop.placeholderCount <= 2, JSON.stringify(E.shop));
 
 const prior = await p.evaluate(() => foundry.utils.deepClone(game.settings.get("core", "uiConfig").colorScheme ?? {}));
 const closeAll = () => p.evaluate(async () => {

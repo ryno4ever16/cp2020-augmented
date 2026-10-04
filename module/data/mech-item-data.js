@@ -1,4 +1,5 @@
 import { canonicalReliability, canonicalArmorType } from "./enum-spellings.js";
+import { cyberwareGlyph, sourcePackId } from "../item-glyphs.js";
 /**
  * Special-mechanics item fields shared by `misc` gear and `cyberware`
  * (SPECIAL-MECHANICS-PROPOSAL.md — decision D1: extend the registered DataModels, the C4 pattern
@@ -384,6 +385,12 @@ export function makeMechAugmentedData(SystemModel) {
         const c = canonicalReliability(w.reliability);
         if (c !== null && c !== w.reliability) w.reliability = c;
       }
+      // A piece of cyberware carrying only a placeholder picture SHOWS the glyph for its kind
+      // (item-glyphs.js). Same bargain as the weapon model: the stored picture is read from the source
+      // and never written, and an item given its own art is left alone.
+      const item = this.parent;
+      const glyph = item ? cyberwareGlyph({ img: item._source?.img, cyberwareType: this.cyberwareType, cyberwareSubtype: this.cyberwareSubtype, name: item.name, packId: sourcePackId(item) }) : null;
+      if (glyph) item.img = glyph;
     }
   };
 }
