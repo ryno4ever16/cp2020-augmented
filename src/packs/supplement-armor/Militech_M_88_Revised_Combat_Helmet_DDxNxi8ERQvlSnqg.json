@@ -5,21 +5,39 @@
   "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Fully enclosed infantry helmet with an integral face shield and respirator. Helmet SP 20, face shield SP 15. The helmet has 10 SDP: once 10 points of damage have gotten through, its electronics stop working. Encumbrance -1 REF. Low-Lite, Infrared, Anti-Dazzle, Targeting, Amplified Hearing and Level Damping; Image Intensifier (+1 Awareness). (Corpbook 2 p.61)</p>",
     "cost": 5000,
     "weight": 0,
     "equipped": false,
     "source": "Corpbook 2",
     "lastOwnerId": "",
     "coverage": {
-      "Head": false,
-      "Torso": false,
-      "lArm": false,
-      "rArm": false,
-      "lLeg": false,
-      "rLeg": false
+      "Head": {
+        "stoppingPower": 20,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
     },
-    "encumbrance": -1,
+    "encumbrance": 1,
     "armorType": "",
     "clothingWeight": ""
   },

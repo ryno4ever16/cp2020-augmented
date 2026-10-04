@@ -12,15 +12,30 @@
     "source": "Corpbook 2",
     "lastOwnerId": "",
     "coverage": {
-      "Head": false,
+      "Head": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
       "Torso": {
         "stoppingPower": "7",
         "ablation": 0
       },
-      "lArm": false,
-      "rArm": false,
-      "lLeg": false,
-      "rLeg": false
+      "lArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
     },
     "encumbrance": 0,
     "armorType": "",

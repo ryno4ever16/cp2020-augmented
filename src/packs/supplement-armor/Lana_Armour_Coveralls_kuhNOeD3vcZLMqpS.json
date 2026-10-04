@@ -12,7 +12,10 @@
     "source": "Chromebook 3",
     "lastOwnerId": "",
     "coverage": {
-      "Head": false,
+      "Head": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
       "Torso": {
         "stoppingPower": "14",
         "ablation": 0

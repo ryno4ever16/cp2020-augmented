@@ -12,12 +12,30 @@
     "source": "Deep Space",
     "lastOwnerId": "",
     "coverage": {
-      "Head": false,
-      "Torso": false,
-      "lArm": false,
-      "rArm": false,
-      "lLeg": false,
-      "rLeg": false
+      "Head": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 25,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 25,
+        "ablation": 0
+      }
     },
     "encumbrance": 0,
     "armorType": "",

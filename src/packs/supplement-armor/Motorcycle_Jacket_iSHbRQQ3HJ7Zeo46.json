@@ -5,22 +5,37 @@
   "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Synthetic copy of the leather motorcycle jacket, in harley, bomber and racing styles. The synthetic leather gives an SP of 4. Additional armor (to SP12) can be purchased for the torso area for an additional 100eb. (Neo Tribes p.56)</p>",
     "cost": 200,
     "weight": 0,
     "equipped": false,
     "source": "Neo Tribes",
     "lastOwnerId": "",
     "coverage": {
-      "Head": false,
-      "Torso": {
-        "stoppingPower": "4",
+      "Head": {
+        "stoppingPower": 0,
         "ablation": 0
       },
-      "lArm": false,
-      "rArm": false,
-      "lLeg": false,
-      "rLeg": false
+      "Torso": {
+        "stoppingPower": 4,
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": 4,
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": 4,
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": 0,
+        "ablation": 0
+      }
     },
     "encumbrance": 0,
     "armorType": "",

@@ -321,6 +321,21 @@ try {
             flag("reliabilityUnrecognised", `${d.type}|${rel}`, where);
           }
 
+          /* armor, module packs only (the base packs are not ours to lint): every location is stored as an
+             object. The 2026 agent-merged import wrote `false` for a location it did not fill. That reads as
+             "no protection" only because `false.stoppingPower` is undefined, and it hid nine records whose
+             printed protection was never stored (found 2026-10-04). A negative encumbrance would RAISE the
+             wearer's REF: the base adds it into the penalty it subtracts. Read from the stored source, so
+             nothing a data model fills in at read time can cover for the pack. */
+          if (d.type === "armor" && p.metadata.packageName === "cp2020-augmented") {
+            const stored = d._source?.system ?? {};
+            for (const loc of ["Head", "Torso", "lArm", "rArm", "lLeg", "rLeg"]) {
+              const v = stored.coverage?.[loc];
+              if (!v || typeof v !== "object") flag("armorCoverageShape", `${loc}: ${JSON.stringify(v)}`, where);
+            }
+            if (Number(stored.encumbrance) < 0) flag("armorEncumbrance", `encumbrance ${stored.encumbrance}`, where);
+          }
+
           /* the weapon-shaped block: a weapon item, or a cyberware carrying a live weapon block */
           let wb = null;
           if (d.type === "weapon") wb = sys;
@@ -429,6 +444,8 @@ try {
       legFor("damage", "damage formula parses (weapon, cyberweapon, and module document types)");
       legFor("attackSkill", "attack-skill legality for the weapon type");
       legFor("burstRof", "a Burst Capable weapon holds a ROF of 3 or more (the base sizes a burst by it)");
+      legFor("armorCoverageShape", "module armor stores every location as an object");
+      legFor("armorEncumbrance", "module armor stores no negative encumbrance");
 
       /* the ratified alias tier still resolves — a revert of the alias block turns this red */
       const aliasUnresolved = AL.RATIFIED_ALIAS_SPELLINGS.filter(s =>
@@ -458,10 +475,36 @@ try {
         // and a re-seed that loses one usually loses both.
         { pack: "cp2020-augmented.vehicle-weapons", id: "DZDgJpcdbnypZ17x",
           name: "250-lb Bomb", field: "cost", want: 450, cite: "Maximum Metal p.99 bombs chart" },
+        // Armor whose printed protection the import never stored (found 2026-10-04): the helmet and the
+        // five spacesuits held none at all, the other three held it on the torso only. Every figure was read
+        // off the book's text layer. `coverageSP` reads Head/Torso/lArm/rArm/lLeg/rLeg.
+        { pack: "cp2020-augmented.supplement-armor", id: "DDxNxi8ERQvlSnqg", name: "M-88 Revised Combat Helmet",
+          field: "coverageSP", want: "20/0/0/0/0/0", cite: "Corpbook 2 p.61, \"the helmet is 20 SP\"" },
+        // "an Encumbrance Value of -1 to the wearer's REF" is a penalty of one, which the base stores as +1.
+        { pack: "cp2020-augmented.supplement-armor", id: "DDxNxi8ERQvlSnqg", name: "M-88 Revised Combat Helmet",
+          field: "encumbrance", want: 1, cite: "Corpbook 2 p.61, EV -1 to REF" },
+        { pack: "cp2020-augmented.supplement-armor", id: "l8tnWaRWirLK3ZtT", name: "Standard Spacesuit",
+          field: "coverageSP", want: "10/10/10/10/10/10", cite: "Deep Space p.60 equipment list" },
+        { pack: "cp2020-augmented.supplement-armor", id: "tFlqDOGntlEMeDK7", name: "Skinsuit",
+          field: "coverageSP", want: "6/6/6/6/6/6", cite: "Deep Space p.60 equipment list" },
+        { pack: "cp2020-augmented.supplement-armor", id: "5H5xhuvaC2QfwQAm", name: "Worksuit",
+          field: "coverageSP", want: "16/16/16/16/16/16", cite: "Deep Space p.60 equipment list" },
+        { pack: "cp2020-augmented.supplement-armor", id: "Mz2lvPDNkzeeJwee", name: "Battlesuit",
+          field: "coverageSP", want: "25/25/25/25/25/25", cite: "Deep Space p.60 equipment list" },
+        { pack: "cp2020-augmented.supplement-armor", id: "jJHZClLgmie2GA13", name: "Radsuit",
+          field: "coverageSP", want: "16/16/16/16/16/16", cite: "Deep Space p.60 equipment list" },
+        { pack: "cp2020-augmented.supplement-armor", id: "ba5S3ApjIIlAgLLQ", name: "Assault Armor",
+          field: "coverageSP", want: "28/28/28/28/28/28", cite: "Home of the Brave p.87, \"This suit provides SP 28\", helmet included" },
+        { pack: "cp2020-augmented.supplement-armor", id: "BEVIZElekMtc0tR4", name: "SMI Armored Greatcoat",
+          field: "coverageSP", want: "0/14/14/14/14/14", cite: "Corpbook 3 p.72, SP 14, \"protects virtually the entire body\"" },
+        { pack: "cp2020-augmented.supplement-armor", id: "iSHbRQQ3HJ7Zeo46", name: "Motorcycle Jacket",
+          field: "coverageSP", want: "0/4/4/4/0/0", cite: "Neo Tribes p.56, \"an SP of 4\", a jacket" },
       ];
+      const coverageSP = (sys) => ["Head", "Torso", "lArm", "rArm", "lLeg", "rLeg"]
+        .map(loc => Number(sys?.coverage?.[loc]?.stoppingPower) || 0).join("/");
       for (const pin of bookPins) {
         const doc = await game.packs.get(pin.pack)?.getDocument(pin.id).catch(() => null);
-        const got = doc?.system?.[pin.field];
+        const got = pin.field === "coverageSP" ? coverageSP(doc?.system) : doc?.system?.[pin.field];
         ok(`book-value pin: ${pin.name} ${pin.field} = ${pin.want} (${pin.cite})`,
           !!doc && got === pin.want, `got ${JSON.stringify(got)} from ${pin.pack}/${pin.id}`);
       }
