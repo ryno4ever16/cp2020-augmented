@@ -269,6 +269,7 @@ const MANIFEST = [
   ["module/shop/catalog.js:1365", "_activatePurchaseDrag", "shop-catalog", "dragstart", ".cp-catalog-list .cp-catalog-row[data-source-key]", "", null, null],
   ["module/shop/catalog.js:1396", "_activateListWindow", "shop-catalog", "scroll", ".cp-catalog-list", "", null, null],
   ["module/shop/catalog.js:1540", "_activateSetupMode", "shop-build", "click", ".cp-shop-setup-toggle", "", null, null],
+  ["module/shop/catalog.js:1626", "_activateViewAsPlayer", "shop-catalog", "click", ".cp-shop-viewas-toggle", "", null, null],
   ["module/shop/catalog.js:1576", "_openContextMenu", "shop-contextmenu", "click", "button[data-action]", "action", null, null],
   ["module/shop/catalog.js:1621", "_activateBuildControls", "shop-build", "click", ".cp-shop-remove", "", "per-stocked-line control — the fixture shop's stocking did not take", null],
   ["module/shop/catalog.js:1621", "_activateBuildControls", "shop-build", "click", ".cp-bulk-add", "", null, null],

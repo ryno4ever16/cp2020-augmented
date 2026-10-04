@@ -1081,6 +1081,18 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   border: 1px solid rgba(192, 121, 26, 0.5); background: rgba(192, 121, 26, 0.12);
   color: #c0791a; font-size: 0.85em; font-weight: bold; text-align: center;
 }
+/* GM "view as player": the same badge + banner shape, in the info colour rather than the warning
+   amber — it changes what the GM is looking at, not what anything costs. */
+.cp-shop-viewas-toggle { width: auto; flex: 0 0 auto; opacity: 0.7; }
+.cp-shop-viewas-toggle.cp-active {
+  opacity: 1; font-weight: bold;
+  color: #6fb7c9; border-color: #6fb7c9; background: rgba(111, 183, 201, 0.15);
+}
+.cp-shop-viewas-banner {
+  margin: 0 0 6px; padding: 4px 8px; border-radius: 3px;
+  border: 1px solid rgba(111, 183, 201, 0.5); background: rgba(111, 183, 201, 0.12);
+  color: #6fb7c9; font-size: 0.85em; font-weight: bold; text-align: center;
+}
 
 /* ===== NPC generator (ApplicationV2) + its Actors-directory button. Shares the preset-picker
  * palette so the module's two GM tool windows read as one family. The directory button is sized to
@@ -4128,6 +4140,12 @@ body.theme-light .cp-shop-setup-banner {
   color: var(--cp-lt-warn);
   border-color: var(--cp-lt-warn);
   background: rgba(131, 82, 18, 0.12);
+}
+body.theme-light .cp-shop-viewas-toggle.cp-active,
+body.theme-light .cp-shop-viewas-banner {
+  color: var(--cp-lt-info);
+  border-color: var(--cp-lt-info);
+  background: rgba(60, 99, 109, 0.12);
 }
 
 /* -- IP tracker ------------------------------------------------------------------------ */

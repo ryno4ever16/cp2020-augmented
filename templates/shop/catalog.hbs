@@ -63,12 +63,23 @@
             <i class="fa-solid fa-screwdriver-wrench"></i> {{localize "CYBERPUNK.ShopSetupMode"}}
         </button>
         {{/if}}
+        {{!-- GM "view as player": lists what a player is offered, on the two views that list it (the
+              catalog and a storefront). Same badge idiom as setup mode; client-local, off on reload. --}}
+        {{#if showViewAsPlayerToggle}}
+        <button type="button" class="cp-shop-viewas-toggle{{#if viewAsPlayer}} cp-active{{/if}}"
+                title="{{localize "CYBERPUNK.ShopViewAsPlayerHint"}}">
+            <i class="fa-solid fa-user"></i> {{localize "CYBERPUNK.ShopViewAsPlayer"}}
+        </button>
+        {{/if}}
         {{#unless isBuild}}
         <span class="cp-catalog-buyer">{{> "modules/cp2020-augmented/templates/shop/buyer-bar.hbs"}}</span>
         {{/unless}}
     </div>
     {{#if setupMode}}
     <p class="cp-shop-setup-banner">{{localize "CYBERPUNK.ShopSetupModeBanner"}} {{localize "CYBERPUNK.ShopSetupModeArmorNote"}}</p>
+    {{/if}}
+    {{#if viewAsPlayer}}
+    <p class="cp-shop-viewas-banner">{{localize "CYBERPUNK.ShopViewAsPlayerBanner"}}</p>
     {{/if}}
 
     {{#if closed}}<p class="cp-src-none">⚫ {{localize "CYBERPUNK.ShopClosed"}}</p>{{/if}}

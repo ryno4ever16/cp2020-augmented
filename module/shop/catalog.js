@@ -8,6 +8,7 @@ import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopA
 import { glyphForIndexEntry } from "../item-glyphs.js";
 import { shimmerWindow } from "../shimmer.js";
 import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
+import { isShopViewAsPlayer, toggleShopViewAsPlayer } from "./view-as-player.js";
 import { renderChatCard, getHtmlElement } from "../compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
 import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature } from "../lookups.js";
@@ -610,6 +611,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   // ── context (V2 _prepareContext; was getData) ───────────────────────────────
   async _prepareContext(options) {
     const isGM = game.user.isGM;
+    // "View as player" belongs to the two views that LIST what a player is offered — the catalog and a
+    // storefront. The builder is the GM's own workbench and keeps the GM's list whatever the switch says.
+    const listsForPlayers = this.view === "catalog" || this.view === "storefront";
+    const viewAsPlayer = listsForPlayers && isShopViewAsPlayer();
     const common = {
       isGM, view: this.view,
       isHome: this.view === "home", isCatalog: this.view === "catalog",
@@ -626,7 +631,12 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       // GM standing in it is looking at what a player sees, not furnishing.
       setupMode: isShopSetupMode(),
       showSetupToggle: isGM && (this.view === "catalog" || this.view === "build"),
+      // Client state like setup mode (module/shop/view-as-player.js), read fresh into every render.
+      viewAsPlayer, showViewAsPlayerToggle: isGM && listsForPlayers,
     };
+    // Who the LIST is drawn for. Only the visibility rule, the book chips and their counts read this;
+    // everything else (Manage, add-to-shop, the buy routes) keeps reading the real `isGM`.
+    const listAsGM = isGM && !viewAsPlayer;
     if (this.view === "home") return { ...common, ...this._dataHome(isGM) };
     // A view that is ABOUT a shop, whose shop has been deleted, is a dead end — it gets its own
     // panel with a route out rather than a sentence under a header full of inert controls.
@@ -654,10 +664,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       // Ammo isn't a compendium pack (caliber × load matrix, box pricing) — fold it into the master
       // catalog as generated rows. Only the catalog view shows ammo; custom shops curate compendium docs.
       const merged = [...all, ...this._ammoCatalogRows()].sort((a, b) => a.name.localeCompare(b.name));
-      return this._windowListContext({ ...common, ...this._dataCatalog(merged, { isGM, cfg, search }) });
+      return this._windowListContext({ ...common, ...this._dataCatalog(merged, { isGM: listAsGM, cfg, search }) });
     }
     if (this.view === "build")      return this._windowListContext({ ...common, ...this._dataBuild(all, { isGM, cfg, search }) });
-    return this._windowListContext({ ...common, ...this._dataStorefront(all, { isGM, cfg, search }) });
+    return this._windowListContext({ ...common, ...this._dataStorefront(all, { isGM, listAsGM, cfg, search }) });
   }
 
   /**
@@ -793,7 +803,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     };
   }
 
-  _dataStorefront(all, { isGM, cfg, search }) {
+  _dataStorefront(all, { isGM, listAsGM = isGM, cfg, search }) {
     const def = this._shop();
     if (!def) return { missing: true, showSearch: false };
     if (def.open === false && !isGM) return { closed: true, showSearch: false, shop: { id: def.id, name: def.name } };
@@ -814,7 +824,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     // fullSearch: whole visible catalog + curated featured.
     const featuredKeys = new Set(curated.map(r => r.sourceKey));
     const featured = curated.map(r => ({ ...r, featured: true }));
-    const rest = this._filterRows(all, { isGM, cfg, search }).filter(it => !featuredKeys.has(it.key));
+    const rest = this._filterRows(all, { isGM: listAsGM, cfg, search }).filter(it => !featuredKeys.has(it.key));
     const letters = [];
     if (search) { this._greedySort(featured, search); this._greedySort(rest, search); }
     else { featured.sort((a, b) => a.name.localeCompare(b.name)); rest.sort((a, b) => a.name.localeCompare(b.name)); this._assignLetters(rest, true, letters); }
@@ -824,7 +834,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       showSearch: true, showFilters: true, showJump: this._showJump(rest),
       shop: { id: def.id, name: def.name, open: def.open, discountPct: def.discountPct },
       rows: [...featured, ...rest], rowCount: featured.length + rest.length, letters,
-      ...this._drawerContext(all, { isGM, cfg, canCurate: false }),
+      ...this._drawerContext(all, { isGM: listAsGM, cfg, canCurate: false }),
       manageBack: isGM, fullSearch: true
     };
   }
@@ -1140,6 +1150,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._activateRowControls(root);
     this._activateBuildControls(root, isGM);
     this._activateSetupMode(root, isGM);
+    this._activateViewAsPlayer(root, isGM);
     this._activateListWindow(root);
 
     // A render rebuilt the rows — re-apply any active text search so it composes with filter changes.
@@ -1576,6 +1587,20 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     btn.addEventListener("click", (ev) => {
       ev.preventDefault();
       toggleShopSetupMode();
+      this.render();
+    });
+  }
+
+  /** The GM "view as player" switch — the setup-mode badge's twin: GM-only, client-local, a class
+   *  toggle for the lit state. Flipping it re-renders, because the whole list, the book chips and
+   *  their counts are drawn for a different viewer. */
+  _activateViewAsPlayer(root, isGM) {
+    const btn = root.querySelector(".cp-shop-viewas-toggle");
+    if (!btn) return;
+    if (!isGM) { btn.remove(); return; }     // belt-and-braces: the template already gates on isGM
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      toggleShopViewAsPlayer();
       this.render();
     });
   }
