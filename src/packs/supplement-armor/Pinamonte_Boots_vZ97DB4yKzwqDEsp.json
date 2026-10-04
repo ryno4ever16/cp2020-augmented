@@ -5,7 +5,7 @@
   "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Boots of synthetic materials: you can walk over spikes and through fire without hurting yourself. SP 20, feet and ankles only. The hit table has no feet, so this protection is not counted on a leg hit; apply it by hand when the foot is what is hit. (Chromebook 3 p.8)</p>",
     "cost": 500,
     "weight": 0,
     "equipped": false,
@@ -29,11 +29,11 @@
         "ablation": 0
       },
       "lLeg": {
-        "stoppingPower": "20",
+        "stoppingPower": 0,
         "ablation": 0
       },
       "rLeg": {
-        "stoppingPower": "20",
+        "stoppingPower": 0,
         "ablation": 0
       }
     },
