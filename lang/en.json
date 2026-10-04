@@ -1741,6 +1741,8 @@
     "ShopBuy": "Buy",
     "ShopBuyFailed": "Purchase failed — you were not charged.",
     "ShopBuyerNeeded": "Select a token, click a character's sheet, or assign yourself a character to buy for.",
+    "ShopBuyerNone": "No buyer selected",
+    "ShopBuyerNoneHint": "Nobody is buying yet. Pick a character here, select a token, or click the character's sheet.",
     "ShopBuyerPick": "Buy as…",
     "ShopBuyerPickHint": "Choose which of your characters is shopping.",
     "ShopCatalogCost": "catalog",

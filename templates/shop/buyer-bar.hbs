@@ -15,9 +15,13 @@
 {{!-- The picker being non-empty does NOT mean somebody is buying. A GM's option list now carries
       controlled tokens and players' assigned characters (see _buyerOptions), so this branch is
       reached with no buyer selected — and the "pick someone" notice has to survive that, or the
-      strip would look furnished while every Buy button is still grey. --}}
+      strip would look furnished while every Buy button is still grey.
+      The notice itself is the SHORT one in both branches: the full sentence is wider than the room
+      the header has left at the default window width, and pushed the strip onto a second line. The
+      instruction is one hover away (worded for whether there is a picker to point at), and it is
+      still what a Buy pressed with nobody selected says. --}}
 {{#if hasBuyer}}<span class="cp-buyer-funds">{{buyerFunds}}eb</span>
-{{else}}<span class="cp-buyer-warn"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNeeded"}}</span>{{/if}}
+{{else}}<span class="cp-buyer-warn" title="{{localize "CYBERPUNK.ShopBuyerNoneHint"}}"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNone"}}</span>{{/if}}
 {{else}}
-{{#if hasBuyer}}<b class="cp-buyer-name" title="{{buyerName}}">{{buyerName}}</b> · {{buyerFunds}}eb{{else}}<span class="cp-buyer-warn"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNeeded"}}</span>{{/if}}
+{{#if hasBuyer}}<b class="cp-buyer-name" title="{{buyerName}}">{{buyerName}}</b> · {{buyerFunds}}eb{{else}}<span class="cp-buyer-warn" title="{{localize "CYBERPUNK.ShopBuyerNeeded"}}"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNone"}}</span>{{/if}}
 {{/if}}

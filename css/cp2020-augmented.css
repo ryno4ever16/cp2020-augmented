@@ -376,9 +376,11 @@
 /* The buyer's name is the ACTOR's own, verbatim, and long ones would otherwise stretch the header
    off the edge of the window. Clip it; the tooltip carries the whole string. */
 .cp-buyer-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-buyer-pick { width: auto; max-width: 150px; }
-.cp-buyer-funds { opacity: 0.85; white-space: nowrap; }
-.cp-buyer-warn { color: #c0a062; display: inline-flex; align-items: center; gap: 4px; }
+/* The picker is the strip's one shrinker: a select is as wide as its LONGEST option, but with nobody
+   chosen it only has "Buy as…" to show, so it gives up the width before the notice beside it does. */
+.cp-buyer-pick { width: auto; max-width: 150px; flex: 0 1 auto; min-width: 72px; }
+.cp-buyer-funds { opacity: 0.85; white-space: nowrap; flex: 0 0 auto; }
+.cp-buyer-warn { color: #c0a062; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; flex: 0 0 auto; }
 /* The buyer changed through a gesture made OUTSIDE this window (a token selected, a character sheet
    clicked): the strip lights for a moment, so a change in who is paying is never silent. The class is
    added by _cpSyncBuyer and taken off again when the animation ends. */
@@ -444,8 +446,14 @@
 .cp-shop-header label { font-size: 0.8em; white-space: nowrap; }
 .cp-shop-header button { width: auto; }
 .cp-catalog .cp-shop-header > * { flex: 0 0 auto; }
-.cp-catalog .cp-shop-header > h2,
+/* ONE LINE at the default width. The title is as wide as its words and no wider — it used to be the
+   row's grower, which is what pushed the buyer strip onto a second line once a third header button
+   arrived. The buyer strip is the grower now, its content held against the right edge; a wrapping flex
+   row breaks lines on each item's BASE size, so the strip is counted at its floor (basis 0 +
+   min-width) and stays on the title's line. The builder's name input still takes the spare width. */
+.cp-catalog .cp-shop-header > h2 { flex: 0 1 auto; min-width: 120px; }
 .cp-catalog .cp-shop-header .cp-shop-name { flex: 1 1 auto; min-width: 120px; }
+.cp-catalog .cp-shop-header > .cp-catalog-buyer { flex: 1 1 0; min-width: 190px; justify-content: flex-end; }
 .cp-shop-discountbadge { color: #6ad06a; font-size: 0.7em; }
 /* Inline styles lifted out of catalog.hbs → classes (templates carry no style=). */
 .cp-catalog .flex-pad { flex: 1 1 auto; }
