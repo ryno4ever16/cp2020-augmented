@@ -707,7 +707,9 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       }
       const key = this._rowDataKey(r);
       const qty = key ? this._rowChoices.get(key)?.qty : null;
-      items.push({ r: qty ? { ...r, qty } : r });
+      // `buyQty`, not `qty`: a shop row's `qty` is the shelf's STOCK count, and the quantity box used
+      // to read that same field — so a storefront row opened pre-filled with the whole shelf.
+      items.push({ r: qty ? { ...r, buyQty: qty } : r });
     }
     return items;
   }
