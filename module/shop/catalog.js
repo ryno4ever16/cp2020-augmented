@@ -531,7 +531,11 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     const core = all.some(i => i.canon === "core")
       ? [{ key: "__core__", name: coreLabel, short: coreLabel, count: counts?.book.get("__core__") ?? 0, active: this._books.has("__core__"), curate: false }]
       : [];
-    const official = mk(knownOfficialSupplements(), "official");
+    // A tag the classifier does not recognise names a book of its own (supplements.js
+    // classifySupplement), so the list is the known titles PLUS every such book the index carries.
+    const officialNames = new Set(knownOfficialSupplements());
+    for (const i of all) if (i.canon === "official") officialNames.add(i.supplement);
+    const official = mk([...officialNames].sort(), "official");
     const homebrew = shopAllowHomebrew() ? mk(knownNoncanonSources(), "noncanon") : [];
     const total = core.length + official.length + homebrew.length;
     // canCurate gates the eye-toggles AND the one-line hint that explains them (GM catalog/build only).

@@ -7,7 +7,8 @@
  *                  label, e.g. the Programs pack). ALWAYS present + enabled for everyone.
  *   • "official" — any official R.Talsorian supplement (Maximum Metal, Chromebook, Solo of Fortune…).
  *                  Always visible to the GM (so they can judge power creep); enabled per-book FOR
- *                  PLAYERS via GM-only controls in the shop. Default off for players.
+ *                  PLAYERS via GM-only controls in the shop. Default off for players. A book tag the
+ *                  rules below do not recognise is gated the same way, as a book of its own.
  *   • "noncanon" — community / online / cross-system (homebrew). ABSENT entirely (even for the GM)
  *                  until the GM flips the master "Allow homebrew" switch in System Settings; then it
  *                  behaves like official (GM curates per-source in the shop, default off for players).
@@ -78,10 +79,36 @@ const RULES = [
   [s => /\b2nd ed/.test(s) || s.includes("core rule") || s.includes("corebook") || s.includes("core book"), "Cyberpunk 2020 (Core)", "core"],
 ];
 
+/** Page references a source tag carries after its book name — " p.12", " pg.84", " p. 12", ", pp. 3-4",
+ *  "(PDF idx 65)". Stripped from an UNRECOGNISED tag so two items cited from different pages of the
+ *  same unknown book share one chip instead of getting one each. */
+const PAGE_REFS = [
+  /\([^)]*\b(?:p|pg|pgs|pp|page|pages|pdf)\b[^)]*\)/gi,
+  /[,;:]?\s*\b(?:p|pg|pgs|pp|page|pages)\.?\s*\d+(?:\s*[-–]\s*\d+)?\b/gi,
+];
+
+/**
+ * The book an unrecognised source tag names: the tag with its page references removed and its
+ * whitespace collapsed. "" when nothing that could name a book is left — a tag of only punctuation
+ * ("?? pg.22") is somebody saying "source unknown", which is what an empty tag already says.
+ * @param {string} rawSource
+ * @returns {string}
+ */
+export function bookNameFromTag(rawSource) {
+  let s = String(rawSource ?? "");
+  for (const re of PAGE_REFS) s = s.replace(re, " ");
+  s = s.replace(/\s+/g, " ").replace(/^[\s,;:–-]+|[\s,;:–-]+$/g, "").trim();
+  return /[\p{L}\p{N}]/u.test(s) ? s : "";
+}
+
 /**
  * Classify a raw source string into { supplement, canon }.
- * Empty / "undefined" / unrecognized → "Untagged", treated as CORE (core gear lacking a source tag,
+ * Empty / "undefined" / "null" → "Untagged", treated as CORE (core gear lacking a source tag,
  * e.g. the Programs pack, armor with source "undefined").
+ * A non-empty tag no rule recognises names a book of its OWN, gated like an official supplement:
+ * the GM always sees it and players see it once the GM turns its eye on. It used to fall to
+ * "Untagged" too, which filed a GM's own world-compendium books on the Core shelf where players
+ * could always see them, with no control to hide them.
  * @param {string} rawSource
  * @returns {{ supplement: string, canon: "core"|"official"|"noncanon" }}
  */
@@ -91,7 +118,8 @@ export function classifySupplement(rawSource) {
   for (const [test, supplement, canon] of RULES) {
     try { if (test(s)) return { supplement, canon }; } catch { /* skip bad rule */ }
   }
-  return { supplement: "Untagged", canon: "core" };
+  const book = bookNameFromTag(rawSource);
+  return book ? { supplement: book, canon: "official" } : { supplement: "Untagged", canon: "core" };
 }
 
 /** Known official supplement names (for the in-shop GM toggles), de-duplicated + sorted. */

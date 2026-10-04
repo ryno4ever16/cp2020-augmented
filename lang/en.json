@@ -1652,7 +1652,7 @@
     "AmmoRoundsPerBox": "Rounds per box (the buy quantity is in boxes)",
     "CatalogBookVisibleHint": "Eye on = players can see & buy this book's items in the catalog. Eye off = GM-only. (This is catalog-wide visibility; stock custom shops to sell per-shop.)",
     "CatalogBooks": "Books",
-    "CatalogBooksEyeHint": "Click a book's eye to show or hide its items from players. The filters here only change your own view.",
+    "CatalogBooksEyeHint": "Click a book's eye to show or hide its items from players. A book tag the shop does not recognise appears as its own book, hidden from players until you turn its eye on. The filters here only change your own view.",
     "CatalogCategories": "Categories",
     "CatalogClearFilters": "Clear filters",
     "CatalogClear": "Clear",
