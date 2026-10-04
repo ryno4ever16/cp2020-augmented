@@ -11,8 +11,8 @@ import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
 import { isShopViewAsPlayer, toggleShopViewAsPlayer } from "./view-as-player.js";
 import { renderChatCard, getHtmlElement } from "../compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
-import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature } from "../lookups.js";
-import { purchaseAmmo } from "./buy-ammo.js";
+import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature, AMMO_MODIFIERS, modifierAppliesToCaliber } from "../lookups.js";
+import { purchaseAmmo, canBuyAmmo } from "./buy-ammo.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
 import {
   getShop, listShops, shopsVisibleTo, createShop, updateShop, deleteShop, duplicateShop,
@@ -623,7 +623,8 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       loads: modifiersForCaliber(id).map(([mid, m]) => ({ id: mid, label: (m && m.label) ? m.label : mid })),
       type: "ammo", category: "Ammo", sub: "",
       supplement: "Untagged", supplementShort: "", canon: "core",
-      key: ""   // not a compendium doc → no source key (keeps it out of drag-to-buy / shop curation)
+      key: ""   // not a compendium doc → no source key (keeps it out of shop curation; its drag-to-buy
+                // payload is the caliber + load instead — see _activatePurchaseDrag)
     }));
   }
 
@@ -1426,22 +1427,36 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /** Catalog + storefront rows are draggable onto a character sheet to BUY (purchaseByDrop). Curated
-   *  storefront rows carry the shopId (shop pricing/stock); everything else buys at flat catalog cost. */
+   *  storefront rows carry the shopId (shop pricing/stock); everything else buys at flat catalog cost.
+   *
+   *  A generated ammo row is not a compendium document and has no source key to carry, so its payload
+   *  is the purchase itself — the caliber, plus the load and the box count as the row shows them at
+   *  the moment the drag starts (read then, not at bind time, so a pick made after the paint counts). */
   _activatePurchaseDrag(root) {
     if (this.view !== "catalog" && this.view !== "storefront") return;
+    const start = (ev, payload) => {
+      ev.stopPropagation();
+      try {
+        ev.dataTransfer.setData("text/plain", JSON.stringify({ type: "cp2020-augmentedPurchase", ...payload }));
+        ev.dataTransfer.effectAllowed = "copy";
+      } catch { /* dnd unsupported */ }
+    };
     root.querySelectorAll(".cp-catalog-list .cp-catalog-row[data-source-key]").forEach(row => {
       const sk = row.dataset.sourceKey;
       if (!sk) return;
       const shopId = (this.view === "storefront" && row.dataset.curated === "1") ? this.shopId : null;
       row.setAttribute("draggable", "true");
       row.classList.add("cp-buy-draggable");
-      row.addEventListener("dragstart", (ev) => {
-        ev.stopPropagation();
-        try {
-          ev.dataTransfer.setData("text/plain", JSON.stringify({ type: "cp2020-augmentedPurchase", sourceKey: sk, shopId }));
-          ev.dataTransfer.effectAllowed = "copy";
-        } catch { /* dnd unsupported */ }
-      });
+      row.addEventListener("dragstart", (ev) => start(ev, { sourceKey: sk, shopId }));
+    });
+    root.querySelectorAll(".cp-catalog-list .cp-catalog-row[data-ammo-caliber]").forEach(row => {
+      row.setAttribute("draggable", "true");
+      row.classList.add("cp-buy-draggable");
+      row.addEventListener("dragstart", (ev) => start(ev, { ammo: {
+        caliber: row.dataset.ammoCaliber,
+        modifier: row.querySelector(".cp-catalog-ammo-load")?.value ?? "standard",
+        boxes: Math.max(1, parseInt(row.querySelector(".cp-catalog-qty")?.value, 10) || 1),
+      } }));
     });
   }
 
@@ -2092,11 +2107,15 @@ async function resolvePurchaseRequest(message, approve, price) {
   return true;
 }
 
-/** A small Buy/Cancel confirm for drag-to-buy. Resolves to the chosen qty, or null on cancel. */
-async function confirmPurchaseDialog({ name, unitPrice, buyerName, isService, allowQty }) {
-  const msg = game.i18n.format(isService ? "CYBERPUNK.ShopDropConfirmService" : "CYBERPUNK.ShopDropConfirmItem",
-    { name: foundry.utils.escapeHTML(name), price: unitPrice, buyer: foundry.utils.escapeHTML(buyerName) });
-  const content = await renderChatCard("shop/purchase-confirm.hbs", { msg, allowQty });
+/** A small Buy/Cancel confirm for drag-to-buy. Resolves to the chosen qty, or null on cancel.
+ *  `ammoRounds` (rounds per box) marks an ammunition purchase: the sentence prices it per BOX and the
+ *  quantity field counts boxes. `qty` is where the quantity field starts. */
+async function confirmPurchaseDialog({ name, unitPrice, buyerName, isService, allowQty, ammoRounds = 0, qty = 1 }) {
+  const key = ammoRounds ? "CYBERPUNK.ShopDropConfirmAmmo"
+    : isService ? "CYBERPUNK.ShopDropConfirmService" : "CYBERPUNK.ShopDropConfirmItem";
+  const msg = game.i18n.format(key,
+    { name: foundry.utils.escapeHTML(name), price: unitPrice, buyer: foundry.utils.escapeHTML(buyerName), rounds: ammoRounds });
+  const content = await renderChatCard("shop/purchase-confirm.hbs", { msg, allowQty, qty, ammo: !!ammoRounds });
   const result = await foundry.applications.api.DialogV2.wait({
     window: { title: game.i18n.localize("CYBERPUNK.ShopBuy") },
     content,
@@ -2117,9 +2136,12 @@ async function confirmPurchaseDialog({ name, unitPrice, buyerName, isService, al
  * Drag-to-buy: a shop row dropped on a character sheet purchases it for that actor. `shopId` set = curated
  * shop pricing/stock; null = flat catalog cost. Cyberware skips the generic confirm (its install flow has its
  * own surgery/Humanity confirm); items + services get a quick Buy/Cancel confirm with a quantity field.
+ * A generated ammo row arrives as `ammo` ({caliber, modifier, boxes}) instead of a source key.
  */
-export async function purchaseByDrop(buyer, { sourceKey, shopId = null } = {}) {
-  if (!shoppingEnabled() || !buyer || !sourceKey) return;
+export async function purchaseByDrop(buyer, { sourceKey, shopId = null, ammo = null } = {}) {
+  if (!shoppingEnabled() || !buyer) return;
+  if (ammo) return purchaseAmmoByDrop(buyer, ammo);
+  if (!sourceKey) return;
   const [packId, itemId] = splitSourceKey(sourceKey);
   const doc = await game.packs.get(packId)?.getDocument(itemId);
   if (!doc) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopItemUnavailable")); return; }
@@ -2168,6 +2190,33 @@ export async function purchaseByDrop(buyer, { sourceKey, shopId = null } = {}) {
   if (qty == null) return;
   if (shopId) await purchaseShopItem(buyer, shopId, sourceKey, { qty });
   else await purchaseCatalogItem(buyer, packId, itemId, { qty, styleMult, styleLabel });
+}
+
+/**
+ * Drag-to-buy for a generated ammo row. The same Buy/Cancel confirm as any other drop, priced per box
+ * at the load the dragged row showed and starting at its box count, then the SAME engine the row's own
+ * Buy button calls (purchaseAmmo) — so the access gate, the funds check, setup mode and the stacking
+ * onto a matching ammo item are one code path whichever gesture was used. The gate and the
+ * caliber/load fit are checked before the confirm so a purchase that cannot happen never asks first.
+ */
+async function purchaseAmmoByDrop(buyer, { caliber, modifier = "standard", boxes = 1 } = {}) {
+  const cal = getCalibers()[caliber];
+  if (!cal || !modifierAppliesToCaliber(modifier, caliber)) {
+    ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopItemUnavailable"));
+    return;
+  }
+  const gate = canBuyAmmo();
+  if (!gate.ok) { ui.notifications?.warn(gate.reason); return; }
+  // The created item's own (English) name — a stored document name is data, not a render label.
+  const name = `${cal.label ?? caliber} ${AMMO_MODIFIERS[modifier]?.label ?? modifier}`;
+  const qty = await confirmPurchaseDialog({
+    name, buyerName: buyer.name, isService: false, allowQty: true,
+    unitPrice: isShopSetupMode() ? 0 : getAmmoBoxPrice(caliber, modifier),   // setup mode waives the bill
+    ammoRounds: Number(getCaliberBox(caliber).box) || 1,
+    qty: Math.max(1, Math.floor(Number(boxes) || 1)),
+  });
+  if (qty == null) return;
+  await purchaseAmmo(buyer, { caliber, modifier, boxes: qty });
 }
 
 /** Modal text prompt; resolves to the entered string, or null on cancel. */

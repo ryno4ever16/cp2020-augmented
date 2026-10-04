@@ -1,9 +1,10 @@
 {{!--
   Drag-to-buy Buy/Cancel confirm body (renderChatCard from confirmPurchaseDialog). `msg` is a
   pre-localized sentence (carries <b> around the pre-escaped item name) → triple-stash. The quantity
-  field shows only when a quantity is allowed; the dialog callback reads it by name="qty".
+  field shows only when a quantity is allowed; the dialog callback reads it by name="qty". It starts
+  at `qty` (1 unless the dragged row carried a count) and counts BOXES for an ammunition purchase.
 --}}
 <p>{{{msg}}}</p>
 {{#if allowQty}}
-<div class="form-group"><label>{{CPLocal "ShopQty"}}</label><input type="number" name="qty" value="1" min="1" class="cp-qty-input"/></div>
+<div class="form-group"><label>{{#if ammo}}{{CPLocal "AmmoBuyBoxes"}}{{else}}{{CPLocal "ShopQty"}}{{/if}}</label><input type="number" name="qty" value="{{#if qty}}{{qty}}{{else}}1{{/if}}" min="1" class="cp-qty-input"/></div>
 {{/if}}

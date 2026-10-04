@@ -267,6 +267,7 @@ const MANIFEST = [
   ["module/shop/catalog.js:1343", "_activateEyePaint", "shop-catalog", "pointercancel", ".cp-book-eye", "", null, null],
   ["module/shop/catalog.js:1344", "_activateEyePaint", "shop-catalog", "click", ".cp-book-eye", "", null, null],
   ["module/shop/catalog.js:1365", "_activatePurchaseDrag", "shop-catalog", "dragstart", ".cp-catalog-list .cp-catalog-row[data-source-key]", "", null, null],
+  ["module/shop/catalog.js:1501", "_activatePurchaseDrag", "shop-catalog", "dragstart", ".cp-catalog-list .cp-catalog-row[data-ammo-caliber]", "ammoCaliber", null, null],
   ["module/shop/catalog.js:1396", "_activateListWindow", "shop-catalog", "scroll", ".cp-catalog-list", "", null, null],
   ["module/shop/catalog.js:1540", "_activateSetupMode", "shop-build", "click", ".cp-shop-setup-toggle", "", null, null],
   ["module/shop/catalog.js:1626", "_activateViewAsPlayer", "shop-catalog", "click", ".cp-shop-viewas-toggle", "", null, null],

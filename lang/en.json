@@ -1979,6 +1979,7 @@
     "CyberTerminus": "Cyber-terminus Options",
     "ShopDropConfirmItem": "Buy <b>{name}</b> for {price}eb each and charge {buyer}?",
     "ShopDropConfirmService": "Add <b>{name}</b> to {buyer}'s services and pay {price}eb now?",
+    "ShopDropConfirmAmmo": "Buy <b>{name}</b> ammunition ({rounds} rounds a box) for {price}eb a box and charge {buyer}?",
     "00 Buck / Slug": "00 Buck / Slug",
     "Airgun Pellet": "Airgun Pellet",
     "AllOutDodgeHint": "FNFF2: commit your whole turn to dodging for a strong defensive bonus — you can't attack.",
