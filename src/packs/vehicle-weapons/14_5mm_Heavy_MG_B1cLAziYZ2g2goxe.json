@@ -20,8 +20,8 @@
     "shots": 100,
     "range": 550,
     "reliability": "VR",
-    "space": 3,
-    "sdp": 15,
+    "space": 2,
+    "sdp": 35,
     "area": "rArm",
     "lastOwnerId": "",
     "ap": false,
@@ -40,7 +40,7 @@
     "activeShell": "",
     "sdpDamage": 0,
     "destroyed": false,
-    "sp": 20
+    "sp": 25
   },
   "_id": "B1cLAziYZ2g2goxe",
   "effects": [],

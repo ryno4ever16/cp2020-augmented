@@ -150,7 +150,17 @@ export const SEED_VEHICLE_WEAPONS = [
       weaponClass: "directFire", mountType: "articulated", arc: "front", wa: 0,
       penetration: 4, damage: "7D10", rof: 5, rofAlt: 3, shots: 100, range: 550, reliability: "VR",
       // cost 2500 per the p.71 ACPA Heavy Weapons row (was 4000, which no printing carries).
-      space: 3, cost: 2500, sp: 20, sdp: 15, area: "rArm", source: SOURCE } },
+      // Space 2, SP 25, SDP 35 per the same row (read by RYNO off the page 2026-10-04, and the text layer
+      // agrees). The entry held 3 / 20 / 15, which are the 4mm Railgun's figures two rows down.
+      space: 2, cost: 2500, sp: 25, sdp: 35, area: "rArm", source: SOURCE } },
+  // p.72: "The EEC has developed a similar weapon in 15mm, the BRG-15 (+1WA, ROF10, 650m, 2800eb, other
+  // stats equal)." Everything not named there is the 14.5mm row's. The Rough Guide to the U.K. prints
+  // its own, different figures for the gun (500 shots, ROF 100); that version is the heavy pack's
+  // "FN BRG-15 15mm HMG". Two books, two records (RYNO's ruling 2026-10-03).
+  { name: "15mm BRG-15 Heavy MG", img: ICON, system: {
+      weaponClass: "directFire", mountType: "articulated", arc: "front", wa: 1,
+      penetration: 4, damage: "7D10", rof: 10, shots: 100, range: 650, reliability: "VR",
+      space: 2, cost: 2800, sp: 25, sdp: 35, area: "rArm", source: SOURCE } },
   // The "4mm Railgun" that stood here was a SECOND record of the weapon below it. p.71 prints ONE row
   // (+3, 5D10+10AP (7), 5 shots, 1500M, 11,370EB, [20]/15) and p.72's prose names the gun "EMG-85 4mm
   // Railgun" — so the two entries were one weapon catalogued twice, and the duplicate disagreed with
