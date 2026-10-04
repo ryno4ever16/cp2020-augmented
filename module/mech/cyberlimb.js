@@ -440,7 +440,13 @@ export async function openFleshLimbStateDialog(actor, zone) {
   // `wait` resolves to the clicked button's callback result — the chosen state for "set", the bare
   // action string for the plain cancel button, and null when the window is dismissed.
   const picked = await foundry.applications.api.DialogV2.wait({
-    window: { title: localize("FleshLimbSetTitle"), icon: "fa-solid fa-user-injured" },
+    // A bare DialogV2 sizes itself to its narrowest field and ships without resize handles, which is
+    // what made this one open cramped and fixed beside every other window the module opens. The shipped
+    // idiom (the IP tracker's manual-add and the cover dialog use it): a stated width, real handles,
+    // and the module's own window classes.
+    window: { title: localize("FleshLimbSetTitle"), icon: "fa-solid fa-user-injured", resizable: true },
+    position: { width: 440 },
+    classes: ["cyberpunk", "cp-flesh-state-window"],
     content,
     rejectClose: false,
     buttons: [

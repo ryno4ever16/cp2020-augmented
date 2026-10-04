@@ -2449,6 +2449,12 @@ body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
 /* Flesh-limb state picker (openFleshLimbStateDialog): the note under the select saying this records
    STATE only. Same hint treatment as the vehicle-fire dialog's. */
 .cp-flesh-state-dialog .cp-flesh-state-hint { font-size: 0.78em; opacity: 0.65; }
+/* The window is resizable (cyberlimb.js); Foundry does not clamp a resize, so it gets a floor below
+   which the select and the two buttons would overlap. Same guard as the IP manual-add window's. */
+.application.cp-flesh-state-window { min-width: 320px; min-height: 230px; }
+.cp-flesh-state-dialog .form-group { align-items: center; gap: 8px; }
+.cp-flesh-state-dialog .form-group > label { flex: 0 0 auto; }
+.cp-flesh-state-dialog .form-group > select { flex: 1 1 0; min-width: 6em; }
 
 .chipware-container.is-empty .chipware-dropzone {
   height: 18px;

@@ -216,6 +216,17 @@ const r = await p.evaluate(async () => {
   const dlg = document.querySelector(".cp-flesh-state-dialog");
   check("gesture: the control opens a state picker", !!dlg, !!dlg);
   const sel = dlg?.querySelector("select.cp-flesh-state-pick");
+  // The picker's WINDOW (reported 2026-10-04: it opened too small and could not be resized). A stated
+  // width, real resize handles and the module's window classes, like the module's other dialogs.
+  const pwin = dlg?.closest(".application");
+  const pbox = pwin?.getBoundingClientRect();
+  const plab = dlg?.querySelector(".form-group > label");
+  const geo = { width: pbox ? Math.round(pbox.width) : null, handle: !!pwin?.querySelector(".window-resize-handle"),
+    classes: pwin?.className ?? "", labelClipped: plab ? plab.scrollWidth > plab.clientWidth + 1 : null,
+    selectWidth: sel ? Math.round(sel.getBoundingClientRect().width) : null };
+  check("picker window: opens at a workable width with resize handles and the module's window classes",
+    geo.width >= 400 && geo.handle === true && /\bcp-flesh-state-window\b/.test(geo.classes) && /\bcyberpunk\b/.test(geo.classes), geo);
+  check("picker window: the field label is not clipped and the select has room", geo.labelClipped === false && geo.selectWidth >= 200, geo);
   const optVals = [...(sel?.options ?? [])].map(o => o.value);
   check("picker: the rows are a clear row plus exactly the recorded states",
     JSON.stringify(optVals) === JSON.stringify(["","crippled","destroyed","disabled","severed"]), optVals);
