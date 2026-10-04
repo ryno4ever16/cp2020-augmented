@@ -19,7 +19,12 @@
  *   §7  unlimited entry: approval delivers, the entry stays unlimited with qty untouched
  *   §8  shop price set on the unpriced item: charged that price directly, no request
  *   §9  GM setup mode: free, no request, no stock change; setup mode OFF: request, nothing delivered
- *   §10 0 console errors on both sessions
+ *   §10 storefront quantity box: starts at 1 with max = stock (no max when unlimited); an unedited Buy
+ *       buys ONE; a typed quantity survives a re-render; the GM's tray still shows the stock count
+ *   §11 a deliberate shop price of 0 reads "0eb" (storefront + tray) and buys free without a request
+ *   §12 open catalog windows on BOTH clients follow an approved price (no reopen), and go back to
+ *       "GM-priced" when the override is cleared
+ *   §13 0 console errors on both sessions
  *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
  */
@@ -108,13 +113,66 @@ async function clickBuy(page, { buyerId, shopId, sourceKey, qty }) {
     while (Date.now() - t0 < 10000) { row = win?.element?.querySelector(sel); if (row) break; await new Promise(r => setTimeout(r, 150)); }
     if (!row) return { found: false };
     const q = row.querySelector(".cp-catalog-qty");
-    if (q) q.value = String(qty);
+    if (q && qty != null) q.value = String(qty);   // null = press Buy on the box as rendered
     const btn = row.querySelector(".cp-catalog-buy");
     if (!btn || btn.disabled) return { found: true, clicked: false };
     btn.click();
     await new Promise(r => setTimeout(r, 2000));
     return { found: true, clicked: true };
   }, { SCOPE, buyerId, shopId, sourceKey, qty });
+}
+
+/** Player: open the storefront and read a curated row's quantity box as rendered (value + max). */
+async function readQtyBox(page, { buyerId, shopId, sourceKey }) {
+  return page.evaluate(async ({ SCOPE, buyerId, shopId, sourceKey }) => {
+    const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+    for (const w of [...foundry.applications.instances.values()].filter(w => w instanceof C.CatalogBrowser)) await w.close().catch(() => {});
+    await new Promise(r => setTimeout(r, 300));
+    const win = C.openShopWindow(game.actors.get(buyerId), { view: "storefront", shopId });
+    const sel = `.cp-catalog-row[data-source-key="${sourceKey}"][data-curated="1"] .cp-catalog-qty`;
+    const t0 = Date.now(); let box = null;
+    while (Date.now() - t0 < 10000) { box = win?.element?.querySelector(sel); if (box) break; await new Promise(r => setTimeout(r, 150)); }
+    if (!box) return { found: false };
+    return { found: true, value: box.value, max: box.getAttribute("max") };
+  }, { SCOPE, buyerId, shopId, sourceKey });
+}
+
+/** Open the catalog view on `page`, narrowed by the search box to `term`, and mark the window instance
+ *  so a later read can prove it is the SAME window (no reopen). */
+async function openCatalogOn(page, { buyerId, term }) {
+  return page.evaluate(async ({ SCOPE, buyerId, term }) => {
+    const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+    for (const w of [...foundry.applications.instances.values()].filter(w => w instanceof C.CatalogBrowser)) await w.close().catch(() => {});
+    await new Promise(r => setTimeout(r, 300));
+    const win = C.openShopWindow(game.actors.get(buyerId), { view: "catalog" });
+    const t0 = Date.now();
+    while (Date.now() - t0 < 15000) { if (win?.element?.querySelector(".cp-catalog-search")) break; await new Promise(r => setTimeout(r, 150)); }
+    const box = win?.element?.querySelector(".cp-catalog-search");
+    if (!box) return false;
+    box.value = term; box.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise(r => setTimeout(r, 600));
+    win.__pwMark = "unpriced-stock-12";
+    return true;
+  }, { SCOPE, buyerId, term });
+}
+
+/** Read a row's price cell in the ALREADY-OPEN catalog window, polling until `until(row)` holds (10 s). */
+async function readOpenRow(page, sourceKey, until) {
+  const read = () => page.evaluate(async ({ SCOPE, sourceKey }) => {
+    const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+    const win = [...foundry.applications.instances.values()].find(w => w instanceof C.CatalogBrowser);
+    const c = win?.element?.querySelector(`.cp-catalog-row[data-source-key="${sourceKey}"] .cp-cat-price`);
+    return {
+      found: !!c, sameWindow: win?.__pwMark === "unpriced-stock-12",
+      text: (c?.textContent ?? "").replace(/\s+/g, " ").trim(),
+      gmMarker: !!c?.querySelector(".cp-price-gm"),
+      figure: c?.querySelector("b")?.textContent?.trim() ?? null,
+    };
+  }, { SCOPE, sourceKey });
+  const t0 = Date.now();
+  let r = await read();
+  while (!(r.found && until(r)) && Date.now() - t0 < 10000) { await page.waitForTimeout(250); r = await read(); }
+  return r;
 }
 
 /** GM: the purchase-request messages created since the snapshot. */
@@ -388,7 +446,107 @@ try {
   check("NEGATIVE setup mode OFF: one request card, nothing delivered, funds and stock unchanged",
     s9b.requests === 1 && s9b.units === 0 && s9b.funds === START_FUNDS && s9b.qty === 5, JSON.stringify(s9b));
 
-  console.log("\n§10 console");
+  /* ─────────────────── §10 the storefront quantity box ─────────────────── */
+  console.log("\n§10 storefront quantity box (stocked entry qty 5, shop price 250)");
+  await reset(gm, IDS, { unlimited: false, qty: 5, price: 250 });
+  const q10 = await readQtyBox(pc, { ...IDS, sourceKey: UNP_KEY });
+  check("stocked row: quantity box starts at 1", q10.value === "1", JSON.stringify(q10));
+  check("stocked row: quantity box max = the stock count 5", q10.max === "5", JSON.stringify(q10));
+  const q10c = await readQtyBox(pc, { ...IDS, sourceKey: S.ctl.key });
+  check("NEGATIVE unlimited row: box starts at 1 with no max", q10c.value === "1" && q10c.max === null, JSON.stringify(q10c));
+  const b10 = await clickBuy(pc, { ...IDS, sourceKey: UNP_KEY, qty: null });
+  check("Buy clicked without editing the box", b10.clicked === true, JSON.stringify(b10));
+  await gm.waitForTimeout(1200);
+  const s10 = await gmState(gm, IDS);
+  check("unedited buy: 1 unit delivered, funds − 250, stock 5 → 4", s10.units === 1 && s10.funds === START_FUNDS - 250 && s10.qty === 4, JSON.stringify(s10));
+  // Second act: a typed quantity survives a re-render of the same window, and the cap follows the stock.
+  const q10t = await pc.evaluate(async ({ SCOPE, sourceKey }) => {
+    const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+    const win = [...foundry.applications.instances.values()].find(w => w instanceof C.CatalogBrowser);
+    const sel = `.cp-catalog-row[data-source-key="${sourceKey}"][data-curated="1"] .cp-catalog-qty`;
+    const box = win.element.querySelector(sel);
+    box.value = "2"; box.dispatchEvent(new Event("input", { bubbles: true }));
+    await win.render(); await new Promise(r => setTimeout(r, 900));
+    const again = win.element.querySelector(sel);
+    return { value: again?.value ?? null, max: again?.getAttribute("max") ?? null };
+  }, { SCOPE, sourceKey: UNP_KEY });
+  check("typed quantity 2 survives a re-render; max now = stock 4", q10t.value === "2" && q10t.max === "4", JSON.stringify(q10t));
+  const tray10 = await gm.evaluate(async ({ SCOPE, shopId, sourceKey }) => {
+    const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+    for (const w of [...foundry.applications.instances.values()].filter(w => w instanceof C.CatalogBrowser)) await w.close().catch(() => {});
+    await new Promise(r => setTimeout(r, 300));
+    const win = C.openShopWindow(null, { view: "build", shopId });
+    const t0 = Date.now(); let row = null;
+    while (Date.now() - t0 < 10000) { row = win?.element?.querySelector(`.cp-vendor-row[data-source-key="${sourceKey}"]`); if (row) break; await new Promise(r => setTimeout(r, 150)); }
+    const v = row?.querySelector(".cp-shop-stock-qty")?.value ?? null;
+    const dbg = { loading: !!win?.element?.querySelector(".cp-catalog-loading"), rows: win?.element?.querySelectorAll(".cp-vendor-row").length, view: win?.view, ready: C.catalogIndexReady(), html: (win?.element?.querySelector(".window-content")?.textContent ?? "").slice(0, 200) };
+    await win.close().catch(() => {});
+    return v ?? JSON.stringify(dbg);
+  }, { SCOPE, shopId: S.shopId, sourceKey: UNP_KEY });
+  check("NEGATIVE: the GM's vendor tray stock box still shows the stock count 4", tray10 === "4", String(tray10));
+
+  /* ─────────────────── §11 a deliberate shop price of 0 ─────────────────── */
+  console.log("\n§11 shop price 0");
+  await reset(gm, IDS, { unlimited: false, qty: 5, price: 0 });
+  const row11 = await readRow(pc, { ...IDS, view: "storefront", sourceKey: UNP_KEY, cell: ".cp-cat-price", rowSel: ".cp-catalog-row" });
+  check("storefront row reads '0eb': figure 0, no GM-priced marker", row11.figure === "0" && row11.text === "0eb" && row11.gmMarker === false, JSON.stringify(row11));
+  const tray11 = await readRow(gm, { ...IDS, view: "build", sourceKey: UNP_KEY, cell: ".cp-vendor-sells", rowSel: ".cp-vendor-row" });
+  check("GM vendor tray reads figure 0", tray11.figure === "0" && tray11.gmMarker === false, JSON.stringify(tray11));
+  await gm.evaluate(async (SCOPE) => { const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`); for (const w of [...foundry.applications.instances.values()].filter(w => w instanceof C.CatalogBrowser)) await w.close().catch(() => {}); }, SCOPE);
+  const b11 = await clickBuy(pc, { ...IDS, sourceKey: UNP_KEY, qty: 1 });
+  await gm.waitForTimeout(1200);
+  const s11 = await gmState(gm, IDS);
+  check("price-0 buy: delivered, funds unchanged, no request, stock 5 → 4",
+    b11.clicked && s11.units === 1 && s11.funds === START_FUNDS && s11.requests === 0 && s11.qty === 4, JSON.stringify(s11));
+
+  /* ─────────────────── §12 open catalog windows follow a saved / cleared override ─────────────────── */
+  console.log("\n§12 open catalog windows on both clients follow an approved price, then its removal");
+  await reset(gm, IDS, { unlimited: false, qty: 5, price: null });
+  // The probe must be listed for the player: if its book is hidden from players, show it for this section.
+  const vis12 = await gm.evaluate(async ({ SCOPE, UNP_KEY }) => {
+    const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+    const row = (await C.getCatalogIndex()).find(r => r.key === UNP_KEY);
+    const map = { ...(game.settings.get(SCOPE, "shopEnabledSources") ?? {}) };
+    const prev = map[row.supplement];
+    if (row.canon !== "core" && map[row.supplement] !== true) { map[row.supplement] = true; await game.settings.set(SCOPE, "shopEnabledSources", map); }
+    return { supplement: row.supplement, canon: row.canon, name: row.name, prev: prev ?? null };
+  }, { SCOPE, UNP_KEY });
+  S.vis12 = vis12;
+  await pc.waitForTimeout(600);
+  const pOpen = await openCatalogOn(pc, { buyerId: S.buyerId, term: vis12.name });
+  const gOpen = await openCatalogOn(gm, { buyerId: S.buyerId, term: vis12.name });
+  const p12a = await readOpenRow(pc, UNP_KEY, r => r.gmMarker);
+  const g12a = await readOpenRow(gm, UNP_KEY, r => r.gmMarker);
+  check("both catalogs open with the probe row reading GM-priced", pOpen && gOpen && p12a.gmMarker && g12a.gmMarker, JSON.stringify({ p12a, g12a }));
+  // The player's Buy from their open catalog asks the GM for a price.
+  const b12 = await pc.evaluate(async ({ SCOPE, key }) => {
+    const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+    const win = [...foundry.applications.instances.values()].find(w => w instanceof C.CatalogBrowser);
+    const btn = win?.element?.querySelector(`.cp-catalog-row[data-source-key="${key}"] .cp-catalog-buy`);
+    if (!btn) return false;
+    btn.click(); await new Promise(r => setTimeout(r, 1500));
+    return true;
+  }, { SCOPE, key: UNP_KEY });
+  const q12 = (await gmRequests(gm, true)).pop();
+  check("player catalog Buy raised a needsPrice request", b12 && q12?.needsPrice === true, JSON.stringify(q12 ?? null));
+  const a12 = await gmResolve(gm, q12?.id, "approve", 120);
+  check("GM approved at 120", a12.status === "approved", JSON.stringify(a12));
+  const p12b = await readOpenRow(pc, UNP_KEY, r => r.figure === "120");
+  const g12b = await readOpenRow(gm, UNP_KEY, r => r.figure === "120");
+  check("player's open catalog window now shows 120eb, no marker (same window, no reopen)", p12b.figure === "120" && !p12b.gmMarker && p12b.sameWindow, JSON.stringify(p12b));
+  check("GM's open catalog window now shows 120eb, no marker (same window, no reopen)", g12b.figure === "120" && !g12b.gmMarker && g12b.sameWindow, JSON.stringify(g12b));
+  // Second act: clearing the override puts the marker back in both open windows.
+  await gm.evaluate(async ({ SCOPE, UNP_ID }) => {
+    const ov = { ...(game.settings.get(SCOPE, "shopPriceOverrides") ?? {}) };
+    delete ov[UNP_ID];
+    await game.settings.set(SCOPE, "shopPriceOverrides", ov);
+  }, { SCOPE, UNP_ID });
+  const p12c = await readOpenRow(pc, UNP_KEY, r => r.gmMarker);
+  const g12c = await readOpenRow(gm, UNP_KEY, r => r.gmMarker);
+  check("override cleared: the player's open window reads GM-priced again", p12c.gmMarker && p12c.figure === null && p12c.sameWindow, JSON.stringify(p12c));
+  check("override cleared: the GM's open window reads GM-priced again", g12c.gmMarker && g12c.figure === null && g12c.sameWindow, JSON.stringify(g12c));
+
+  console.log("\n§13 console");
   check("0 console errors on the GM session", gmErrors.length === 0, gmErrors.slice(0, 3).join(" | "));
   check("0 console errors on the player session", pcErrors.length === 0, pcErrors.slice(0, 3).join(" | "));
 } catch (e) {
@@ -396,8 +554,20 @@ try {
   fail++; failed.push("harness threw");
 } finally {
   if (gm && S) {
-    await gm.evaluate(async ({ SCOPE, buyerId, shopId, prevOverrides, UNP_ID }) => {
+    if (pc) await pc.evaluate(async (SCOPE) => {
+      const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
+      for (const w of [...foundry.applications.instances.values()].filter(w => w instanceof C.CatalogBrowser)) await w.close().catch(() => {});
+    }, SCOPE).catch(() => {});
+    await gm.evaluate(async ({ SCOPE, buyerId, shopId, prevOverrides, UNP_ID, vis12 }) => {
       try { (await import(`/modules/${SCOPE}/module/shop/setup-mode.js`)).setShopSetupMode(false); } catch {}
+      try {
+        // §12 may have shown the probe's book to players; put that one entry back as it stood.
+        if (vis12 && vis12.canon !== "core") {
+          const map = { ...(game.settings.get(SCOPE, "shopEnabledSources") ?? {}) };
+          if (vis12.prev === null) delete map[vis12.supplement]; else map[vis12.supplement] = vis12.prev;
+          await game.settings.set(SCOPE, "shopEnabledSources", map);
+        }
+      } catch {}
       try {
         const C = await import(`/modules/${SCOPE}/module/shop/catalog.js`);
         for (const w of [...foundry.applications.instances.values()].filter(w => w instanceof C.CatalogBrowser)) await w.close().catch(() => {});
@@ -415,7 +585,7 @@ try {
       } catch {}
       try { await game.actors.get(buyerId)?.delete(); } catch {}
       for (const a of game.actors.filter(a => a.name?.startsWith("__PW__UNPSHOP"))) await a.delete().catch(() => {});
-    }, { SCOPE, buyerId: S.buyerId, shopId: S.shopId, prevOverrides: S.prevOverrides, UNP_ID }).catch(e => console.error("cleanup failed:", e?.message));
+    }, { SCOPE, buyerId: S.buyerId, shopId: S.shopId, prevOverrides: S.prevOverrides, UNP_ID, vis12: S.vis12 ?? null }).catch(e => console.error("cleanup failed:", e?.message));
   }
   await browser.close();
 }
