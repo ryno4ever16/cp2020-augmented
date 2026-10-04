@@ -48,18 +48,6 @@
 .cp-shop-request-status { margin: 4px 0 0; font-weight: bold; }
 .cp-shop-request-status.cp-approved { color: #1f9d2f; }
 .cp-shop-request-status.cp-denied { color: #d1502f; }
-/* The two cyberware cards reuse this card wholesale (module/cyberware/install.js, the approved-request
-   route), so only their extra rows need styling: the terms list and the GM's two option checkboxes.
-   Their buttons carry .cp-approve / .cp-deny and pick up the colors above. */
-.cp-shop-request-actions .cp-shop-cyber-choice-btn,
-.cp-shop-request-actions .cp-shop-cyber-surgery-btn { flex: 1 1 auto; width: auto; }
-.cp-shop-cyber-choice-btn.cp-approve, .cp-shop-cyber-surgery-btn.cp-approve { color: #1f9d2f; }
-.cp-shop-cyber-choice-btn.cp-deny, .cp-shop-cyber-surgery-btn.cp-deny { color: #d1502f; }
-.cp-shop-request-terms { margin: 0 0 6px; padding-left: 18px; }
-.cp-shop-request-terms li { margin: 0; }
-.cp-shop-request-opts { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px; }
-.cp-shop-request-opts label { display: flex; align-items: center; gap: 6px; margin: 0; width: 100%; }
-.cp-shop-request-opts label input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
 /* Price-request variant: the GM enters a price for an item the base compendium leaves unpriced. */
 .cp-shop-request-price-row { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; }
 .cp-shop-request-price-label { flex: 0 0 auto; font-weight: bold; }
@@ -4190,8 +4178,6 @@ body.theme-light .cyberpunk .result-success,
 body.theme-light .cyberpunk .cp-shop-request-btn.cp-approve,
 body.theme-light .cp-shop-request-btn.cp-approve,
 body.theme-light .cp-shop-request-status.cp-approved,
-body.theme-light .cp-shop-cyber-choice-btn.cp-approve,
-body.theme-light .cp-shop-cyber-surgery-btn.cp-approve,
 body.theme-light .cp-inshop-mark,
 body.theme-light .cp-shop-discountbadge,
 body.theme-light .cp-books-hint .fa-eye,
@@ -4206,8 +4192,6 @@ body.theme-light .cyberpunk .result-note.danger,
 body.theme-light .cyberpunk .cp-shop-request-btn.cp-deny,
 body.theme-light .cp-shop-request-btn.cp-deny,
 body.theme-light .cp-shop-request-status.cp-denied,
-body.theme-light .cp-shop-cyber-choice-btn.cp-deny,
-body.theme-light .cp-shop-cyber-surgery-btn.cp-deny,
 body.theme-light .cp-shop-remove:hover,
 body.theme-light .cp-vehicle-destroyed,
 body.theme-light .cp-acpa-system-destroyed,

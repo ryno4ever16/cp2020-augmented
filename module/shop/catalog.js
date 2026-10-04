@@ -1,6 +1,6 @@
 import { buyItem, FASHION_STYLES, styleMultOf, resolveCatalogPrice, isValidPrice } from "./purchase.js";
 import { correctionFor, correctedCost } from "../data-corrections.js";
-import { buyAndInstallCyberware, offerCyberwareChoice, resolveCyberChoice, resolveCyberSurgery } from "../cyberware/install.js";
+import { buyAndInstallCyberware, askCyberwareChoice } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, resolveCategory, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
@@ -1755,46 +1755,65 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
  * (resolvePurchaseRequest) — has already written "approved" to a chat card by the time this runs and
  * must be able to take it back if the buy refuses. Every other caller ignores the return, so the
  * shape is free to be descriptive:
- *   {ok:true}                              the goods were delivered (or a deferred cyberware choice was sent)
+ *   {ok:true}                              the goods were delivered
  *   {ok:false, reason:"noBuyer"|"noItem"}  nothing to buy, or nobody to buy it
  *   {ok:false, reason:"requested"}         re-routed to a GM request instead of buying (unpriced / player gate)
+ *   {ok:false, reason:"cancelled"}         the buyer backed out of the cyberware install question
  *   {ok:false, reason:"funds", need, have} refused for money — `need` and `have` are in eurobucks
  *   {ok:false, reason:"refused"}           buyItem said no for another reason (buy in flight, create failed)
+ * `cyber` = the answers a buyer already gave to the cyberware install question (askCyberwareChoice),
+ * carried on their request and handed back by resolvePurchaseRequest together with `requesterId`.
  * @returns {Promise<{ok:boolean, reason?:string, need?:number, have?:number}>}
  */
-export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styleMult = 1, styleLabel = "", requesterId = null } = {}) {
+export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styleMult = 1, styleLabel = "", requesterId = null, cyber = null } = {}) {
   if (!buyer) return { ok: false, reason: "noBuyer" };
   const doc = await game.packs.get(packId)?.getDocument(itemId);
   if (!doc) return { ok: false, reason: "noItem" };
+  const isCyberware = doc.type === "cyberware";
   // Price precedence: compendium cost → GM override → unpurchasable. An item the base leaves unpriced
-  // is NEVER free — route it (for ANYONE, GM included) through the price-request flow so the GM sets a
-  // price first; that price is saved as a self-disengaging override (re-runs here once set). For a
-  // variable-price item (data-corrections priceRange) the GM override wins over the compendium cost.
+  // is not free to a customer — route it (for ANYONE, GM included) through the price-request flow so the
+  // GM sets a price first; that price is saved as a self-disengaging override (re-runs here once set).
+  // For a variable-price item (data-corrections priceRange) the GM override wins over the compendium cost.
+  // The one exception is the GM's own setup mode: everything a GM furnishes there is free, and an item
+  // with no price is no different — asking the GM to price something for themselves at zero is a
+  // question with one answer (module/shop/setup-mode.js). Never for somebody else's request.
   const corr = correctionFor(packId, itemId);
   const pr = resolveCatalogPrice(correctedCost(packId, itemId, doc.system?.cost), itemId, undefined, { preferOverride: !!corr?.priceRange });
-  if (!pr.purchasable) {
-    await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, styleMult, styleLabel, needsPrice: true });
+  const setupFree = !pr.purchasable && isShopSetupMode() && !requesterId;
+  if (!pr.purchasable && !setupFree) {
+    // Cyberware: the buyer answers the install question on their own client BEFORE the request goes
+    // out, so the GM is asked one thing — approve or deny (module/cyberware/install.js askCyberwareChoice).
+    const choice = isCyberware ? await askCyberwareChoice(buyer, doc, { partPrice: null }) : null;
+    if (isCyberware && !choice) return { ok: false, reason: "cancelled" };
+    await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, styleMult, styleLabel, needsPrice: true, cyber: choice });
     return { ok: false, reason: "requested" };
   }
-  const unitPrice = Math.max(0, Math.round(pr.price * (Number(styleMult) || 1)));
+  const unitPrice = setupFree ? 0 : Math.max(0, Math.round(pr.price * (Number(styleMult) || 1)));
   const label = styleLabel && styleMult !== 1 ? `${styleLabel} ×${styleMult}` : "";
   // Published-shops-only: a player may BROWSE the full catalog but needs GM permission to buy from it
   // directly — route the buy through a GM purchase request instead. (Published-shop buys go through
   // purchaseShopItem and are unaffected; a GM buying here is unaffected.) A variable-price item's
   // request carries the book range so the GM can set the final price right on the card.
   if (!game.user.isGM && shopBuySource() === "shops") {
-    await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel, priceRange: corr?.priceRange ?? null });
+    const choice = isCyberware ? await askCyberwareChoice(buyer, doc, { partPrice: unitPrice }) : null;
+    if (isCyberware && !choice) return { ok: false, reason: "cancelled" };
+    await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel, priceRange: corr?.priceRange ?? null, cyber: choice });
     return { ok: false, reason: "requested" };
   }
-  if (doc.type === "cyberware") {
-    // A GM approving a player's REQUEST is not the person whose Humanity is about to be spent, so the
-    // install-or-buy-only choice goes back to the buyer and the surgery confirmation comes forward to
-    // the GM afterwards (module/cyberware/install.js, "the approved-request route"). `requesterId` is
-    // set only by resolvePurchaseRequest; the direct paths — a player buying for themselves, a GM
-    // buying for an NPC — leave it null and keep their own dialog on the client that started them.
-    if (requesterId) { await offerCyberwareChoice(buyer, doc, { partPrice: unitPrice, packId, itemId, requesterId }); return { ok: true }; }
-    const cw = await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice });
-    return cw === false ? { ok: false, reason: "refused" } : { ok: true };
+  if (isCyberware) {
+    // Who decides: the person buying. A buyer acting for themselves — a player whose table lets them buy
+    // freely, a GM buying for an NPC — gets the install dialog right here, on their own client. A buyer
+    // whose purchase needed approval already answered it before the request was sent (`cyber`), so the
+    // GM's Approve carries those answers out and asks the GM nothing more. `requesterId` is set only by
+    // resolvePurchaseRequest. (A request made before this flow existed carries no answers; its
+    // approval falls back to asking on the approving client.)
+    const have = Number(buyer.system?.eurobucks ?? 0);
+    const cw = await buyAndInstallCyberware(buyer, doc, (requesterId && cyber)
+      ? { partPrice: unitPrice, requesterId, confirm: false, install: cyber.install !== false, paySurgery: cyber.paySurgery !== false,
+          rollHumanity: cyber.rollHumanity !== false, applyDamage: cyber.applyDamage !== false }
+      : { partPrice: unitPrice, requesterId });
+    if (cw !== false) return { ok: true };
+    return have < unitPrice ? { ok: false, reason: "funds", need: unitPrice, have } : { ok: false, reason: "refused" };
   }
   // Read funds BEFORE the buy so a refusal can be attributed. buyItem warns the clicking client and
   // returns false without saying why; the money reason is the one the GM's Approve button has to be
@@ -1868,23 +1887,42 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
 /** Post a GM-whispered purchase request for a full-catalog item; notify the requesting player.
  *  `needsPrice` = the item has no catalog price; the card shows the GM a price input to set first.
  *  `priceRange` = a variable-price item (data-corrections): the card shows the book's range and an
- *  OPTIONAL price input — the GM may set the final price or approve at the listed one. */
-async function requestPurchase(buyer, { packId, itemId, name, qty = 1, unitPrice = 0, styleMult = 1, styleLabel = "", needsPrice = false, priceRange = null } = {}) {
+ *  OPTIONAL price input — the GM may set the final price or approve at the listed one.
+ *  `cyber` = a cyberware buyer's own answers to the install question, asked on their client before this
+ *  request was posted (askCyberwareChoice). The card states them so the GM approves what will happen. */
+async function requestPurchase(buyer, { packId, itemId, name, qty = 1, unitPrice = 0, styleMult = 1, styleLabel = "", needsPrice = false, priceRange = null, cyber = null } = {}) {
   const n = Math.max(1, Math.floor(Number(qty) || 1));
-  const total = Math.max(0, Math.round((Number(unitPrice) || 0) * n));
+  const total = Math.max(0, Math.round((Number(unitPrice) || 0) * n)) + cyberSurgeryDue(cyber);
   const label = styleLabel && styleMult !== 1 ? `${styleLabel} ×${styleMult}` : "";
   const content = await renderChatCard("shop/purchase-request.hbs", {
     requester: game.user.name, buyer: buyer?.name ?? "", name, qty: n, total, label, pending: true, needsPrice, priceRange,
+    cyberLine: cyberRequestLine(cyber),
   });
   const gms = ChatMessage.getWhisperRecipients("GM").map((u) => u.id);
   await ChatMessage.create({
     content, whisper: gms, speaker: ChatMessage.getSpeaker({ actor: buyer }),
     flags: { "cp2020-augmented": { purchaseRequest: {
       buyerId: buyer?.id ?? "", packId, itemId, qty: n, styleMult, styleLabel,
-      name, total, needsPrice, priceRange, requesterId: game.user.id, status: "pending",
+      name, total, needsPrice, priceRange, cyber, requesterId: game.user.id, status: "pending",
     } } },
   });
   ui.notifications?.info(game.i18n.localize("CYBERPUNK.ShopRequestSent"));
+}
+
+/** The surgery fee a cyberware request will charge on top of the part: only when it is to be installed
+ *  now and the fee is to be paid. PURE. */
+function cyberSurgeryDue(cyber) {
+  return (cyber?.install && cyber?.paySurgery) ? Math.max(0, Math.round(Number(cyber.surgeryCost) || 0)) : 0;
+}
+
+/** One line for the request card saying what the buyer asked to have done with their cyberware, or ""
+ *  for anything that is not cyberware. Assembled here so the template stays a plain `{{cyberLine}}`. */
+function cyberRequestLine(cyber) {
+  if (!cyber) return "";
+  if (!cyber.install) return game.i18n.localize("CYBERPUNK.CyberRequestBuyOnly");
+  const surgery = game.i18n.has(`CYBERPUNK.${cyber.surgeryLabel}`) ? game.i18n.localize(`CYBERPUNK.${cyber.surgeryLabel}`) : (cyber.surgeryLabel ?? "");
+  return game.i18n.format(cyber.paySurgery ? "CYBERPUNK.CyberRequestInstall" : "CYBERPUNK.CyberRequestInstallUnpaid",
+    { surgery, cost: Math.max(0, Math.round(Number(cyber.surgeryCost) || 0)) });
 }
 
 // Purchase requests already being resolved on THIS client — a synchronous claim (add before the first
@@ -1923,7 +1961,7 @@ async function resolvePurchaseRequest(message, approve, price) {
     if (approve) {
       if (req.needsPrice) await setShopPriceOverride(req.itemId, price);   // self-disengaging: compendium cost always wins later
       else if (req.priceRange && isValidPrice(price)) await setShopPriceOverride(req.itemId, price);   // range item: the GM's price becomes the standing final price
-      outcome = await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel, requesterId: req.requesterId });
+      outcome = await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel, requesterId: req.requesterId, cyber: req.cyber ?? null });
       // The status flag is written BEFORE the buy (it is the concurrency claim — see above), so an
       // approval whose buy then refuses would leave a card permanently reading "Approved" for goods
       // that were never delivered, with nothing but a transient GM-side toast to say otherwise. The
@@ -1953,10 +1991,10 @@ async function resolvePurchaseRequest(message, approve, price) {
     // After a price-request approval the total is now known (price × qty); a range request the GM
     // repriced recomputes the same way; otherwise keep the original.
     const gmPriced = approve && (req.needsPrice || (req.priceRange && isValidPrice(price)));
-    const total = gmPriced ? Math.max(0, Math.round((Number(price) || 0) * req.qty)) : req.total;
+    const total = gmPriced ? Math.max(0, Math.round((Number(price) || 0) * req.qty)) + cyberSurgeryDue(req.cyber) : req.total;
     const content = await renderChatCard("shop/purchase-request.hbs", {
       requester: game.users.get(req.requesterId)?.name ?? "", buyer: buyer?.name ?? req.buyerId,
-      name: req.name, qty: req.qty, total, label,
+      name: req.name, qty: req.qty, total, label, cyberLine: cyberRequestLine(req.cyber),
       // `approved` stays false when the buy refused, so the card can never claim an approval that
       // delivered nothing; `failed` distinguishes that from a GM's deliberate Deny.
       pending: false, approved: approve && outcome?.ok !== false, failed: approve && outcome?.ok === false,
@@ -2018,13 +2056,14 @@ export async function purchaseByDrop(buyer, { sourceKey, shopId = null } = {}) {
   } else {
     const corr = correctionFor(packId, itemId);
     const pr = resolveCatalogPrice(correctedCost(packId, itemId, doc.system?.cost), itemId, undefined, { preferOverride: !!corr?.priceRange });
-    if (!pr.purchasable) {
+    if (!pr.purchasable && !isShopSetupMode()) {
       // Unpriced catalog item: skip the misleading 0eb confirm — purchaseCatalogItem routes the drop
       // through the GM price-request flow (no free buy). Qty defaults to 1 until a price is set.
       await purchaseCatalogItem(buyer, packId, itemId, { qty: 1, styleMult, styleLabel });
       return;
     }
-    unitPrice = pr.price;
+    // In the GM's setup mode an unpriced item is free like everything else (see purchaseCatalogItem).
+    unitPrice = pr.purchasable ? pr.price : 0;
   }
 
   // Cyberware: straight through (buyAndInstallCyberware shows its own surgery/Humanity confirm).
@@ -2201,31 +2240,6 @@ function _wireShopCardControls(message, html) {
       if (resolved === false) btns.forEach(b => b.disabled = false);   // retriable bail (e.g. a price is still needed)
     });
   });
-
-  // The two halves of an approved cyberware request. The permission question is answered inside each
-  // resolver (the choice belongs to the requester, the surgery to a GM) rather than here, so a card
-  // that is whispered to both still shows its buttons to both and refuses the wrong clicker quietly.
-  // Same click discipline as above: disable synchronously, restore only on a retriable bail.
-  const wireCyberButtons = (selector, run) => root?.querySelectorAll?.(selector).forEach(btn => {
-    if (btn.dataset.cpBound === "1") return;
-    btn.dataset.cpBound = "1";
-    btn.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      const card = btn.closest(".cp-shop-request");
-      const btns = card ? [...card.querySelectorAll("button[data-action]")] : [btn];
-      btns.forEach(b => b.disabled = true);
-      const resolved = await run(btn, card);
-      if (resolved === false) btns.forEach(b => b.disabled = false);
-    });
-  });
-  wireCyberButtons(".cp-shop-cyber-choice-btn", (btn) => resolveCyberChoice(message, btn.dataset.action));
-  wireCyberButtons(".cp-shop-cyber-surgery-btn", (btn, card) => resolveCyberSurgery(
-    message, btn.dataset.action === "operate",
-    {
-      rollHumanity: card?.querySelector('[name="rollHumanity"]')?.checked ?? true,
-      applyDamage:  card?.querySelector('[name="applyDamage"]')?.checked ?? true,
-    },
-  ));
 }
 
 /** Ready-time hooks: sidebar button + chat links + live buyer sync + the GM stock-decrement relay. */

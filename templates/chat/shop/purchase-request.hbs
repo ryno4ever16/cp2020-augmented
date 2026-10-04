@@ -9,6 +9,9 @@
   <p class="cp-shop-request-head"><i class="fas fa-cart-shopping"></i> {{localize "CYBERPUNK.ShopRequestTitle"}}</p>
   <p class="cp-shop-request-body">{{CPLocal "ShopRequestBody" requester=requester buyer=buyer qty=qty name=name total=total}}{{#if label}} <span class="cp-shop-request-note">({{label}})</span>{{/if}}</p>
   {{/if}}
+  {{!-- Cyberware: what the buyer asked to have done with it (install now and pay the surgery, install
+        with the fee unpaid, or just buy the part). Built in catalog.js cyberRequestLine. --}}
+  {{#if cyberLine}}<p class="cp-shop-request-note cp-shop-request-cyber">{{cyberLine}}</p>{{/if}}
   {{#if pending}}
   {{#if needsPrice}}
   <div class="cp-shop-request-price-row">

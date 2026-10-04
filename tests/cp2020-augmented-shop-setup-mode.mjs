@@ -53,6 +53,7 @@ const r1 = await p.evaluate(async () => {
   const SHOPS = await import("/modules/cp2020-augmented/module/shop/shops.js");
 
   try {
+    window.__pwBefore = new Set(game.messages.map(m => m.id));   // cleanup sweeps every message this run posts
     SETUP.setShopSetupMode(false);
     for (const w of [...foundry.applications.instances.values()]) if (w instanceof CAT.CatalogBrowser) await w.close();
 
@@ -198,6 +199,62 @@ const r1 = await p.evaluate(async () => {
       { before: fundsOff, now: buyer.system.eurobucks });
     check("mode OFF ⇒ the chat card is back", game.messages.size > msgsOff, { before: msgsOff, now: game.messages.size });
 
+    // ── (c) setup mode and an UNPRICED catalog item, bought by the GM ─────────────────────────────
+    // Off: the item is routed to a price request (needsPrice) and nothing is delivered. On: the GM's
+    // own furnishing call delivers it free, with no request card and no chat message.
+    const UNP_PACK = "cp2020-augmented.supplement-armor", UNP_ID = "QIwkOGgOYsByn1gA";
+    out.unp = { packId: UNP_PACK, id: UNP_ID };
+    const idx = await CAT.getCatalogIndex();
+    const unpRow = idx.find(r => r.packId === UNP_PACK && r.id === UNP_ID);
+    check("fixture: the unpriced probe row is in the catalog index with unpriced = true",
+      unpRow?.unpriced === true, unpRow ? { unpriced: unpRow.unpriced, cost: unpRow.cost, name: unpRow.name } : null);
+    const overrides0 = game.settings.get(SCOPE, "shopPriceOverrides") ?? {};
+    out.prevOverrides = foundry.utils.deepClone(overrides0);
+    check("fixture: no GM price override stands for the unpriced probe", overrides0[UNP_ID] === undefined, overrides0[UNP_ID]);
+    const unpCount = () => buyer.items.filter(i => String(i._stats?.compendiumSource ?? "").includes(UNP_ID)).length;
+    const newMsgs = (before) => [...game.messages].filter(m => !before.has(m.id));
+
+    SETUP.setShopSetupMode(false);
+    {
+      const before = new Set(game.messages.map(m => m.id));
+      const f0 = Number(buyer.system.eurobucks), n0 = unpCount();
+      const r = await CAT.purchaseCatalogItem(buyer, UNP_PACK, UNP_ID);
+      await sleep(700);
+      const reqs = newMsgs(before).filter(m => m.getFlag(SCOPE, "purchaseRequest"));
+      check("setup OFF ⇒ unpriced buy returns reason 'requested'", r?.reason === "requested", r);
+      check("setup OFF ⇒ exactly one request card, flag needsPrice = true",
+        reqs.length === 1 && reqs[0].getFlag(SCOPE, "purchaseRequest").needsPrice === true,
+        reqs.map(m => m.getFlag(SCOPE, "purchaseRequest")?.needsPrice));
+      check("setup OFF ⇒ nothing delivered", unpCount() === n0, { before: n0, now: unpCount() });
+      check("setup OFF ⇒ funds unchanged", Number(buyer.system.eurobucks) === f0, { before: f0, now: buyer.system.eurobucks });
+      for (const m of reqs) await m.delete().catch(() => {});
+    }
+    SETUP.setShopSetupMode(true);
+    {
+      const before = new Set(game.messages.map(m => m.id));
+      const f0 = Number(buyer.system.eurobucks), n0 = unpCount();
+      const r = await CAT.purchaseCatalogItem(buyer, UNP_PACK, UNP_ID);
+      await sleep(700);
+      const fresh = newMsgs(before);
+      check("⭐ setup ON ⇒ unpriced buy returns {ok:true}", r?.ok === true, r);
+      check("⭐ setup ON ⇒ the unpriced item is delivered (+1) with funds unchanged",
+        unpCount() === n0 + 1 && Number(buyer.system.eurobucks) === f0,
+        { itemsBefore: n0, itemsNow: unpCount(), fundsBefore: f0, fundsNow: buyer.system.eurobucks });
+      check("⭐ setup ON ⇒ no request card", fresh.filter(m => m.getFlag(SCOPE, "purchaseRequest")).length === 0,
+        fresh.map(m => m.getFlag(SCOPE, "purchaseRequest")?.needsPrice ?? "-"));
+      check("setup ON ⇒ zero new chat messages", fresh.length === 0, fresh.length);
+      check("setup ON ⇒ no price override was written", (game.settings.get(SCOPE, "shopPriceOverrides") ?? {})[UNP_ID] === undefined,
+        (game.settings.get(SCOPE, "shopPriceOverrides") ?? {})[UNP_ID]);
+    }
+    SETUP.setShopSetupMode(false);
+
+    // Phase 2/3 inputs: a priced armor row for the player's ordinary request, and approvals switched on.
+    const priced = idx.find(r => r.packId === "cyberpunk2020.armor" && !r.unpriced && !r.priceRange && r.cost > 0 && r.cost <= 1500);
+    check("fixture: a priced armor row (≤ 1500eb) for the player's request", !!priced, priced?.name);
+    out.priced = priced ? { packId: priced.packId, id: priced.id, cost: priced.cost } : null;
+    out.prevSource = game.settings.get(SCOPE, "shopBuySource");
+    await game.settings.set(SCOPE, "shopBuySource", "shops");
+
     // --- it does not survive a reload, by construction ---
     SETUP.setShopSetupMode(true);
     check("setup mode is in-memory only (no world/client setting was registered for it)",
@@ -221,7 +278,7 @@ await join(pp, r1.playerUserName ?? "test user 1", "");
 pp.on("pageerror", e => errors.push("player pageerror: " + e.message));
 pp.on("console", m => { if (m.type() === "error") errors.push("player console: " + m.text()); });
 
-const r2 = await pp.evaluate(async ({ playerActorId }) => {
+const r2 = await pp.evaluate(async ({ playerActorId, priced, unp }) => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const waitFor = async (fn, ms = 30000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(120); } return false; };
   const out = { checks: [], fails: [], restoreFunds: null, actorId: null };
@@ -261,29 +318,113 @@ const r2 = await pp.evaluate(async ({ playerActorId }) => {
       Number(buyer.system.eurobucks) === before - 250, { before, now: buyer.system.eurobucks });
 
     await win.close();
+
+    // Two catalog buys that need the GM's approval (shopBuySource = "shops"): one priced, one unpriced.
+    // The GM approves both in phase 3 with setup mode still ON; neither may become free.
+    const f0 = Number(buyer.system.eurobucks);
+    const rq1 = priced ? await CAT.purchaseCatalogItem(buyer, priced.packId, priced.id, { qty: 1 }) : null;
+    const rq2 = unp ? await CAT.purchaseCatalogItem(buyer, unp.packId, unp.id, { qty: 1 }) : null;
+    await sleep(600);
+    check("player's priced catalog buy became a request", rq1?.reason === "requested", rq1);
+    check("player's unpriced catalog buy became a price request", rq2?.reason === "requested", rq2);
+    check("requests charged nothing yet", Number(buyer.system.eurobucks) === f0, { before: f0, now: buyer.system.eurobucks });
+    out.fundsBeforeApproval = Number(buyer.system.eurobucks);
+    out.requesterId = game.user.id;
   } catch (e) {
     check("keeper phase 2 ran without throwing", false, String(e?.stack ?? e));
   }
   return out;
-}, { playerActorId: r1.playerActorId });
+}, { playerActorId: r1.playerActorId, priced: r1.priced ?? null, unp: r1.unp ?? null });
+
+// ── Phase 3: the GM approves the player's two requests by clicking the cards, setup mode still ON ──
+const r3 = await p.evaluate(async ({ playerActorId, priced, unp, requesterId, fundsBeforeApproval }) => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const out = { checks: [], fails: [] };
+  const check = (n, ok, got) => { out.checks.push(`${ok?"  PASS":"  FAIL"}  ${n}${ok?"":"  got="+JSON.stringify(got)}`); if(!ok) out.fails.push(n); };
+  const SCOPE = "cp2020-augmented";
+  const SETUP = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
+  try {
+    check("GM setup mode reads ON while approving", SETUP.isShopSetupMode() === true, SETUP.isShopSetupMode());
+    const buyer = game.actors.get(playerActorId);
+    const pending = () => [...game.messages].filter(m => {
+      const q = m.getFlag(SCOPE, "purchaseRequest");
+      return q && q.status === "pending" && q.requesterId === requesterId && q.buyerId === playerActorId;
+    });
+    const t0 = Date.now();
+    while (pending().length < 2 && Date.now() - t0 < 10000) await sleep(150);
+    const reqs = pending();
+    const pricedReq = reqs.find(m => m.getFlag(SCOPE, "purchaseRequest").itemId === priced?.id);
+    const unpReq = reqs.find(m => m.getFlag(SCOPE, "purchaseRequest").itemId === unp?.id);
+    check("both player requests reached the GM (priced + needsPrice)",
+      !!pricedReq && unpReq?.getFlag(SCOPE, "purchaseRequest").needsPrice === true, reqs.map(m => m.getFlag(SCOPE, "purchaseRequest")));
+    const has = (id) => buyer.items.filter(i => String(i._stats?.compendiumSource ?? "").includes(id)).length;
+    const clickApprove = async (msg, price) => {
+      const sel = `[data-message-id="${msg.id}"] .cp-shop-request-btn[data-action="approve"]`;
+      const t = Date.now();
+      while (!document.querySelector(sel) && Date.now() - t < 10000) await sleep(120);
+      const el = [...document.querySelectorAll(sel)].pop();
+      if (!el) return false;
+      if (price != null) {
+        const inp = el.closest(".cp-shop-request")?.querySelector(".cp-shop-request-price");
+        if (inp) { inp.value = String(price); inp.dispatchEvent(new Event("input", { bubbles: true })); }
+      }
+      el.click();
+      const t1 = Date.now();
+      while (game.messages.get(msg.id)?.getFlag(SCOPE, "purchaseRequest")?.status === "pending" && Date.now() - t1 < 10000) await sleep(120);
+      await sleep(1200);
+      return true;
+    };
+    if (pricedReq) {
+      const n0 = has(priced.id);
+      check("approve control clicked on the priced request", await clickApprove(pricedReq), null);
+      check("priced request status = approved", game.messages.get(pricedReq.id)?.getFlag(SCOPE, "purchaseRequest")?.status === "approved",
+        game.messages.get(pricedReq.id)?.getFlag(SCOPE, "purchaseRequest")?.status);
+      check("⭐ approved request under setup mode delivers the item", has(priced.id) === n0 + 1, { before: n0, now: has(priced.id) });
+      check(`⭐ approved request under setup mode CHARGES the buyer (−${priced.cost})`,
+        Number(buyer.system.eurobucks) === fundsBeforeApproval - priced.cost, { before: fundsBeforeApproval, now: buyer.system.eurobucks });
+    }
+    if (unpReq) {
+      const PRICE = 300;
+      const f0 = Number(buyer.system.eurobucks), n0 = has(unp.id);
+      check("approve control clicked on the needsPrice request (price 300 entered)", await clickApprove(unpReq, PRICE), null);
+      check("needsPrice request status = approved", game.messages.get(unpReq.id)?.getFlag(SCOPE, "purchaseRequest")?.status === "approved",
+        game.messages.get(unpReq.id)?.getFlag(SCOPE, "purchaseRequest")?.status);
+      check("⭐ approved unpriced request under setup mode delivers the item", has(unp.id) === n0 + 1, { before: n0, now: has(unp.id) });
+      check(`⭐ approved unpriced request under setup mode CHARGES the GM-set price (−${PRICE})`,
+        Number(buyer.system.eurobucks) === f0 - PRICE, { before: f0, now: buyer.system.eurobucks });
+    }
+  } catch (e) {
+    check("keeper phase 3 ran without throwing", false, String(e?.stack ?? e));
+  }
+  return out;
+}, { playerActorId: r1.playerActorId, priced: r1.priced ?? null, unp: r1.unp ?? null, requesterId: r2.requesterId ?? null, fundsBeforeApproval: r2.fundsBeforeApproval ?? 0 });
 
 // ── Cleanup, on the GM client ─────────────────────────────────────────────────────────────────────
-await p.evaluate(async ({ probeActorId, shopId, playerActorId }) => {
+await p.evaluate(async ({ probeActorId, shopId, playerActorId, prevSource, prevOverrides }) => {
+  const SCOPE = "cp2020-augmented";
   const SETUP = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
   const SHOPS = await import("/modules/cp2020-augmented/module/shop/shops.js");
   SETUP.setShopSetupMode(false);
+  try { if (prevSource != null) await game.settings.set(SCOPE, "shopBuySource", prevSource); } catch {}
+  try { if (prevOverrides != null) await game.settings.set(SCOPE, "shopPriceOverrides", prevOverrides); } catch {}
+  try {
+    const stray = [...game.messages].filter(m => !window.__pwBefore?.has(m.id)).map(m => m.id);
+    if (window.__pwBefore && stray.length) await ChatMessage.deleteDocuments(stray);
+  } catch {}
   try { await game.actors.get(probeActorId)?.delete(); } catch {}
   try { await game.actors.get(playerActorId)?.delete(); } catch {}
   try { if (shopId) await SHOPS.deleteShop(shopId); } catch {}
-}, { probeActorId: r1.probeActorId, shopId: r1.shopId, playerActorId: r1.playerActorId });
+}, { probeActorId: r1.probeActorId, shopId: r1.shopId, playerActorId: r1.playerActorId, prevSource: r1.prevSource ?? null, prevOverrides: r1.prevOverrides ?? null });
 
 for (const line of r1.checks) console.log(line);
 console.log("  ── player client ──");
 for (const line of r2.checks) console.log(line);
+console.log("  ── GM approves the player's requests (setup mode ON) ──");
+for (const line of r3.checks) console.log(line);
 const consoleFails = errors.length;
 console.log(consoleFails ? `  FAIL  0 console errors  got=${JSON.stringify(errors.slice(0, 6))}` : "  PASS  0 console errors");
-const total = r1.checks.length + r2.checks.length + 1;
-const failed = r1.fails.length + r2.fails.length + (consoleFails ? 1 : 0);
+const total = r1.checks.length + r2.checks.length + r3.checks.length + 1;
+const failed = r1.fails.length + r2.fails.length + r3.fails.length + (consoleFails ? 1 : 0);
 console.log(`\n${total - failed}/${total} passed`);
 await b.close();
 process.exit(failed ? 1 : 0);

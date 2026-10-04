@@ -1,7 +1,7 @@
 import { formulaHasDice } from "../dice.js";
 import { localize, tryLocalize, cappedWoundDamage } from "../utils.js";
 import { canShop } from "../settings.js";
-import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage, renderChatCard } from "../compat.js";
+import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage } from "../compat.js";
 import { correctionFor, applyCorrectionToItemData, markCorrectionApplied } from "../data-corrections.js";
 import { isShopSetupMode } from "../shop/setup-mode.js";
 
@@ -99,16 +99,22 @@ async function rollSurgicalDamage(actor, formula) {
   return { dmg, roll };
 }
 
+const renderDialogTemplate = (path, context) =>
+  (foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate)(path, context);
+
 /**
- * Confirm dialog for an install. Returns { proceed, rollHumanity, applyDamage } or null if cancelled.
- * @param {object} o  { title, item, surgery, partPrice, surgeryCost, showPart }
+ * Confirm dialog for an install. Returns the operator's choices, or null if cancelled:
+ *   { proceed, installNow, paySurgery, rollHumanity, applyDamage }
+ * `paySurgery` is the operator's own answer to "does the patient pay the fee" — unticking it installs
+ * with the fee left unpaid (the box is only offered when there is a fee).
+ * @param {object} o  { title, item, surgery, partPrice, surgeryCost, showPart, partUnpriced }
  */
 async function _confirmInstall(o) {
   const hc = o.item.system?.humanityCost ?? "—";
   const total = (o.showPart ? (Number(o.partPrice) || 0) : 0) + (Number(o.surgeryCost) || 0);
-  const render = foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
-  const content = await render("modules/cp2020-augmented/templates/dialog/cyber-install.hbs", {
+  const content = await renderDialogTemplate("modules/cp2020-augmented/templates/dialog/cyber-install.hbs", {
     showPart: o.showPart,
+    partUnpriced: o.partUnpriced === true,
     partPrice: Number(o.partPrice) || 0,
     surgeryLabel: tryLocalize(o.surgery.label),
     surgeryCost: Number(o.surgeryCost) || 0,
@@ -127,6 +133,7 @@ async function _confirmInstall(o) {
         callback: (ev, btn, dlg) => {
           const r = dlg.element;
           resolve({ proceed: true, installNow: true,
+            paySurgery: r.querySelector('[name="paySurgery"]')?.checked ?? true,
             rollHumanity: r.querySelector('[name="rollHumanity"]')?.checked ?? true,
             applyDamage: r.querySelector('[name="applyDamage"]')?.checked ?? true });
         },
@@ -141,6 +148,11 @@ async function _confirmInstall(o) {
     });
     buttons.push({ action: "cancel", icon: "fas fa-times", label: localize("Cancel"), callback: () => resolve(null) });
     new foundry.applications.api.DialogV2({
+      // The class is what the button-row rules in the stylesheet key on (.cp-cyber-install-dialog); the
+      // width keeps the cost lines and the three option rows on one line each — left to size itself the
+      // window shrank to its narrowest word and wrapped every row.
+      classes: ["cp-cyber-install-dialog"],
+      position: { width: 380 },
       window: { title: o.title },
       content,
       buttons,
@@ -148,6 +160,30 @@ async function _confirmInstall(o) {
       close: () => resolve(null),
     }).render({ force: true });
   });
+}
+
+/**
+ * What the operation will actually cost the patient. A fee they cannot cover is NOT a refusal: whoever
+ * is running the install is shown the shortfall and may go ahead with the fee left unpaid (a favour, a
+ * clinic tab, chrome the character is meant to start play with). It is asked on the client that is
+ * about to take the money, so when a GM approves a request it is the GM who answers.
+ * @param {object} o  { name, fee, available }  `available` = eurobucks left once the part is paid for
+ * @returns {Promise<number|null>} the fee to charge (0 when left unpaid), or null when they backed out
+ */
+async function settleSurgeryFee({ name, fee, available }) {
+  const due = Math.max(0, Number(fee) || 0);
+  const have = Math.max(0, Number(available) || 0);
+  if (due === 0 || due <= have) return due;
+  const content = await renderDialogTemplate("modules/cp2020-augmented/templates/dialog/cyber-surgery-unpaid.hbs",
+    { name, fee: due, available: have });
+  const go = await foundry.applications.api.DialogV2.confirm({
+    window: { title: localize("CyberSurgeryUnpaidTitle") },
+    content,
+    yes: { icon: "fas fa-syringe", label: localize("CyberSurgeryUnpaidGo") },
+    no: { icon: "fas fa-times", label: localize("Cancel") },
+    rejectClose: false,
+  });
+  return go === true ? 0 : null;
 }
 
 /** Post the install summary chat card. */
@@ -182,22 +218,21 @@ export async function installCyberware(actor, item, opts = {}) {
   // GM setup mode waives the FEE and nothing else: the confirm dialog, the Humanity roll, the surgical
   // damage and the summary card all still happen, because installing chrome is a decision the GM wants
   // to see even while they are furnishing (module/shop/setup-mode.js — the user's own amendment).
-  const surgeryCost = (chargeSurgery && !isShopSetupMode()) ? surgery.cost : 0;
+  const listedFee = (chargeSurgery && !isShopSetupMode()) ? surgery.cost : 0;
 
-  let choices = { proceed: true, rollHumanity: true, applyDamage: true };
+  let choices = { proceed: true, paySurgery: true, rollHumanity: true, applyDamage: true };
   if (confirm) {
     choices = await _confirmInstall({
       title: localize("CyberInstallTitle", { item: item.name }),
-      item, surgery, surgeryCost, showPart: false
+      item, surgery, surgeryCost: listedFee, showPart: false
     });
     if (!choices) return false;
   }
 
   const funds = Number(actor.system?.eurobucks) || 0;
-  if (surgeryCost > funds) {
-    ui.notifications?.warn(localize("CyberSurgeryFunds", { cost: surgeryCost, funds }));
-    return false;
-  }
+  const surgeryCost = await settleSurgeryFee({
+    name: item.name, fee: choices.paySurgery === false ? 0 : listedFee, available: funds });
+  if (surgeryCost === null) return false;
   if (surgeryCost > 0) await actor.update({ "system.eurobucks": funds - surgeryCost });
   if (item.system?.equipped !== true) await item.update({ "system.equipped": true });
 
@@ -215,9 +250,14 @@ export async function installCyberware(actor, item, opts = {}) {
  * Buy a cyberware item from the catalog/shop AND install it in one confirmed step (Shopping #14).
  * Charges part cost + surgery cost together, creates the item (equipped), rolls humanity + surgical
  * damage. Refunds on stocking failure.
+ *
+ * Two callers reach this. A buyer acting for themselves gets the confirm dialog here (`confirm`, the
+ * default). A GM approving a buyer's REQUEST passes `confirm: false` with the answers the buyer already
+ * gave on their own client (`install`, `paySurgery`, `rollHumanity`, `applyDamage` — see
+ * `askCyberwareChoice`) and the `requesterId` that marks the purchase as somebody else's.
  * @param {Actor} actor
  * @param {Item|object} source      catalog Item or raw data
- * @param {object} [opts]           { partPrice, priceLabel, confirm=true }
+ * @param {object} [opts]           { partPrice, confirm=true, install, paySurgery, rollHumanity, applyDamage, requesterId }
  * @returns {Promise<boolean>}
  */
 export async function buyAndInstallCyberware(actor, source, opts = {}) {
@@ -225,17 +265,20 @@ export async function buyAndInstallCyberware(actor, source, opts = {}) {
   if (!canShop()) { ui.notifications?.warn(localize("ShopNotAllowed")); return false; }
 
   const { confirm = true } = opts;
-  const { data, partPrice, surgery, surgeryCost } = cyberwareTerms(source, opts.partPrice);
+  const { data, partPrice, surgery, surgeryCost } = cyberwareTerms(source, opts.partPrice, { requesterId: opts.requesterId });
 
-  // Initial affordability is checked against the PART price alone — buy-only must stay reachable even
-  // if the buyer can't afford the surgery; the actual charge is re-validated after the choice.
+  // The PART has to be paid for: buy-only must stay reachable even when the buyer can't afford the
+  // surgery, and the surgery fee is settled on its own below.
   const funds = Number(actor.system?.eurobucks) || 0;
   if (partPrice > funds) {
     ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: data.name ?? "cyberware", cost: partPrice, funds }));
     return false;
   }
 
-  let choices = { proceed: true, installNow: opts.install !== false, rollHumanity: true, applyDamage: true };
+  let choices = {
+    proceed: true, installNow: opts.install !== false, paySurgery: opts.paySurgery !== false,
+    rollHumanity: opts.rollHumanity !== false, applyDamage: opts.applyDamage !== false,
+  };
   if (confirm) {
     choices = await _confirmInstall({
       title: localize("CyberBuyInstallTitle", { item: data.name ?? "cyberware" }),
@@ -244,28 +287,72 @@ export async function buyAndInstallCyberware(actor, source, opts = {}) {
     if (!choices) return false;
   }
   const installNow = choices.installNow !== false && opts.install !== false;
-  const charge = installNow ? partPrice + surgeryCost : partPrice;
+  let fee = 0;
+  if (installNow) {
+    fee = await settleSurgeryFee({
+      name: data.name ?? "cyberware", fee: choices.paySurgery === false ? 0 : surgeryCost, available: funds - partPrice });
+    if (fee === null) return false;
+  }
+  const charge = partPrice + fee;
 
   const item = await chargeAndStockCyberware(actor, data, { charge, installed: installNow });
   if (!item) return false;
   if (!installNow) return postCyberwareBoughtOnly(actor, item, charge);
   return completeCyberwareInstall(actor, item, {
-    surgery, charged: charge, rollHumanity: choices.rollHumanity, applyDamage: choices.applyDamage,
+    surgery, charged: charge, rollHumanity: choices.rollHumanity !== false, applyDamage: choices.applyDamage !== false,
   });
+}
+
+/**
+ * Ask the buyer the install question for a purchase that is about to go to the GM as a REQUEST. It is
+ * asked on the buyer's own client, BEFORE the request is sent, so the person playing the character
+ * decides what is done to it and the GM is left one thing to do: approve or deny. Nothing is charged or
+ * created here; the answers travel on the request and come back through `buyAndInstallCyberware`.
+ * @param {Actor} actor
+ * @param {Item|object} source
+ * @param {object} [o]  { partPrice }  null = the part has no catalog price yet (the GM sets one)
+ * @returns {Promise<{install:boolean, paySurgery:boolean, rollHumanity:boolean, applyDamage:boolean,
+ *   surgeryLabel:string, surgeryCost:number}|null>} null when the buyer cancelled
+ */
+export async function askCyberwareChoice(actor, source, { partPrice = null } = {}) {
+  const unpriced = partPrice == null;
+  const { data, partPrice: price, surgery, surgeryCost } = cyberwareTerms(source, unpriced ? 0 : partPrice, { requesterId: game.user.id });
+  const name = data.name ?? "cyberware";
+  const choices = await _confirmInstall({
+    title: localize("CyberBuyInstallTitle", { item: name }),
+    item: { name: data.name, system: data.system }, surgery, partPrice: price, surgeryCost,
+    showPart: true, partUnpriced: unpriced,
+  });
+  if (!choices) return null;
+  const install = choices.installNow !== false;
+  let paySurgery = install && surgeryCost > 0 && choices.paySurgery !== false;
+  // With a known part price the shortfall is already visible, so it is settled now and the GM sees the
+  // request as it will be carried out. (A part the buyer cannot afford at all is left for the approval
+  // to report; an unpriced part cannot be judged until the GM prices it.)
+  const funds = Number(actor?.system?.eurobucks) || 0;
+  if (paySurgery && !unpriced && price <= funds) {
+    const fee = await settleSurgeryFee({ name, fee: surgeryCost, available: funds - price });
+    if (fee === null) return null;
+    paySurgery = fee > 0;
+  }
+  return {
+    install, paySurgery,
+    rollHumanity: choices.rollHumanity !== false, applyDamage: choices.applyDamage !== false,
+    surgeryLabel: surgery.label, surgeryCost,
+  };
 }
 
 /* ══════════════════════ The shared halves ══════════════════════
  *
- * Everything below is what `buyAndInstallCyberware` above is made of, pulled out so the OTHER route to
- * the same purchase — a player's request, approved by the GM, where the choice belongs to the player
- * and the surgery to the GM (see `offerCyberwareChoice`) — runs the same engine rather than a second
- * reading of it. Split at the two points where the flow can pause for a person: after the terms are
- * known, and after the item exists.
+ * Everything below is what `buyAndInstallCyberware` above is made of.
  */
 
 /** Resolve a catalog document into the terms a buyer has to decide on: the item data to create, what
- *  the part costs, and what the surgery its code names costs and does. */
-export function cyberwareTerms(source, partPriceOverride) {
+ *  the part costs, and what the surgery its code names costs and does.
+ *  `requesterId` marks a purchase made on somebody else's behalf (a player's request the GM is
+ *  approving): GM setup mode never applies to those — the same rule buyItem follows for ordinary goods
+ *  (module/shop/purchase.js, the `setup` line). */
+export function cyberwareTerms(source, partPriceOverride, { requesterId = null } = {}) {
   const data = (source && typeof source.toObject === "function") ? source.toObject() : foundry.utils.deepClone(source ?? {});
   // Shop-bought copy of a base-compendium item: stamp its origin uuid (toObject drops it) AND apply the
   // book corrections up front, so the surgery below prices from the CORRECTED Surgery Code and the created
@@ -278,7 +365,7 @@ export function cyberwareTerms(source, partPriceOverride) {
   // In GM setup mode both halves of the bill go to zero — the part and the surgery — while the terms
   // themselves (the surgery's label, its damage, the Humanity cost) travel unchanged, so every card
   // downstream still shows the GM what the operation actually does.
-  const setup = isShopSetupMode();
+  const setup = isShopSetupMode() && !requesterId;
   const partPrice = setup ? 0 : Math.max(0, Math.round(Number(partPriceOverride ?? data.system?.cost ?? 0)));
   const surgery = getSurgery(data.system?.surgCode);
   return { data, partPrice, surgery, surgeryCost: setup ? 0 : surgery.cost };
@@ -329,206 +416,4 @@ export async function completeCyberwareInstall(actor, item, { surgery, charged =
   await _postInstallSummary(actor, item, { surgery, charged, loss, dmg });
   ui.notifications?.info(localize("CyberInstalled", { item: item.name }));
   return true;
-}
-
-/* ══════════════════════ The approved-request route ══════════════════════
- *
- * A player asks the GM to buy a piece of chrome; the GM approves. The money and the stock are the
- * GM's business and are settled before this point (module/shop/catalog.js), but the two questions
- * left are not the same person's:
- *
- *   • Install it, or just buy the part?  — the BUYER's, because it is their character's Humanity and
- *     their character's wound track. Asked of the GM, a player found out what had been done to them
- *     from the summary card.
- *   • Roll the Humanity loss? Apply the surgical damage?  — the GM's, because those are referee knobs
- *     that exist for tables handling either by hand.
- *
- * So the approval hands a whispered CHOICE card to the requesting player, and picking Install hands a
- * whispered SURGERY card back to the GMs. Nothing is charged until the hop that actually does the
- * thing: buy-only charges the part at the player's click, install charges part plus surgery at the
- * GM's. Funds are re-read at every hop, because between hops is a person deciding.
- *
- * The card idiom is the purchase request's own, verbatim: flags carrying the whole job, a `status`
- * field flipped before the charge so a second click on another client finds it resolved, an in-memory
- * claim so a double-click on THIS client cannot fire twice, and the content re-rendered to a resolved
- * state. Buttons are bound in module/shop/catalog.js's single chat-card pass — these cards carry the
- * `cp-shop-` class prefix its cheap bail looks for, which they earn honestly: they exist only as steps
- * of a shop purchase.
- */
-
-const SCOPE = "cp2020-augmented";
-
-/** Cards being resolved on THIS client — claimed synchronously, before any await. */
-const _resolvingCyberCards = new Set();
-
-/** Re-read the catalog document a card names and rebuild its terms. The cards carry pack/item ids
- *  rather than a copy of the item, so a correction landing between hops is picked up and a card that
- *  outlives its compendium resolves to nothing instead of to stale data. */
-async function _termsFromCard(job) {
-  const doc = await game.packs.get(job.packId)?.getDocument(job.itemId);
-  if (!doc) { ui.notifications?.warn(localize("ShopItemUnavailable")); return null; }
-  return cyberwareTerms(doc, job.partPrice);
-}
-
-/** Flip a card's status flag and re-render its content into the resolved state. */
-async function _closeCyberCard(message, flagKey, template, context) {
-  const content = await renderChatCard(template, context);
-  await message.update({ content, [`flags.${SCOPE}.${flagKey}.status`]: context.status });
-}
-
-/**
- * Hand the buyer the install-or-buy-only choice, whispered. Called by the shop's request resolver in
- * place of the confirm dialog the direct path shows — the direct path is unchanged and still runs its
- * dialog on the client that started it.
- */
-export async function offerCyberwareChoice(buyer, source, { partPrice, packId, itemId, requesterId } = {}) {
-  if (!buyer) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
-  const { data, partPrice: price, surgery, surgeryCost } = cyberwareTerms(source, partPrice);
-  const job = {
-    buyerId: buyer.id, packId, itemId, name: data.name ?? "", partPrice: price,
-    surgeryCost, requesterId: requesterId ?? "", approvedBy: game.user.id, status: "pending",
-  };
-  const context = {
-    pending: true, status: "pending",
-    name: job.name, buyer: buyer.name, partPrice: price,
-    surgeryLabel: tryLocalize(surgery.label), surgeryCost, surgeryDamage: surgery.damage,
-    humanityCost: String(data.system?.humanityCost ?? "—"),
-    total: price + surgeryCost,
-  };
-  const content = await renderChatCard("shop/cyber-choice.hbs", context);
-  const card = {
-    content,
-    whisper: [requesterId, ...ChatMessage.getWhisperRecipients("GM").map(u => u.id)].filter(Boolean),
-    speaker: ChatMessage.getSpeaker({ actor: buyer }),
-    flags: { [SCOPE]: { cyberChoice: job } },
-  };
-  // ⭐ AUTHORED BY THE PLAYER, deliberately, even though a GM is creating it. A chat message's author
-  // is its owner, and the player has to be able to close this card when they answer it — a card the
-  // GM owns would refuse the player's own update and the decision would die on their client. A GM may
-  // create a message under any author (core's own create rule); a player may not, which is exactly why
-  // the reverse card, whispered back to the GMs, is authored by whoever posts it.
-  if (requesterId) card.author = requesterId;
-  await ChatMessage.create(card);
-  return true;
-}
-
-/**
- * The buyer's answer. "buyOnly" ends here — they own the character, so the charge and the item are
- * ordinary local writes. "install" charges nothing and asks the GMs for the surgery.
- * @returns {Promise<boolean>} false when the clicker should be able to try again (funds, a missing
- *   document): the card stays pending and its buttons come back.
- */
-export async function resolveCyberChoice(message, action) {
-  const job = message?.getFlag?.(SCOPE, "cyberChoice");
-  if (!job || job.status !== "pending") return true;
-  // Whispered to the requester and to the GMs; the requester decides, and a GM may decide for them —
-  // the table's own convention when a player is away from the keyboard.
-  if (game.user.id !== job.requesterId && !game.user.isGM) return true;
-  const buyer = game.actors.get(job.buyerId);
-  if (!buyer) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
-  if (_resolvingCyberCards.has(message.id)) return true;
-  _resolvingCyberCards.add(message.id);
-  try {
-    const terms = await _termsFromCard(job);
-    if (!terms) return false;
-    const funds = Number(buyer.system?.eurobucks) || 0;
-
-    if (action === "buyOnly") {
-      if (terms.partPrice > funds) {
-        ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: job.name, cost: terms.partPrice, funds }));
-        return false;
-      }
-      await _closeCyberCard(message, "cyberChoice", "shop/cyber-choice.hbs", {
-        pending: false, status: "boughtOnly", name: job.name, buyer: buyer.name,
-        partPrice: terms.partPrice, resolvedBy: game.user.name,
-      });
-      const item = await chargeAndStockCyberware(buyer, terms.data, { charge: terms.partPrice, installed: false });
-      if (!item) return true;                       // the card is closed; the refund happened inside
-      await postCyberwareBoughtOnly(buyer, item, terms.partPrice);
-      return true;
-    }
-
-    // Install: the money is taken at the GM's hop, so nothing is charged here — but refuse now rather
-    // than send the GM a card for a purchase that cannot be paid for.
-    const total = terms.partPrice + terms.surgeryCost;
-    if (total > funds) {
-      ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: job.name, cost: total, funds }));
-      return false;
-    }
-    await _closeCyberCard(message, "cyberChoice", "shop/cyber-choice.hbs", {
-      pending: false, status: "awaitingSurgery", name: job.name, buyer: buyer.name,
-      partPrice: terms.partPrice, resolvedBy: game.user.name,
-    });
-    await _requestSurgery(buyer, job, terms);
-    return true;
-  } finally {
-    _resolvingCyberCards.delete(message.id);
-  }
-}
-
-/** Whisper the GMs the surgery confirmation, carrying the referee's own two knobs. */
-async function _requestSurgery(buyer, job, terms) {
-  const context = {
-    pending: true, status: "pending",
-    name: job.name, buyer: buyer.name, patient: game.users.get(job.requesterId)?.name ?? "",
-    partPrice: terms.partPrice, surgeryLabel: tryLocalize(terms.surgery.label),
-    surgeryCost: terms.surgeryCost, surgeryDamage: terms.surgery.damage,
-    humanityCost: String(terms.data.system?.humanityCost ?? "—"),
-    total: terms.partPrice + terms.surgeryCost,
-  };
-  const content = await renderChatCard("shop/cyber-surgery.hbs", context);
-  await ChatMessage.create({
-    content,
-    whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-    speaker: ChatMessage.getSpeaker({ actor: buyer }),
-    flags: { [SCOPE]: { cyberSurgery: { ...job, status: "pending" } } },
-  });
-  ui.notifications?.info(localize("CyberSurgeryRequested", { item: job.name }));
-}
-
-/**
- * The GM's answer to the surgery card. Approve charges part + surgery together and runs the whole
- * install; the two checkboxes are read off the card the GM is looking at.
- * @returns {Promise<boolean>} false when the GM should be able to try again.
- */
-export async function resolveCyberSurgery(message, approve, { rollHumanity = true, applyDamage = true } = {}) {
-  if (!game.user.isGM) return true;
-  const job = message?.getFlag?.(SCOPE, "cyberSurgery");
-  if (!job || job.status !== "pending") return true;
-  const buyer = game.actors.get(job.buyerId);
-  if (approve && !buyer) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
-  if (_resolvingCyberCards.has(message.id)) return true;
-  _resolvingCyberCards.add(message.id);
-  try {
-    if (!approve) {
-      await _closeCyberCard(message, "cyberSurgery", "shop/cyber-surgery.hbs", {
-        pending: false, status: "refused", name: job.name, buyer: buyer?.name ?? "", resolvedBy: game.user.name,
-      });
-      const player = game.users.get(job.requesterId);
-      if (player) await ChatMessage.create({
-        whisper: [player.id],
-        content: localize("CyberSurgeryRefusedWhisper", { item: foundry.utils.escapeHTML(job.name ?? "") }),
-      });
-      return true;
-    }
-    const terms = await _termsFromCard(job);
-    if (!terms) return false;
-    const charge = terms.partPrice + terms.surgeryCost;
-    const funds = Number(buyer.system?.eurobucks) || 0;
-    if (charge > funds) {
-      ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: job.name, cost: charge, funds }));
-      return false;
-    }
-    // Close the card BEFORE the charge, for the reason the purchase request flips its status early:
-    // a second GM's click has to find this resolved rather than charge a second time.
-    await _closeCyberCard(message, "cyberSurgery", "shop/cyber-surgery.hbs", {
-      pending: false, status: "done", name: job.name, buyer: buyer.name, resolvedBy: game.user.name,
-    });
-    const item = await chargeAndStockCyberware(buyer, terms.data, { charge, installed: true });
-    if (!item) return true;                         // charge already refunded inside
-    await completeCyberwareInstall(buyer, item, { surgery: terms.surgery, charged: charge, rollHumanity, applyDamage });
-    return true;
-  } finally {
-    _resolvingCyberCards.delete(message.id);
-  }
 }

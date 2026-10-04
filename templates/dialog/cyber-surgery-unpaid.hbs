@@ -1,0 +1,8 @@
+{{!--
+  Shown when the patient cannot cover the surgery fee (settleSurgeryFee in module/cyberware/install.js).
+  Not a refusal: the operator sees the shortfall and may go ahead with the fee left unpaid.
+  i18n via CPLocal; values are auto-escaped by Handlebars.
+--}}
+<div class="cyberpunk cp-cyber-install">
+  <p>{{CPLocal "CyberSurgeryUnpaidBody" item=name cost=fee funds=available}}</p>
+</div>
