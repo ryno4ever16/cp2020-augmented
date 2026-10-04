@@ -110,6 +110,50 @@ const spreadOf = async (buf) => p.evaluate(async (b64) => {
   return Math.round(lum[Math.floor(lum.length * 0.97)] - lum[Math.floor(lum.length * 0.03)]);
 }, buf.toString("base64"));
 
+// ── D. PLACEHOLDER PICTURES ──────────────────────────────────────────────────────────────────────
+// A base-system weapon stores the generic weapon icon. It must SHOW its category glyph on every surface
+// (document, shop row, compendium window list) while its stored picture stays exactly as it was.
+const D = await p.evaluate(async () => {
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+  const tail = s => String(s ?? "").split("/").pop();
+  const out = {};
+  const pack = game.packs.get("cyberpunk2020.submachineguns");
+  const doc = await pack.getDocument("ZPRv9RxGpq4xZfaV");                       // H&K MP5, a core SMG
+  out.doc = { shown: tail(doc.img), stored: doc._source.img, exported: doc.toObject().img };
+  const melee = game.packs.get("cyberpunk2020.melee");
+  const mi = await melee.getIndex({ fields: ["system.attackType", "system.isEdged", "img"] });
+  const kick = mi.find(e => /kick-icon/.test(e.img));
+  out.ownArt = kick ? { shown: tail((await melee.getDocument(kick._id)).img), stored: tail(kick.img) } : null;
+  // a world weapon nobody gave a picture, and one somebody did
+  for (const i of game.items.filter(x => /^__PW__ glyph/.test(x.name))) await i.delete();
+  const plain = await Item.create({ name: "__PW__ glyph plain", type: "weapon", system: { weaponType: "Rifle" } });
+  const custom = await Item.create({ name: "__PW__ glyph custom", type: "weapon", img: "icons/svg/explosion.svg", system: { weaponType: "Rifle" } });
+  out.world = { plainShown: tail(plain.img), plainStored: plain._source.img, customShown: tail(custom.img) };
+  await plain.update({ "system.weaponType": "Pistol" });
+  out.world.afterRetype = tail(plain.img);
+  await plain.delete(); await custom.delete();
+  // the shop's index rows
+  const cat = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+  const all = await cat.getCatalogIndex();
+  const G = await import("/modules/cp2020-augmented/module/item-glyphs.js");
+  const weapons = all.filter(r => r.type === "weapon");
+  out.shop = { weapons: weapons.length, placeholders: weapons.filter(r => G.isPlaceholderIcon(r.img)).map(r => `${r.name} (${r.packId})`).slice(0, 6),
+    placeholderCount: weapons.filter(r => G.isPlaceholderIcon(r.img)).length, mp5Row: tail(all.find(r => r.id === "ZPRv9RxGpq4xZfaV")?.img) };
+  // the compendium window's list
+  await pack.render(true); await sleep(2500);
+  const app = [...foundry.applications.instances.values()].find(a => a.collection === pack);
+  const pics = [...(app?.element?.querySelectorAll("[data-entry-id] img") ?? [])].map(i => tail(i.getAttribute("src")));
+  out.list = { rows: pics.length, distinct: [...new Set(pics)] };
+  await app?.close({ animate: false });
+  return out;
+});
+check("D1 a base weapon document shows its category glyph", D.doc.shown === "mp5.svg", JSON.stringify(D.doc));
+check("D2 its stored and exported picture are untouched", /weapon-icon\.svg$/.test(D.doc.stored) && D.doc.exported === D.doc.stored, JSON.stringify(D.doc));
+check("D3 a weapon with art of its own keeps it", D.ownArt?.shown === D.ownArt?.stored && D.world.customShown === "explosion.svg", JSON.stringify({ ownArt: D.ownArt, custom: D.world.customShown }));
+check("D4 a new weapon with no picture shows its type's glyph and follows a change of type", D.world.plainShown === "fn-fal.svg" && D.world.afterRetype === "pistol-gun.svg" && !/img\/icons\//.test(D.world.plainStored), JSON.stringify(D.world));
+check("D5 no weapon row in the shop index carries a placeholder picture", D.shop.weapons > 300 && D.shop.placeholderCount === 0 && D.shop.mp5Row === "mp5.svg", JSON.stringify(D.shop));
+check("D6 a base compendium window lists its weapons under the category glyph", D.list.rows >= 16 && D.list.distinct.length === 1 && D.list.distinct[0] === "mp5.svg", JSON.stringify(D.list));
+
 const prior = await p.evaluate(() => foundry.utils.deepClone(game.settings.get("core", "uiConfig").colorScheme ?? {}));
 const closeAll = () => p.evaluate(async () => {
   for (const app of [...foundry.applications.instances.values()]) {

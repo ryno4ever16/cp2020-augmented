@@ -85,6 +85,7 @@ import { registerSeamShim } from "./seam-shim.js";
 import { registerGmSessionPrimary, isPrimaryGMSession, gmSessionId, gmSessionPrimaryState } from "./gm-session-primary.js";
 import { registerMartialIdResolutionShim } from "./martial/id-resolution-shim.js";
 import { registerIconNormalizationShim } from "./icon-normalization-shim.js";
+import { registerItemGlyphs } from "./item-glyphs.js";
 import { hostProvides } from "./system-api.js";
 import { deleteFieldUpdate, localize, localizeParam } from "./utils.js";
 
@@ -806,6 +807,10 @@ Hooks.once("ready", function () {
   // load by the ACTIVE GM client only (a world setting is a GM-only write); the prior ownership is
   // snapshotted before the first change and restored when the setting is turned off. Self-guarded.
   wire("scraped-pack visibility", applyScrapedPackVisibility);
+
+  // Compendium windows list index entries, which the weapon data model's read-time picture rule never
+  // sees: give a listed weapon that carries only a placeholder picture its category glyph (item-glyphs.js).
+  wire("compendium glyphs", registerItemGlyphs);
 
   // TEMPORARY seam shim: emit the weaponFired / skillRolled hooks the module relies on, but ONLY while
   // the base system lacks native emission (the seam PRs aren't merged). Self-disengages the instant the

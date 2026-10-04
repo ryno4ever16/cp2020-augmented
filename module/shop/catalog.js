@@ -5,6 +5,7 @@ import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, resolveCategory, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
+import { weaponGlyphForIndexEntry } from "../item-glyphs.js";
 import { shimmerWindow } from "../shimmer.js";
 import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
 import { renderChatCard, getHtmlElement } from "../compat.js";
@@ -231,7 +232,8 @@ async function buildCatalogIndex() {
       // variable-price item (corr.priceRange) the GM override wins instead (the range is a suggestion).
       const pr = resolveCatalogPrice(correctedCost(pack.collection, e._id, e.system?.cost), e._id, overrides, { preferOverride: !!corr?.priceRange });
       items.push({
-        id: e._id, packId: pack.collection, name: corr?.name ?? e.name, img: e.img,
+        // A weapon carrying only a placeholder picture shows its category glyph (item-glyphs.js).
+        id: e._id, packId: pack.collection, name: corr?.name ?? e.name, img: weaponGlyphForIndexEntry(e) ?? e.img,
         cost: pr.price ?? 0, unpriced: !pr.purchasable, priceRange: corr?.priceRange ?? null,
         type, category, sub, supplement, supplementShort: shortSupplement(supplement), canon,
         attackType: e.system?.attackType ?? "", ammoType: e.system?.ammoType ?? "",

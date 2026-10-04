@@ -14,6 +14,7 @@
  */
 
 import { canonicalWeaponEnums } from "./enum-spellings.js";
+import { weaponGlyph } from "../item-glyphs.js";
 
 const WEAPON_AUGMENT_FIELDS = {
   // ⭐ BURST CAPABLE (2026-09-30, source-checked attack-type review): the weapon sheet has carried this box
@@ -118,6 +119,13 @@ export function makeWeaponAugmentedData(SystemModel) {
       super.prepareBaseData?.();
       const fix = canonicalWeaponEnums(this);
       for (const [k, v] of Object.entries(fix)) this[k] = v;
+      // A weapon carrying only a placeholder picture SHOWS its category glyph (item-glyphs.js). The stored
+      // picture is read from the source and never written: this sets the prepared document's `img`, which
+      // is rebuilt from the source on every initialise, so an update, an export or a drag still carries
+      // what is stored, and a weapon given its own art is left alone.
+      const item = this.parent;
+      const glyph = item ? weaponGlyph({ img: item._source?.img, weaponType: this.weaponType, attackType: this.attackType }) : null;
+      if (glyph) item.img = glyph;
     }
   };
 }
