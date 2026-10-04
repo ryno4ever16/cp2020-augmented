@@ -1740,7 +1740,7 @@
     "ShopBulkNone": "Everything currently shown is already stocked.",
     "ShopBuy": "Buy",
     "ShopBuyFailed": "Purchase failed — you were not charged.",
-    "ShopBuyerNeeded": "Select a token or assign yourself a character to buy for.",
+    "ShopBuyerNeeded": "Select a token, click a character's sheet, or assign yourself a character to buy for.",
     "ShopBuyerPick": "Buy as…",
     "ShopBuyerPickHint": "Choose which of your characters is shopping.",
     "ShopCatalogCost": "catalog",

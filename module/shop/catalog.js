@@ -198,6 +198,43 @@ function disarmShopStallSignpost() {
   _stallObserver = null;
 }
 
+/**
+ * "Buy as" by clicking a character sheet. While a shop window is open, a click anywhere on the sheet of
+ * a character the user owns makes that character the buyer in every open shop window — the sheet twin
+ * of the token-selection gesture (see the controlToken hook in registerShopHooks), and the only one
+ * of the two that reaches an actor with no token on the scene.
+ *
+ * One capture-phase listener on the document, armed by the first shop window's render and removed
+ * when the last one closes (the stall signpost's lifecycle): a document-level listener outlives the
+ * window that registered it unless it is taken down by hand. Capture, because sheet controls stop
+ * their own clicks from bubbling. A `click`, not a pointer press: dragging an item off a sheet starts
+ * with a press on it and must not hand the bill to the sheet it was dragged from. The window's own
+ * header buttons (close, the ⋮ menu) are left out for the same reason — closing a sheet is not
+ * choosing it.
+ */
+let _sheetBuyerListener = null;
+function armSheetBuyerGesture() {
+  if (_sheetBuyerListener) return;
+  _sheetBuyerListener = (ev) => {
+    const frame = ev.target?.closest?.(".application, .window-app");
+    if (!frame || ev.target.closest(".window-header button, .window-header .header-control")) return;
+    const app = foundry.applications.instances.get(frame.id)
+      ?? Object.values(ui.windows ?? {}).find(w => w.id === frame.id);
+    const actor = app?.document ?? app?.object;
+    if (actor?.documentName !== "Actor" || !canShopAs(actor) || !actor.isOwner) return;
+    for (const w of foundry.applications.instances.values()) {
+      if (!(w instanceof CatalogBrowser) || w.view === "build") continue;
+      if (w.buyer?.uuid === actor.uuid) continue;   // unchanged → don't disturb an open window
+      w._cpSyncBuyer(actor, { flash: true });
+    }
+  };
+  document.addEventListener("click", _sheetBuyerListener, true);
+}
+function disarmSheetBuyerGesture() {
+  if (_sheetBuyerListener) document.removeEventListener("click", _sheetBuyerListener, true);
+  _sheetBuyerListener = null;
+}
+
 /** Split a "packId.itemId" sourceKey (packId itself contains a dot). */
 function splitSourceKey(sk) {
   const i = String(sk ?? "").lastIndexOf(".");
@@ -996,8 +1033,12 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    *  there is a buyer at all and not on which one — so it is touched only when that flips.
    *
    *  Not patched here, deliberately: the build view has no buyer strip at all, and a home view has no
-   *  rows; both just carry the new buyer into their next real render. */
-  async _cpSyncBuyer(buyer) {
+   *  rows; both just carry the new buyer into their next real render.
+   *
+   *  `flash` is for a change made by a gesture OUTSIDE this window (a token selected, a character
+   *  sheet clicked): the strip lights for a moment so the new payer is noticed. The lit state is a
+   *  class the stylesheet animates, taken off again when the animation ends. */
+  async _cpSyncBuyer(buyer, { flash = false } = {}) {
     const had = !!this.buyer;
     this.buyer = buyer ?? null;
     const root = this.element;
@@ -1013,6 +1054,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         buyerFunds: this.buyer ? (Number(this.buyer.system?.eurobucks) || 0) : 0,
       });
       this._activateBuyerPick(root);
+      // Toggled both ways: a strip emptied while an earlier change is still lit goes dark at once.
+      const lit = flash && !!this.buyer;
+      strip.classList.toggle("cp-buyer-changed", lit);
+      if (lit) strip.addEventListener("animationend", () => strip.classList.remove("cp-buyer-changed"), { once: true });
     }
 
     if (had !== !!this.buyer) {
@@ -1028,6 +1073,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    *  and keep the window header title in sync with the dynamic, view-based `get title()`. */
   _onRender(context, options) {
     super._onRender?.(context, options);
+    armSheetBuyerGesture();
     armShopStallSignpost();
     const titleEl = this.element?.querySelector?.(".window-title");
     if (titleEl) titleEl.textContent = this.title;
@@ -1048,11 +1094,12 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     }
   }
 
-  /** The signpost listens only while a shop window exists — the last one closing stands it down. */
+  /** The signpost and the sheet-click buyer gesture listen only while a shop window exists — the last
+   *  one closing stands both down. */
   async _preClose(options) {
     await super._preClose?.(options);
     const others = [...foundry.applications.instances.values()].some(w => w !== this && w instanceof CatalogBrowser);
-    if (!others) disarmShopStallSignpost();
+    if (!others) { disarmShopStallSignpost(); disarmSheetBuyerGesture(); }
   }
 
   // ── Listeners ────────────────────────────────────────────────────────────────
@@ -2408,7 +2455,7 @@ export function registerShopHooks() {
         if (w.buyer?.id === buyer?.id) continue;   // unchanged → don't disturb an open window
         // Patch the buyer in place. A render here is what made token selection feel broken with a big
         // catalog open — see _cpSyncBuyer. Scroll is untouched because nothing is replaced.
-        w._cpSyncBuyer(buyer);
+        w._cpSyncBuyer(buyer, { flash: true });
       }
     }, 50);
   });
