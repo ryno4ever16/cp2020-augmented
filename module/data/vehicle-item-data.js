@@ -131,6 +131,9 @@ export class CyberpunkVehicleWeaponData extends CyberpunkBaseItemData {
       area:        stringField("torso"),   // head|rArm|lArm|rLeg|lLeg|torso (when mounted on an ACPA)
       sdp:         numberField(0),          // structural points (0 = no per-weapon tracking → frame)
       sdpDamage:   numberField(0),
+      // The weapon's own printed SP (the bracketed figure in each catalog row). Without the field the
+      // value in the pack source was dropped on read. Stored and shown only; no damage code reads it yet.
+      sp:          numberField(0),
       destroyed:   booleanField(false),
       // ACPA armed-melee weapons add the chassis Fist strike (round(STR/9) d10) on top of their own
       // dice (MM p.70 "+FIST"); the resolver adds it + its Penetration when an ACPA wields the weapon.

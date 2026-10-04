@@ -478,8 +478,7 @@ try {
         // Maximum Metal p.71, "Heavy MGs & Rifles": the 14.5mm row reads Space 2, SP [25], SDP 35 (read by RYNO
         // off the page 2026-10-04; the text layer agrees). The entry held 3 / 20 / 15, the 4mm Railgun's row.
         { pack: "cp2020-augmented.vehicle-weapons", id: "B1cLAziYZ2g2goxe", name: "14.5mm Heavy MG", field: "space", want: 2, cite: "Maximum Metal p.71" },
-        // (No pin on the row's SP [25]: the vehicle-weapon model declares no `sp` field, so the figure is
-        // kept in the pack source and the catalog but is not readable from a document.)
+        { pack: "cp2020-augmented.vehicle-weapons", id: "B1cLAziYZ2g2goxe", name: "14.5mm Heavy MG", field: "sp", want: 25, cite: "Maximum Metal p.71" },
         { pack: "cp2020-augmented.vehicle-weapons", id: "B1cLAziYZ2g2goxe", name: "14.5mm Heavy MG", field: "sdp", want: 35, cite: "Maximum Metal p.71" },
         // Armor whose printed protection the import never stored (found 2026-10-04): the helmet and the
         // five spacesuits held none at all, the other three held it on the torso only. Every figure was read

@@ -1090,6 +1090,7 @@
       "ScatterDiceTip": "Scatter-pack munition dice (MM p.72): XD6 rolled per hit target for how many munitions strike (applied as multiple rounds). 0 = not a scatter-pack.",
       "ScatterDice": "Scatter dice (XD6)",
       "WSpacesTip": "Spaces the weapon occupies (vehicle construction).",
+      "WSPTip": "The weapon's own Stopping Power, the bracketed figure in its catalog row (Maximum Metal).",
       "ShellVariantsHeader": "Shell Variants",
       "ShellVariantsHint": "Offered when firing. The warhead drives the effect: HEAT (shaped charge, halved by composite), WP (3D6 burn), Cluster (×3 burst, Pen 4), Chemical (gas cloud, no Pen). Leave empty for a plain HE round.",
       "ShellNamePlaceholder": "Name",
