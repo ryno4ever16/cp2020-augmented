@@ -271,9 +271,12 @@ function isUnarmedTechnique(it) {
 
 export function getCatalogIndex() {
   if (!_catalogIndexPromise) {
-    _catalogIndexPromise = buildCatalogIndex()
-      .then(all => { _catalogIndexBuilt = true; return all; })
-      .catch(e => { _catalogIndexPromise = null; throw e; });
+    // Each settle checks it is still THE build: a cache cleared mid-build must not have the stale
+    // build mark the new one ready (or clear the new one's promise when it fails).
+    const build = buildCatalogIndex()
+      .then(all => { if (_catalogIndexPromise === build) _catalogIndexBuilt = true; return all; })
+      .catch(e => { if (_catalogIndexPromise === build) _catalogIndexPromise = null; throw e; });
+    _catalogIndexPromise = build;
   }
   return _catalogIndexPromise;
 }
@@ -281,6 +284,22 @@ export function getCatalogIndex() {
  *  panel without awaiting (awaiting is what would hold the whole window closed on the first open). */
 export function catalogIndexReady() { return _catalogIndexBuilt; }
 export function clearCatalogIndexCache() { _catalogIndexPromise = null; _catalogIndexBuilt = false; }
+
+/**
+ * A GM price override was saved or cleared — the `shopPriceOverrides` setting's onChange, which runs
+ * on every connected client (module/settings.js).
+ *
+ * The index resolves each row's price once, when it is built, and is then kept for the session; so an
+ * approved price request charged the new price while every open catalog went on showing "GM-priced"
+ * until a reload. Dropping the index and re-rendering the open shop windows rebuilds it against the
+ * new map (the windows show their loading panel for the length of that build, then the rows).
+ */
+export function refreshCatalogPrices() {
+  clearCatalogIndexCache();
+  for (const w of foundry.applications.instances.values()) {
+    if (w instanceof CatalogBrowser && w.rendered) w.render();
+  }
+}
 
 /** key → index row, for resolving a shop's sourceKeys to catalog entries. */
 function indexByKey(all) { const m = new Map(); for (const it of all) m.set(it.key, it); return m; }
@@ -1012,6 +1031,11 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     const titleEl = this.element?.querySelector?.(".window-title");
     if (titleEl) titleEl.textContent = this.title;
     if (this.element) this.activateListeners(this.element);
+    // The index build can land while THIS loading-panel render is still in flight: `_awaitCatalogIndex`
+    // then finds the window not yet `rendered`, skips its re-render, and the panel would stay up for
+    // good. A price change rebuilds the index (refreshCatalogPrices), which made that race a routine
+    // one, so the render that painted the panel checks once more on its way out.
+    if (context?.catalogLoading && catalogIndexReady()) this.render();
     // Typing the first character on the landing page swaps the whole pane, which takes the focus off
     // the box the person is typing into. Put it back, with the caret at the end, so the second
     // character lands where the first one did.

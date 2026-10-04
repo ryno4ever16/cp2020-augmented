@@ -642,7 +642,17 @@ export function registerAugmentedSettings() {
   // prefers a valid compendium cost, so an override goes dead the instant real data appears (the value
   // is fixed upstream / our data PR lands). Same mechanism the variable-price items (cybermodems/decks)
   // use. Not shown in the menu — written via the catalog's price-request flow.
-  game.settings.register(SCOPE, "shopPriceOverrides", { scope: "world", config: false, type: Object, default: {} });
+  // onChange runs on every client: the catalog index caches each row's resolved price, so it is dropped
+  // and the open shop windows redrawn (catalog.js refreshCatalogPrices). Imported on demand because
+  // catalog.js itself imports this file.
+  game.settings.register(SCOPE, "shopPriceOverrides", {
+    scope: "world", config: false, type: Object, default: {},
+    onChange: () => {
+      import("./shop/catalog.js")
+        .then(({ refreshCatalogPrices }) => refreshCatalogPrices())
+        .catch(e => console.warn(`${SCOPE} | shop price refresh failed`, e));
+    }
+  });
 
   // Per-user: show the item source/supplement badge in the shop (default on; each player can hide).
   game.settings.register(SCOPE, "shopShowSource", {
