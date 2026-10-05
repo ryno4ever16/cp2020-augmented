@@ -22,19 +22,24 @@
     {{> (template "fields/number") label="HumanityLoss" edit="system.humanityLoss" readOnly=true extraClasses="cyberware-humanity-locked"}}
   {{/if}}
 
-  {{!-- Install (Surgery) button (our net-new): only on actor-owned cyberware. Handler = _cpActivateCyberwareInstall. --}}
+  {{!-- Install (Surgery) button (our net-new): only on actor-owned cyberware. Handler = _cpActivateCyberwareInstall.
+        A chip is slotted, not implanted (cw.isChip): same control, worded for what it does — no surgery. --}}
   {{#if item.isEmbedded}}
   {{#if system.equipped}}
   <div class="field inactive">
-    <label>{{CPLocal "CyberInstall"}}</label>
+    <label>{{#if cw.isChip}}{{CPLocal "ChipSlot"}}{{else}}{{CPLocal "CyberInstall"}}{{/if}}</label>
     <span class="flex-pad"></span>
-    <span>{{CPLocal "CyberInstalledLabel"}}</span>
+    <span>{{#if cw.isChip}}{{CPLocal "ChipSlotted"}}{{else}}{{CPLocal "CyberInstalledLabel"}}{{/if}}</span>
   </div>
   {{else}}
   <div class="field">
-    <label>{{CPLocal "CyberInstall"}}</label>
+    <label>{{#if cw.isChip}}{{CPLocal "ChipSlot"}}{{else}}{{CPLocal "CyberInstall"}}{{/if}}</label>
     <span class="flex-pad"></span>
+    {{#if cw.isChip}}
+    <button type="button" class="cyber-install" title="{{CPLocal "ChipSlotTip"}}">{{CPLocal "ChipSlot"}}</button>
+    {{else}}
     <button type="button" class="cyber-install" title="{{CPLocal "CyberInstallTip"}}">🔧 {{CPLocal "CyberInstall"}}</button>
+    {{/if}}
   </div>
   {{/if}}
   {{/if}}

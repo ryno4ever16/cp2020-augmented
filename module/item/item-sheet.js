@@ -2,7 +2,7 @@ import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, conceal
 import { canBuyAmmo, applyAmmoModifierUpdate } from "../dialog/buy-ammo.js";
 import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
-import { beginCyberwareInstall, wasInstalledHere } from "../cyberware/install.js";
+import { beginCyberwareInstall, wasInstalledHere, isSlottedChip } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, localizeParam, cwHasType, getSkillIndex, pickCwType } from "../utils.js";
 import { MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { VISION_DEVICE_MODES } from "../mech/vision.js";
@@ -595,6 +595,8 @@ async _prepareCyberware(sheet) {
     }
   };
   sheet.cw.typeLabels = sheet.cw.types.map(mapKeyToLoc);
+  // A chip is slotted, not implanted — the settings part words its install control accordingly.
+  sheet.cw.isChip = isSlottedChip(this.item);
 
   // Ensure Module exists for bindings
   if (!this.item.system.Module) {
@@ -2227,6 +2229,14 @@ async _prepareCyberware(sheet) {
 
       const actor = this.item?.actor;
       if (!actor) { ui.notifications?.warn(localize("ShopNoActor")); return; }
+      // A chip is slotted, not implanted (install.js isSlottedChip): it goes in with no surgery and no
+      // prompt, the same write a chip dropped on the actor sheet's chip slots gets.
+      if (isSlottedChip(this.item)) {
+        await this.item.update({ "system.equipped": true, "system.CyberWorkType.ChipActive": true });
+        if (typeof this._cp_syncChipLevelsToSkills === "function") await this._cp_syncChipLevelsToSkills();
+        if (typeof this._cp_syncActiveFlagsToSkills === "function") await this._cp_syncActiveFlagsToSkills();
+        return;
+      }
       // Chrome that has been in this body before goes back in without a second surgery; a first install
       // is the shared install flow (the install dialog, and the GM's approval when approvals are on).
       if (wasInstalledHere(this.item) && this.item.system?.equipped !== true) {

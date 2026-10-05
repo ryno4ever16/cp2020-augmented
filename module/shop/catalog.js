@@ -1,6 +1,6 @@
 import { buyItem, FASHION_STYLES, styleMultOf, resolveCatalogPrice, isValidPrice } from "./purchase.js";
 import { correctionFor, correctedCost } from "../data-corrections.js";
-import { buyAndInstallCyberware, askCyberwareChoice, resolveInstallRequest } from "../cyberware/install.js";
+import { buyAndInstallCyberware, askCyberwareChoice, resolveInstallRequest, isSlottedChip } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, resolveCategory, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
@@ -1901,6 +1901,9 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   const doc = await game.packs.get(packId)?.getDocument(itemId);
   if (!doc) return { ok: false, reason: "noItem" };
   const isCyberware = doc.type === "cyberware";
+  // The install question is for chrome that goes in through a surgery. A chip is slotted, not implanted
+  // (install.js isSlottedChip), so its buyer is asked nothing and its request carries no install answers.
+  const asksInstall = isCyberware && !isSlottedChip(doc);
   // Price precedence: compendium cost → GM override → unpurchasable. An item the base leaves unpriced
   // is not free to a customer — route it (for ANYONE, GM included) through the price-request flow so the
   // GM sets a price first; that price is saved as a self-disengaging override (re-runs here once set).
@@ -1914,8 +1917,8 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   if (!pr.purchasable && !setupFree) {
     // Cyberware: the buyer answers the install question on their own client BEFORE the request goes
     // out, so the GM is asked one thing — approve or deny (module/cyberware/install.js askCyberwareChoice).
-    const choice = isCyberware ? await askCyberwareChoice(buyer, doc, { partPrice: null }) : null;
-    if (isCyberware && !choice) return { ok: false, reason: "cancelled" };
+    const choice = asksInstall ? await askCyberwareChoice(buyer, doc, { partPrice: null }) : null;
+    if (asksInstall && !choice) return { ok: false, reason: "cancelled" };
     await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, styleMult, styleLabel, needsPrice: true, cyber: choice, shop });
     return { ok: false, reason: "requested" };
   }
@@ -1926,8 +1929,8 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   // purchaseShopItem and are unaffected; a GM buying here is unaffected.) A variable-price item's
   // request carries the book range so the GM can set the final price right on the card.
   if (!game.user.isGM && shopBuySource() === "shops") {
-    const choice = isCyberware ? await askCyberwareChoice(buyer, doc, { partPrice: unitPrice }) : null;
-    if (isCyberware && !choice) return { ok: false, reason: "cancelled" };
+    const choice = asksInstall ? await askCyberwareChoice(buyer, doc, { partPrice: unitPrice }) : null;
+    if (asksInstall && !choice) return { ok: false, reason: "cancelled" };
     await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel, priceRange: corr?.priceRange ?? null, cyber: choice, shop });
     return { ok: false, reason: "requested" };
   }
@@ -2229,15 +2232,17 @@ export async function purchaseByDrop(buyer, { sourceKey, shopId = null, ammo = n
     unitPrice = pr.purchasable ? pr.price : 0;
   }
 
-  // Cyberware: straight through (buyAndInstallCyberware shows its own surgery/Humanity confirm).
-  if (doc.type === "cyberware") {
+  // Cyberware: straight through (buyAndInstallCyberware shows its own surgery/Humanity confirm). A chip
+  // has no install dialog (install.js isSlottedChip), so it takes the ordinary confirm — one chip a buy.
+  const chip = doc.type === "cyberware" && isSlottedChip(doc);
+  if (doc.type === "cyberware" && !chip) {
     if (shopId) await purchaseShopItem(buyer, shopId, sourceKey, { qty: 1 });
     else await purchaseCatalogItem(buyer, packId, itemId, { qty: 1, styleMult, styleLabel });
     return;
   }
   const isService = svc === "oneoff" || svc === "recurring";
   const qty = await confirmPurchaseDialog({
-    name: doc.name, unitPrice, buyerName: buyer.name, isService, allowQty: !isService, free: isShopSetupMode() });
+    name: doc.name, unitPrice, buyerName: buyer.name, isService, allowQty: !isService && !chip, free: isShopSetupMode() });
   if (qty == null) return;
   if (shopId) await purchaseShopItem(buyer, shopId, sourceKey, { qty });
   else await purchaseCatalogItem(buyer, packId, itemId, { qty, styleMult, styleLabel });

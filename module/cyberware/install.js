@@ -1,5 +1,5 @@
 import { formulaHasDice } from "../dice.js";
-import { localize, tryLocalize, cappedWoundDamage, deleteFieldUpdate } from "../utils.js";
+import { localize, tryLocalize, cappedWoundDamage, deleteFieldUpdate, cwHasType } from "../utils.js";
 import { canShop, shopBuySource } from "../settings.js";
 import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage, renderChatCard } from "../compat.js";
 import { correctionFor, applyCorrectionToItemData, markCorrectionApplied } from "../data-corrections.js";
@@ -29,6 +29,23 @@ export function wasInstalledHere(item) {
   if (stamp && owner && stamp === owner) return true;
   if (item.system?.equipped === true) return true;
   return (Number(item.system?.humanityLoss) || 0) > 0;
+}
+
+/**
+ * A chip is SLOTTED, not implanted: it goes into an installed chipware socket and comes out again at
+ * will, so it is never a surgery — no install dialog, no fee, no Humanity roll, no GM approval, at the
+ * counter or on the sheet (user ruling 2026-10-05). Keyed on the mark the sheet's own chip slots read
+ * (CyberWorkType "Chip"), so the hardware filed beside the chips — the socket itself, a moddy rack, a
+ * chip lock — is still an implant and still goes in through the install flow. PURE.
+ * @param {Item|object} item  a cyberware item, or raw item data
+ */
+export function isSlottedChip(item) {
+  return cwHasType(item, "Chip");
+}
+
+/** Does putting `item` into the body here call for the install flow? PURE. */
+export function needsInstallSurgery(item) {
+  return !isSlottedChip(item) && !wasInstalledHere(item);
 }
 
 /** The update that stamps `item` as installed in `actor`. */
@@ -310,7 +327,11 @@ export async function buyAndInstallCyberware(actor, source, opts = {}) {
     proceed: true, installNow: opts.install !== false, paySurgery: opts.paySurgery !== false,
     rollHumanity: opts.rollHumanity !== false, applyDamage: opts.applyDamage !== false,
   };
-  if (confirm) {
+  // A chip is bought like any other goods and slotted later from the sheet: nothing to ask, nothing
+  // to install here (see isSlottedChip).
+  const chip = isSlottedChip(data);
+  if (chip) choices = { proceed: true, installNow: false };
+  else if (confirm) {
     choices = await _confirmInstall({
       title: localize("CyberBuyInstallTitle", { item: data.name ?? "cyberware" }),
       item: { name: data.name, system: data.system }, surgery, partPrice, surgeryCost, showPart: true
@@ -328,6 +349,7 @@ export async function buyAndInstallCyberware(actor, source, opts = {}) {
 
   const item = await chargeAndStockCyberware(actor, data, { charge, installed: installNow });
   if (!item) return false;
+  if (chip) return postChipBought(actor, item, charge);
   if (!installNow) return postCyberwareBoughtOnly(actor, item, charge);
   return completeCyberwareInstall(actor, item, {
     surgery, charged: charge, rollHumanity: choices.rollHumanity !== false, applyDamage: choices.applyDamage !== false,
@@ -442,6 +464,17 @@ export async function postCyberwareBoughtOnly(actor, item, charged) {
   return true;
 }
 
+/** A chip bought at the counter: it sits with the character's spare chrome until it is slotted. */
+async function postChipBought(actor, item, charged) {
+  const speaker = ChatMessage.getSpeaker(actor ? { actor } : {});
+  await createCyberpunkChatMessage({
+    speaker,
+    content: localize("ChipBought", { actor: actor?.name ?? game.user.name, item: item.name, cost: charged })
+  }, { messageMode: getPublicMessageMode() });
+  ui.notifications?.info(localize("ChipBoughtInfo", { item: item.name }));
+  return true;
+}
+
 /** The surgery itself, on an item that already exists and is already paid for. */
 export async function completeCyberwareInstall(actor, item, { surgery, charged = 0, rollHumanity = true, applyDamage = true } = {}) {
   let loss = 0, dmg = 0;
@@ -489,6 +522,8 @@ export function pendingInstallRequest(item) {
  */
 export async function beginCyberwareInstall(actor, item, { placement = null } = {}) {
   if (!actor || !item || item.type !== "cyberware") return false;
+  // Never a surgery (see isSlottedChip): the sheets slot a chip themselves and do not come here.
+  if (isSlottedChip(item)) return false;
   if (item.system?.equipped === true) {
     ui.notifications?.warn(localize("CyberAlreadyInstalled", { item: item.name }));
     return false;

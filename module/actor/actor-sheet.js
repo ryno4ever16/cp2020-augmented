@@ -23,7 +23,7 @@ import { hasLoadout, deactivateLoadout, loadoutOptionsOf } from "../mech/loadout
 import { getAutoLayerOrder, getArmorHardness, LAYER_LAW } from "../combat/armor-layers.js";
 import { layerEvPenalty } from "../combat/book-legality.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
-import { beginCyberwareInstall, wasInstalledHere } from "../cyberware/install.js";
+import { beginCyberwareInstall, needsInstallSurgery } from "../cyberware/install.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
 import { ipDisplayForActor, levelUpSkill, toggleSkillLock, canEditSkillLevels } from "../ip/ip.js";
 import { shoppingEnabled, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
@@ -3624,7 +3624,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         }
         // An option's first install is a surgery of its own (the install flow carries this nesting
         // through to wherever it completes); one that has been in this body before just goes back in.
-        if (!wasInstalledHere(item)) {
+        // A chip going into its socket is never a surgery (install.js isSlottedChip).
+        if (needsInstallSurgery(item)) {
           await beginCyberwareInstall(this.actor, item, { placement: { updates: nestUpdate, severFlesh: false } });
           return this.render(true);
         }
@@ -3736,7 +3737,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // Chrome going into this body for the first time is a surgery: the install flow asks (and, when
     // approvals are on, the GM approves) and then applies exactly this placement, flesh sever included.
     // Chrome that has been in this body before goes straight back in.
-    if (!wasInstalledHere(item)) {
+    if (needsInstallSurgery(item)) {
       await beginCyberwareInstall(this.actor, item, { placement: { updates, severFlesh: true } });
       return this.render(true);
     }
