@@ -4,7 +4,8 @@
  *   §2 a generated caliber row is a drag source like every other row: the drag payload carries the
  *      caliber + the load and box count the row shows; a REAL drag onto a character sheet opens the
  *      drop confirm at that box count and per-box price; Cancel buys nothing; Buy stocks and bills the
- *      SHEET's actor (not the strip's buyer); a second drop stacks; setup mode waives the bill
+ *      SHEET's actor (not the strip's buyer); a second drop stacks; setup mode waives the bill and the
+ *      confirm says so (for a caliber row and for an ordinary item row)
  *   §3 a click on a character sheet makes its actor the buyer (strip repainted + lit); a second sheet
  *      takes over; an item sheet and the sheet's own close button do not; the listener is armed once
  *      and taken down when the last shop window closes; token selection lights the strip too
@@ -78,9 +79,10 @@ async function installHelpers(page) {
 
 /** REAL drag: the caliber row's name cell onto a sheet's content. Resolves to the confirm it opened
  *  ({qty, text, label}) or null when none appeared. */
-async function dragRowToSheet(page, caliber, sheetId, waitMs = 6000) {
+const dragRowToSheet = (page, caliber, sheetId, waitMs = 6000) => dragSelToSheet(page, `.cp-catalog-row[data-ammo-caliber="${caliber}"]`, sheetId, waitMs);
+async function dragSelToSheet(page, rowSelector, sheetId, waitMs = 6000) {
   await page.evaluate((id) => foundry.applications.instances.get(id)?.bringToFront?.(), sheetId);
-  const row = page.locator(`.cp-catalog-row[data-ammo-caliber="${caliber}"]`).first();
+  const row = page.locator(rowSelector).first();
   const target = page.locator(`[id="${sheetId}"] .window-content`);
   await row.dragTo(target, { sourcePosition: { x: 70, y: 12 }, targetPosition: { x: 220, y: 320 } }).catch(() => {});
   return page.evaluate(async (waitMs) => {
@@ -264,7 +266,8 @@ try {
 
   await gm.evaluate(() => window.__pw.SETUP.setShopSetupMode(true));
   d = await dragRowToSheet(gm, R.caliber, R.sheetA);
-  check("setup mode: the confirm states the waived bill (0eb a box)", !!d && d.text.includes("0eb a box") && !d.text.includes(`${R.price}eb a box`), d?.text);
+  check("setup mode: the confirm says nothing is charged — no price, no charge clause",
+    !!d && /at no charge/i.test(d.text) && /setup mode/i.test(d.text) && !/eb a box/.test(d.text) && !/and charge/.test(d.text) && d.text.includes(`${R.boxSize} rounds a box`) && d.text.includes("__PW__Gest A"), d?.text);
   await pressConfirm(gm, "buy");
   a = await actorState(gm, S.A);
   check("setup mode: stocked, funds untouched", a.qty === 5 * R.boxSize && a.funds === 5000 - 4 * R.price, a);
@@ -273,12 +276,29 @@ try {
   const other = await gm.evaluate(async () => {
     const { shopWins, intoRows } = window.__pw; const w = shopWins()[0];
     await intoRows(w, "Armor", '.cp-catalog-row[data-source-key]:not([data-source-key=""])');
-    const row = w.element.querySelector('.cp-catalog-row[data-source-key]:not([data-source-key=""])');
+    const row = [...w.element.querySelectorAll('.cp-catalog-row[data-source-key]:not([data-source-key=""])')]
+      .find(r => Number(r.querySelector(".cp-cat-price b")?.textContent) > 0);
     const dt = new DataTransfer(); row.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
     let p = null; try { p = JSON.parse(dt.getData("text/plain")); } catch { /* none */ }
-    return { payload: p, key: row.dataset.sourceKey };
+    return { payload: p, key: row.dataset.sourceKey, name: row.dataset.name, price: Number(row.querySelector(".cp-cat-price b").textContent) };
   });
   check("a compendium row's payload is unchanged: its source key, no caliber block", other.payload?.sourceKey === other.key && !!other.key && !("ammo" in (other.payload ?? {})), other);
+
+  // The same confirm for an ordinary item row: worded for a charge normally, and for none in setup mode.
+  const itemRow = `.cp-catalog-row[data-source-key="${other.key}"]`;
+  const held = (page, id, name) => page.evaluate(({ id, name }) => { const a = game.actors.get(id); return { funds: Number(a.system.eurobucks), n: a.items.filter(i => i.name === name).length }; }, { id, name });
+  d = await dragSelToSheet(gm, itemRow, R.sheetA);
+  check("item row, normally: the confirm names the price each and the charge", !!d && d.text.includes(`${other.price}eb each and charge __PW__Gest A`), d?.text);
+  await pressConfirm(gm, "cancel");
+  const h0 = await held(gm, S.A, other.name);
+  await gm.evaluate(() => window.__pw.SETUP.setShopSetupMode(true));
+  d = await dragSelToSheet(gm, itemRow, R.sheetA);
+  check("item row, setup mode: the confirm says nothing is charged — no price, no charge clause",
+    !!d && /at no charge/i.test(d.text) && /setup mode/i.test(d.text) && !/eb each/.test(d.text) && !/and charge/.test(d.text) && d.text.includes("__PW__Gest A"), d?.text);
+  await pressConfirm(gm, "buy");
+  const h1 = await held(gm, S.A, other.name);
+  check("item row, setup mode: delivered, funds untouched", h1.n === h0.n + 1 && h1.funds === h0.funds && h0.n === 0, { h0, h1 });
+  await gm.evaluate(() => window.__pw.SETUP.setShopSetupMode(false));
 
   /* ─────────────────────────── §3 sheet click = buy as ─────────────────────────── */
   console.log("\n§3 a click on a character sheet picks the buyer");

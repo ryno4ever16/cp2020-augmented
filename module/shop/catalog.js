@@ -2156,10 +2156,13 @@ async function resolvePurchaseRequest(message, approve, price) {
 
 /** A small Buy/Cancel confirm for drag-to-buy. Resolves to the chosen qty, or null on cancel.
  *  `ammoRounds` (rounds per box) marks an ammunition purchase: the sentence prices it per BOX and the
- *  quantity field counts boxes. `qty` is where the quantity field starts. */
-async function confirmPurchaseDialog({ name, unitPrice, buyerName, isService, allowQty, ammoRounds = 0, qty = 1 }) {
-  const key = ammoRounds ? "CYBERPUNK.ShopDropConfirmAmmo"
+ *  quantity field counts boxes. `qty` is where the quantity field starts.
+ *  `free` = the GM's setup mode, where nothing is charged: the sentence says so instead of naming a
+ *  price and a charge that will not happen (each kind has its own "…Setup" wording). */
+async function confirmPurchaseDialog({ name, unitPrice, buyerName, isService, allowQty, ammoRounds = 0, qty = 1, free = false }) {
+  const kind = ammoRounds ? "CYBERPUNK.ShopDropConfirmAmmo"
     : isService ? "CYBERPUNK.ShopDropConfirmService" : "CYBERPUNK.ShopDropConfirmItem";
+  const key = free ? `${kind}Setup` : kind;
   const msg = game.i18n.format(key,
     { name: foundry.utils.escapeHTML(name), price: unitPrice, buyer: foundry.utils.escapeHTML(buyerName), rounds: ammoRounds });
   const content = await renderChatCard("shop/purchase-confirm.hbs", { msg, allowQty, qty, ammo: !!ammoRounds });
@@ -2233,7 +2236,8 @@ export async function purchaseByDrop(buyer, { sourceKey, shopId = null, ammo = n
     return;
   }
   const isService = svc === "oneoff" || svc === "recurring";
-  const qty = await confirmPurchaseDialog({ name: doc.name, unitPrice, buyerName: buyer.name, isService, allowQty: !isService });
+  const qty = await confirmPurchaseDialog({
+    name: doc.name, unitPrice, buyerName: buyer.name, isService, allowQty: !isService, free: isShopSetupMode() });
   if (qty == null) return;
   if (shopId) await purchaseShopItem(buyer, shopId, sourceKey, { qty });
   else await purchaseCatalogItem(buyer, packId, itemId, { qty, styleMult, styleLabel });
@@ -2258,7 +2262,7 @@ async function purchaseAmmoByDrop(buyer, { caliber, modifier = "standard", boxes
   const name = `${cal.label ?? caliber} ${AMMO_MODIFIERS[modifier]?.label ?? modifier}`;
   const qty = await confirmPurchaseDialog({
     name, buyerName: buyer.name, isService: false, allowQty: true,
-    unitPrice: isShopSetupMode() ? 0 : getAmmoBoxPrice(caliber, modifier),   // setup mode waives the bill
+    unitPrice: getAmmoBoxPrice(caliber, modifier), free: isShopSetupMode(),   // setup mode waives the bill
     ammoRounds: Number(getCaliberBox(caliber).box) || 1,
     qty: Math.max(1, Math.floor(Number(boxes) || 1)),
   });
