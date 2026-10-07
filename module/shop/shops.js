@@ -79,10 +79,11 @@ export function listShops() {
   return Object.values(getShops()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Shops a given user may SEE (GM sees all; players see open + published-to-them). */
-export function shopsVisibleTo(user = game.user) {
+/** Shops a given user may SEE (GM sees all; players see open + published-to-them).
+ *  `asPlayer` makes a GM's list the player's (the shop window's "view as player"). */
+export function shopsVisibleTo(user = game.user, { asPlayer = false } = {}) {
   const all = listShops();
-  if (user?.isGM) return all;
+  if (user?.isGM && !asPlayer) return all;
   return all.filter(s => s.open && (s.publishedTo === "all" || (Array.isArray(s.publishedTo) && s.publishedTo.includes(user.id))));
 }
 

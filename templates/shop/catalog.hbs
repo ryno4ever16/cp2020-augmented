@@ -3,7 +3,20 @@
     {{!-- ───────────────────────── HOME: directory ───────────────────────── --}}
     {{#if isHome}}
     <div class="cp-shop-home">
-        <h2 class="cp-home-title">🛒 {{localize "CYBERPUNK.ShopTitle"}}</h2>
+        {{!-- The GM's "view as player" badge sits on the directory too: with it on, the directory lists
+              only the shops a player is offered (open ones) and loses its Create entry. --}}
+        <div class="cp-home-head">
+            <h2 class="cp-home-title">🛒 {{localize "CYBERPUNK.ShopTitle"}}</h2>
+            {{#if showViewAsPlayerToggle}}
+            <button type="button" class="cp-shop-viewas-toggle{{#if viewAsPlayer}} cp-active{{/if}}"
+                    title="{{localize "CYBERPUNK.ShopViewAsPlayerHint"}}">
+                <i class="fa-solid fa-user"></i> {{localize "CYBERPUNK.ShopViewAsPlayer"}}
+            </button>
+            {{/if}}
+        </div>
+        {{#if viewAsPlayer}}
+        <p class="cp-shop-viewas-banner">{{localize "CYBERPUNK.ShopViewAsPlayerBanner"}}</p>
+        {{/if}}
         <div class="cp-home-list">
             <button type="button" class="cp-home-entry cp-home-catalog">
                 <span class="cp-home-icon"><i class="fa-solid fa-layer-group"></i></span>

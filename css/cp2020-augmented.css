@@ -427,7 +427,12 @@
 
 /* ── Round-7: single window — home directory + vendor tray + context menu ── */
 .cp-shop-home { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.cp-home-title { margin: 0; font-size: 1.25em; color: #6fb7c9; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 6px; flex: 0 0 auto; }
+/* The title row carries the rule under it (and the GM's view-as-player badge at its right edge), so the
+   rule spans the row whether or not the badge is there. */
+.cp-shop-home .cp-home-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 6px; flex: 0 0 auto; }
+.cp-shop-home .cp-home-head .cp-shop-viewas-toggle { font-size: 0.85em; }
+.cp-shop-home .cp-shop-viewas-banner { flex: 0 0 auto; margin: 0; }
+.cp-home-title { margin: 0; font-size: 1.25em; color: #6fb7c9; flex: 0 0 auto; }
 .cp-shop-home .cp-home-list { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }
 .cp-shop-home .cp-home-entry { display: flex; align-items: center; gap: 14px; width: 100%; flex: 0 0 auto; min-height: 0; height: auto; padding: 11px 16px; text-align: left; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease; }
 .cp-shop-home .cp-home-entry:hover { background: rgba(138,109,59,0.22); border-color: #b8916a; }
@@ -4144,7 +4149,8 @@ body.theme-light .cp-vendor-colhead { border-bottom-color: var(--cp-lt-line); }
 body.theme-light .cp-book-divider { border-top-color: var(--cp-lt-line); }
 body.theme-light .cp-catalog-row:hover,
 body.theme-light .cp-catalog-row.cp-shop-extra { background: var(--cp-lt-fill); }
-body.theme-light .cp-home-title { border-bottom-color: var(--cp-lt-line); color: var(--cp-lt-info); }
+body.theme-light .cp-shop-home .cp-home-head { border-bottom-color: var(--cp-lt-line); }
+body.theme-light .cp-home-title { color: var(--cp-lt-info); }
 body.theme-light .cp-catalog .cp-catalog-spinner {
   border-color: var(--cp-lt-line);
   border-top-color: var(--cp-lt-brass);

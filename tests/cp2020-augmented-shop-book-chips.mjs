@@ -19,6 +19,8 @@
  *   §5  view as player (GM catalog): real click → banner on, eyes + hint gone, the full row-key list
  *       and the chip list equal the player's; second act across a storefront (fullSearch shop) and
  *       back; off restores the GM's set; a GM buy while it is on is still a GM buy
+ *   §5b view as player on the DIRECTORY (closed shop + Create entry gone, badge + banner there) and on a
+ *       CLOSED shop's storefront (the player's "closed" notice instead of the shelves); off restores both
  *   §6  the switch is absent on the player's client, and a console call cannot turn it on there
  *   §7  0 console errors on both sessions
  *
@@ -384,6 +386,48 @@ try {
   const gOff = await gm.evaluate(() => window.__bc.read());
   check("switch off: banner gone, eyes back", gOff.toggleActive === false && gOff.banner === null && gOff.eyes > 0, JSON.stringify({ a: gOff.toggleActive, b: gOff.banner, eyes: gOff.eyes }));
   check("switch off: the GM's own full row-key list is restored", same(gOff.baseKeys, gFull.baseKeys) && gOff.baseKeys.length === gFull.baseKeys.length, `${gOff.baseKeys.length} vs ${gFull.baseKeys.length}`);
+
+  /* ─────────────────── §5b the directory and a closed shop ─────────────────── */
+  console.log("\n§5b view as player: the shop directory and a closed shop");
+  const closedId = await gm.evaluate(async (SCOPE) => {
+    const SH = await import(`/modules/${SCOPE}/module/shop/shops.js`);
+    const s = await SH.createShop({ name: "__PW__BC Closed" });
+    await SH.updateShop(s.id, { open: false });
+    return s.id;
+  }, SCOPE);
+  const homeRead = (page) => page.evaluate(async () => {
+    const K = window.__bc; const win = await K.win();
+    (win.element.querySelector(".cp-shop-back") ?? { click: () => win.navigate("home") }).click();
+    const t0 = Date.now(); while (Date.now() - t0 < 8000 && !win.element?.querySelector(".cp-shop-home")) await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 300));
+    const el = win.element;
+    return { home: !!el.querySelector(".cp-shop-home"), shops: [...el.querySelectorAll(".cp-home-shop")].map(b => b.dataset.shopId), create: !!el.querySelector(".cp-home-create"),
+      toggle: !!el.querySelector(".cp-shop-viewas-toggle"), toggleActive: !!el.querySelector(".cp-shop-viewas-toggle.cp-active"), banner: el.querySelector(".cp-shop-viewas-banner")?.textContent?.trim() ?? null };
+  });
+  let home = await homeRead(gm);
+  check("directory, switch off: both shops listed (the closed one too), Create offered, the badge present and dark",
+    home.home && home.shops.includes(S.shopId) && home.shops.includes(closedId) && home.create && home.toggle && !home.toggleActive && home.banner === null, JSON.stringify(home));
+  await gm.evaluate(() => window.__bc.clickViewAs());
+  home = await gm.evaluate(async () => { const K = window.__bc; const win = await K.win(); await new Promise(r => setTimeout(r, 300)); const el = win.element;
+    return { shops: [...el.querySelectorAll(".cp-home-shop")].map(b => b.dataset.shopId), create: !!el.querySelector(".cp-home-create"), toggleActive: !!el.querySelector(".cp-shop-viewas-toggle.cp-active"), banner: el.querySelector(".cp-shop-viewas-banner")?.textContent?.trim() ?? null }; });
+  check("directory, switch on (real click): only the open shop, no Create, badge lit, banner shown",
+    home.shops.includes(S.shopId) && !home.shops.includes(closedId) && !home.create && home.toggleActive && /Viewing as a player/.test(home.banner ?? ""), JSON.stringify(home));
+  const sfRead = (page, shopId) => page.evaluate(async ({ shopId, buyerId }) => {
+    const K = window.__bc; const win = await K.win();
+    win.buyer = game.actors.get(buyerId); win.navigate("storefront", shopId);
+    const t0 = Date.now(); while (Date.now() - t0 < 8000 && !(win.element?.querySelector(".cp-src-none") || win.element?.querySelector(".cp-catalog-list"))) await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 400));
+    const el = win.element;
+    return { notice: el.querySelector(".cp-src-none")?.textContent?.trim() ?? null, list: !!el.querySelector(".cp-catalog-list"), toggleActive: !!el.querySelector(".cp-shop-viewas-toggle.cp-active"), manage: !!el.querySelector(".cp-shop-manage") };
+  }, { shopId, buyerId: S.buyerId });
+  let sf = await sfRead(gm, closedId);
+  check("closed shop, switch on: the player's closed notice, no shelves; Manage still offered to the GM", /closed/i.test(sf.notice ?? "") && !sf.list && sf.toggleActive && sf.manage, JSON.stringify(sf));
+  await gm.evaluate(() => window.__bc.clickViewAs());
+  sf = await gm.evaluate(async () => { const K = window.__bc; const win = await K.win(); await new Promise(r => setTimeout(r, 400)); const el = win.element;
+    return { notice: el.querySelector(".cp-src-none")?.textContent?.trim() ?? null, list: !!el.querySelector(".cp-catalog-list"), toggleActive: !!el.querySelector(".cp-shop-viewas-toggle.cp-active") }; });
+  check("closed shop, switch off: the GM's shelves are back", !/closed/i.test(sf.notice ?? "") && sf.list && !sf.toggleActive, JSON.stringify(sf));
+  home = await homeRead(gm);
+  check("directory, switch off again: the closed shop and Create are back", home.shops.includes(closedId) && home.create && !home.toggleActive, JSON.stringify(home));
 
   /* ─────────────────── §6 the switch is GM-only ─────────────────── */
   console.log("\n§6 player client");

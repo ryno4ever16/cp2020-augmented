@@ -668,10 +668,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   // ── context (V2 _prepareContext; was getData) ───────────────────────────────
   async _prepareContext(options) {
     const isGM = game.user.isGM;
-    // "View as player" belongs to the two views that LIST what a player is offered — the catalog and a
-    // storefront. The builder is the GM's own workbench and keeps the GM's list whatever the switch says.
-    const listsForPlayers = this.view === "catalog" || this.view === "storefront";
-    const viewAsPlayer = listsForPlayers && isShopViewAsPlayer();
+    // "View as player" covers every view a player can stand in — the shop directory, the catalog and a
+    // storefront. The builder is the GM's own workbench and keeps the GM's view whatever the switch says.
+    const playerFacing = this.view !== "build";
+    const viewAsPlayer = playerFacing && isShopViewAsPlayer();
     const common = {
       isGM, view: this.view,
       isHome: this.view === "home", isCatalog: this.view === "catalog",
@@ -689,12 +689,12 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       setupMode: isShopSetupMode(),
       showSetupToggle: isGM && (this.view === "catalog" || this.view === "build"),
       // Client state like setup mode (module/shop/view-as-player.js), read fresh into every render.
-      viewAsPlayer, showViewAsPlayerToggle: isGM && listsForPlayers,
+      viewAsPlayer, showViewAsPlayerToggle: isGM && playerFacing,
     };
     // Who the LIST is drawn for. Only the visibility rule, the book chips and their counts read this;
     // everything else (Manage, add-to-shop, the buy routes) keeps reading the real `isGM`.
     const listAsGM = isGM && !viewAsPlayer;
-    if (this.view === "home") return { ...common, ...this._dataHome(isGM) };
+    if (this.view === "home") return { ...common, ...this._dataHome(isGM, listAsGM) };
     // A view that is ABOUT a shop, whose shop has been deleted, is a dead end — it gets its own
     // panel with a route out rather than a sentence under a header full of inert controls.
     if (this._shopMissing()) return { ...common, missing: true, showSearch: false };
@@ -790,12 +790,14 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     );
   }
 
-  _dataHome(isGM) {
-    const shops = shopsVisibleTo().map(s => {
+  /** The directory. Drawn for a player when the GM is viewing as one (`listAsGM` false): only the shops
+   *  a player is offered — open, and shared with them — and no Create entry. */
+  _dataHome(isGM, listAsGM = isGM) {
+    const shops = shopsVisibleTo(game.user, { asPlayer: !listAsGM }).map(s => {
       const count = Object.keys(s.items).length;
       return { id: s.id, name: s.name, open: s.open, fullSearch: s.fullSearch, count, countLabel: itemCountLabel(count) };
     });
-    return { shops, canCreate: isGM, hasShops: shops.length > 0 };
+    return { shops, canCreate: listAsGM, hasShops: shops.length > 0 };
   }
 
   /**
@@ -865,7 +867,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   _dataStorefront(all, { isGM, listAsGM = isGM, cfg, search }) {
     const def = this._shop();
     if (!def) return { missing: true, showSearch: false };
-    if (def.open === false && !isGM) return { closed: true, showSearch: false, shop: { id: def.id, name: def.name } };
+    // A closed shop shows a player its "closed" notice and nothing else; the GM sees its shelves — unless
+    // viewing as a player, when the GM gets the notice too.
+    // Manage stays the GM's whatever the switch says, so the builder is one click away from the notice.
+    if (def.open === false && !listAsGM) return { closed: true, showSearch: false, shop: { id: def.id, name: def.name }, manageBack: isGM };
     const idxMap = indexByKey(all);
     const fullSearch = def.fullSearch === true;
     let curated = this._vendorRows(def, idxMap)
