@@ -106,6 +106,18 @@ async function clickSheet(page, sheetId) {
   await page.locator(`[id="${sheetId}"] .window-title`).click({ position: { x: 30, y: 8 } });
 }
 const stripState = (page) => page.evaluate(() => { const w = window.__pw.shopWins()[0]; return w ? { buyer: w.buyer?.id ?? null, ...window.__pw.header(w) } : null; });
+/** The strip's light is a CSS animation. A page that is not in front (the second headless session here)
+ *  runs it to its end at once, so the class alone cannot be read there: the legs arm a listener on the
+ *  strip BEFORE the gesture and watch for the animation starting — the mechanism itself. */
+const armLit = (page) => page.evaluate(() => {
+  const strip = window.__pw.shopWins()[0]?.element?.querySelector(".cp-catalog-buyer");
+  window.__pwLit = [];
+  strip?.addEventListener("animationstart", (e) => { if (e.target === strip) window.__pwLit.push(e.animationName); });
+});
+const sawLit = (page, ms = 1200) => page.evaluate(async (ms) => {
+  await window.__pw.waitFor(() => (window.__pwLit ?? []).includes("cp-buyer-changed"), ms);
+  return (window.__pwLit ?? []).includes("cp-buyer-changed");
+}, ms);
 
 const b = await chromium.launch({ headless: true });
 const VIEW = { width: 1920, height: 1100 };
@@ -312,11 +324,12 @@ try {
   }, { A: S.A, B: S.B, itemId: S.itemId });
   check("the document-level listener was armed exactly once by the first open", T.adds === 1 && T.removes === 0, { adds: T.adds, removes: T.removes });
 
+  await armLit(gm);
   await clickSheet(gm, R.sheetA);
-  await sleep(250);
+  const litA = await sawLit(gm);
   h = await stripState(gm);
   check("click on a sheet: that actor is the buyer; picker and funds follow", h.buyer === S.A && h.pick === S.A && h.funds === `${a.funds}eb`, { buyer: h.buyer, pick: h.pick, funds: h.funds });
-  check("the strip is lit by the change", h.lit === true, h.lit);
+  check("the strip is lit by the change", litA === true, litA);
   await sleep(1700);
   h = await stripState(gm);
   check("the lit state clears itself when its animation ends", h.lit === false, h.lit);
@@ -353,9 +366,12 @@ try {
     const t = canvas?.tokens?.placeables?.find(t => ["character", "npc"].includes(t.actor?.type));
     if (!t) return { skip: true };
     await w._cpSyncBuyer(null);
+    const strip = w.element.querySelector(".cp-catalog-buyer"); const seen = [];
+    strip.addEventListener("animationstart", (e) => { if (e.target === strip) seen.push(e.animationName); });
     t.control({ releaseOthers: true });
-    await waitFor(() => w.buyer?.id === t.actor.id, 3000); await sleep(120);
-    const on = { buyer: w.buyer?.id === t.actor.id, lit: header(w).lit };
+    await waitFor(() => w.buyer?.id === t.actor.id, 3000);
+    const litT = await waitFor(() => seen.includes("cp-buyer-changed"), 1200);
+    const on = { buyer: w.buyer?.id === t.actor.id, lit: litT };
     canvas.tokens.releaseAll();
     await waitFor(() => !w.buyer, 3000); await sleep(120);
     return { skip: false, on, off: { buyer: w.buyer?.id ?? null, lit: header(w).lit } };
@@ -409,10 +425,11 @@ try {
     }, { P1: S.P1, P2: S.P2, X: S.X });
     check("harness: the player owns P1/P2, only observes X, and X's sheet opened", P.buyer0 === S.P1 && P.ownsX === false && P.seesX === true, P);
     check("player header (no GM badges): one line", P.lines === 1, P.lines);
+    await armLit(pc);
     await clickSheet(pc, P.sheetP2);
-    await sleep(300);
+    const litP = await sawLit(pc);
     let ph = await stripState(pc);
-    check("player: clicking another sheet they OWN switches the buyer and lights the strip", ph.buyer === S.P2 && ph.funds === "4000eb" && ph.lit === true, { buyer: ph.buyer, funds: ph.funds, lit: ph.lit });
+    check("player: clicking another sheet they OWN switches the buyer and lights the strip", ph.buyer === S.P2 && ph.funds === "4000eb" && litP === true, { buyer: ph.buyer, funds: ph.funds, lit: litP });
     await clickSheet(pc, P.sheetX);
     await sleep(300);
     ph = await stripState(pc);

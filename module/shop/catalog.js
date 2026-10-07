@@ -1059,10 +1059,19 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         buyerFunds: this.buyer ? (Number(this.buyer.system?.eurobucks) || 0) : 0,
       });
       this._activateBuyerPick(root);
-      // Toggled both ways: a strip emptied while an earlier change is still lit goes dark at once.
+      // Toggled both ways: a strip emptied while an earlier change is still lit goes dark at once. The
+      // class comes off when ITS animation ends — animationend bubbles, so a descendant's animation
+      // ending must not put the light out early.
       const lit = flash && !!this.buyer;
       strip.classList.toggle("cp-buyer-changed", lit);
-      if (lit) strip.addEventListener("animationend", () => strip.classList.remove("cp-buyer-changed"), { once: true });
+      if (lit) {
+        const done = (ev) => {
+          if (ev.target !== strip || ev.animationName !== "cp-buyer-changed") return;
+          strip.classList.remove("cp-buyer-changed");
+          strip.removeEventListener("animationend", done);
+        };
+        strip.addEventListener("animationend", done);
+      }
     }
 
     if (had !== !!this.buyer) {
