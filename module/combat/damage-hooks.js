@@ -364,15 +364,20 @@ function _rofSemiOf(item, sys) {
   const n = Math.floor(Number(sys?.rofSemi));
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
-/** The rule's view of a roll from an automatic weapon fired semi-auto (RYNO's ruling 2026-10-02): with a PRINTED
- *  single-shot rate the weapon is treated as a semi-automatic at that rate - the "attack up to your ROF" allowance is
- *  book data for it; without one the counter abstains and the dialog warns. Returns the `rof` and `autoClass` the
- *  rule should see. */
+/** The rule's view of a roll fired semi-auto (RYNO's ruling 2026-10-02): an automatic weapon with a PRINTED
+ *  single-shot rate is treated as a semi-automatic at that rate - the "attack up to your ROF" allowance is book data
+ *  for it; without one the counter abstains and the dialog warns. RYNO's ruling 2026-10-06 extends the printed rate
+ *  to every weapon that has one, so a burst-fire weapon (semi-auto tag, Burst Capable, `rof` 3 for the burst) gets
+ *  its printed single-shot rate per action, not the burst's 3. A semi-automatic with no printed rate keeps `rof`.
+ *  Returns the `rof` and `autoClass` the rule should see, the printed rate in force (0 when none) and `burstFire`
+ *  (a non-automatic Burst Capable weapon) so the dialog note can word itself. */
 function _semiAutoView(item, sys, fireMethod) {
   const autoClass = !!item && _isAutoClassWeapon(item, sys);
-  if (!autoClass || fireMethod !== SEMI_AUTO_METHOD) return { rof: sys?.rof, autoClass, printedSemi: 0 };
-  const printedSemi = _rofSemiOf(item, sys);
-  return printedSemi > 0 ? { rof: printedSemi, autoClass: false, printedSemi } : { rof: sys?.rof, autoClass: true, printedSemi: 0 };
+  const burstFire = !autoClass && sys?.burstCapable === true;
+  if (fireMethod !== SEMI_AUTO_METHOD) return { rof: sys?.rof, autoClass, printedSemi: 0, burstFire };
+  const printedSemi = item ? _rofSemiOf(item, sys) : 0;
+  if (printedSemi > 0) return { rof: printedSemi, autoClass: false, printedSemi, burstFire };
+  return { rof: sys?.rof, autoClass, printedSemi: 0, burstFire };
 }
 /** The weapon-fire increment path: runs the rule against the open attack action and advances the counter
  *  only when the roll opened a new action. Same per-actor chain as the declared actions, same guard. */
@@ -443,12 +448,12 @@ function _dialogActionEval(actor, weapon, { fireMode = null, dualWield = false, 
   const shots = fireMethod === "__threeRoundBurst" ? 3
               : fireMethod === "__fullAuto" ? Math.max(1, Math.min(rof || 1, Math.floor(Number(rounds)) || rof || 1))
               : 1;
-  const view  = isRanged ? _semiAutoView(weapon, sys, fireMethod) : { rof: sys.rof, autoClass: false, printedSemi: 0 };
+  const view  = isRanged ? _semiAutoView(weapon, sys, fireMethod) : { rof: sys.rof, autoClass: false, printedSemi: 0, burstFire: false };
   const step  = attackActionStep(_attackState(actor, round), { itemId: weapon?.id ?? "", round, fireMethod, rof: view.rof, shots, dualWield, fireId: null, autoClass: view.autoClass });
   const count = _getActionCount(actor);
   const declaring = step.newAction ? count + 1 : count;
   const penalty = step.kind === "abstain" ? 0 : _multiActionPenaltyFor(actor, declaring);
-  return { step, count, declaring, penalty, printedSemi: view.printedSemi };
+  return { step, count, declaring, penalty, printedSemi: view.printedSemi, burstFire: view.burstFire === true };
 }
 /** The labelled line for the dialog, by what the roll does to the counter. Pre-localized HTML. */
 function _multiActionNoteFor(actor, ev) {
@@ -457,7 +462,7 @@ function _multiActionNoteFor(actor, ev) {
   const name = actor.name;
   if (step.kind === "continue") {
     let line = ev.printedSemi > 0
-      ? localizeParam("MultiActionAutoSemiNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty: penaltyText })
+      ? localizeParam(ev.burstFire ? "MultiActionBurstSemiNote" : "MultiActionAutoSemiNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty: penaltyText })
       : localizeParam("MultiActionContinueNote", { name, shot: step.firedInCount, rof: step.rof, count: declaring, penalty: penaltyText });
     if (step.firedInRound > step.rof) line += localizeParam("MultiActionRofRoundClause", { fired: step.firedInRound, rof: step.rof });
     return line;

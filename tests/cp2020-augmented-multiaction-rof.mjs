@@ -23,6 +23,11 @@
  *   E5 full auto twice = two actions (unchanged); the payload carries a per-pull id and the method name
  *   E6 setting off: no seed, no note, the counter still tracks
  *   E7 round advance clears the count and the attack state
+ *   E11-E14 a burst-fire weapon (semi-auto tag, Burst Capable, rof 3) counts single shots against its PRINTED
+ *      single-shot rate (RYNO's ruling 2026-10-06): rate 1 = the second shot is a new action; rate 2 = shot 2 of 2
+ *      continues under the burst-fire note, shot 3 is a new action; its three-round burst is still one action
+ *      spending 3 rounds; a plain semi-automatic with no printed rate keeps its rof (3 shots in one action).
+ *      The automatic weapon with no printed rate still abstains (E8).
  * Wording rule: legs are named after the mechanism (continue, join, close), not the fiction.
  */
 import { chromium } from "@playwright/test";
@@ -89,10 +94,17 @@ const r = await p.evaluate(async () => {
       mk("__PW__MAR Pistol B", { weaponType: "Pistol", attackType: "SemiAuto", rof: 2, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),   // 40: the legs fire fourteen times
       mk("__PW__MAR SMG",      { weaponType: "SMG",    attackType: "Auto",     rof: 25, shots: 120, shotsLeft: 120, damage: "2d6+1", range: 150, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
       mk("__PW__MAR Knife",    { weaponType: "Melee",  attackType: "Melee",    rof: 1, damage: "1d6", range: 1, accuracy: 0, reliability: "ST" }),
+      // burst-fire weapons: semi-auto tag, Burst Capable, rof 3 for the burst, a printed single-shot rate (RYNO 2026-10-06)
+      mk("__PW__MAR Burst R1", { weaponType: "Pistol", attackType: "SemiAuto", rof: 3, rofSemi: 1, burstCapable: true, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
+      mk("__PW__MAR Burst R2", { weaponType: "Rifle",  attackType: "SemiAuto", rof: 3, rofSemi: 2, burstCapable: true, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 100, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
+      // a plain semi-automatic at rof 3 with no printed single-shot rate (the negative)
+      mk("__PW__MAR Semi R3",  { weaponType: "Pistol", attackType: "SemiAuto", rof: 3, shots: 40, shotsLeft: 40, damage: "2d6+1", range: 50, accuracy: 0, reliability: "ST", ammoType: "9mm" }),
     ]);
     const byName = (n) => actor.items.find(i => i.name === `__PW__MAR ${n}`);
     const A = byName("Pistol A"), B = byName("Pistol B"), SMG = byName("SMG"), K = byName("Knife");
-    out.e.fixtures = { created: created.length, A: !!A, B: !!B, SMG: !!SMG, K: !!K, knifeRanged: K?.isRanged?.() ?? null };
+    const BR1 = byName("Burst R1"), BR2 = byName("Burst R2"), SR3 = byName("Semi R3");
+    out.e.fixtures = { created: created.length, A: !!A, B: !!B, SMG: !!SMG, K: !!K, BR1: !!BR1, BR2: !!BR2, SR3: !!SR3, knifeRanged: K?.isRanged?.() ?? null,
+      stored: { br1: [BR1?.system?.rof, BR1?.system?.rofSemi, BR1?.system?.burstCapable], br2: [BR2?.system?.rof, BR2?.system?.rofSemi, BR2?.system?.burstCapable] } };
 
     combat = await Combat.create({ scene: null, active: true });
     await combat.createEmbeddedDocuments("Combatant", [{ actorId: actor.id, initiative: 10 }]);
@@ -202,6 +214,28 @@ const r = await p.evaluate(async () => {
     o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e10.s3 = { pre: readDialog(o.d) }; out.e.e10.s3.fired = await fire(o.d);
     o = await open(SMG); await setControl(o.d, { fireMode: "SemiAuto" }); out.e.e10.s4 = { pre: readDialog(o.d) }; out.e.e10.s4.fired = await fire(o.d);
     await SMG.update({ "system.rofSemi": 0 }); await sleep(300);
+    // E11: a burst-fire weapon with a printed single-shot rate of 1: the second single shot is a new action
+    const semiShot = async (item) => { const x = await open(item); await setControl(x.d, { fireMode: "SemiAuto" }); const s = { pre: readDialog(x.d) }; s.fired = await fire(x.d); return s; };
+    out.e.e11 = { start: await nextRound() };
+    out.e.e11.s1 = await semiShot(BR1);
+    out.e.e11.s2 = await semiShot(BR1);
+    // E12: printed single-shot rate 2: the second single shot continues (shot 2 of 2), the third is a new action
+    out.e.e12 = { start: await nextRound() };
+    out.e.e12.s1 = await semiShot(BR2);
+    out.e.e12.s2 = await semiShot(BR2);
+    out.e.e12.s3 = await semiShot(BR2);
+    // E13: a three-round burst from the burst-fire weapon is one action spending three rounds
+    out.e.e13 = { start: await nextRound() };
+    out.e.e13.loadedBefore = actor.items.get(BR1.id)?.system?.shotsLeft ?? null;
+    o = await open(BR1); await setControl(o.d, { fireMode: "ThreeRoundBurst" });
+    out.e.e13.modeOffered = [...(o.d.element?.querySelectorAll('select[name="fields.fireMode"] option, select[name="fireMode"] option, .field[data-path="fireMode"] select option') ?? [])].map(x => x.value);
+    out.e.e13.b1 = { pre: readDialog(o.d) }; out.e.e13.b1.fired = await fire(o.d);
+    out.e.e13.loadedAfter = actor.items.get(BR1.id)?.system?.shotsLeft ?? null;
+    // E14: a plain semi-automatic at rof 3 with no printed single-shot rate keeps three single shots in one action
+    out.e.e14 = { start: await nextRound() };
+    out.e.e14.s1 = await semiShot(SR3);
+    out.e.e14.s2 = await semiShot(SR3);
+    out.e.e14.s3 = await semiShot(SR3);
     // E9: two bursts whose rounds pass the weapon's ROF for the round draw the ceiling clause on the second
     out.e.e9 = { start: await nextRound() };
     const setRounds = async (d, v) => { const el = d.element?.querySelector('input[name="fields.fullAutoRoundsFired"], input[name="fullAutoRoundsFired"]'); if (!el) return false; el.value = String(v); el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); await sleep(200); return true; };
@@ -253,7 +287,7 @@ if (P.exported) {
   ok("P15 single shots from an automatic weapon: the counter abstains - no new action, the state untouched, flagged autoSingle", P.abstain.kind === "abstain" && !P.abstain.newAction && P.abstain.autoSingle === true && P.abstain.stateUntouched === true && P.abstainFresh.kind === "abstain", J({ a: P.abstain, b: P.abstainFresh }));
 }
 const E = r.e;
-ok("E0 fixtures + started combat with the shooter as combatant", E.fixtures?.created === 4 && E.combat?.started && E.combat?.isMine && E.combat?.combatant && E.fixtures?.knifeRanged === false, J({ f: E.fixtures, c: E.combat, err: E.error }));
+ok("E0 fixtures + started combat with the shooter as combatant", E.fixtures?.created === 7 && J(E.fixtures?.stored?.br1) === "[3,1,true]" && J(E.fixtures?.stored?.br2) === "[3,2,true]" && E.combat?.started && E.combat?.isMine && E.combat?.combatant && E.fixtures?.knifeRanged === false, J({ f: E.fixtures, c: E.combat, err: E.error }));
 const e1 = E.e1 ?? {};
 ok("E1a shot 1: nothing seeded, no note; counter 1 after", e1.s1?.pre?.extraMod === "" && e1.s1?.pre?.note === null && e1.s1?.fired?.after?.count === 1, J(e1.s1));
 ok("E1b shot 2 continues: nothing seeded, note reads shot 2 of 2; counter still 1", e1.s2?.pre?.kind === "continue" && Number(e1.s2?.pre?.extraMod || 0) === 0 && /shot 2 of 2/i.test(e1.s2?.pre?.note ?? "") && e1.s2?.fired?.after?.count === 1 && e1.s2?.fired?.after?.attack?.shots && Object.values(e1.s2.fired.after.attack.shots)[0] === 2, J(e1.s2));
@@ -276,6 +310,15 @@ const e8 = E.e8 ?? {};
 ok("E8 single shots from an automatic weapon: nothing pre-filled on any of three, the warning names the missing mode on every one (the first included), the counter never moves", e8.s1?.pre?.extraMod === "" && e8.s2?.pre?.extraMod === "" && e8.s3?.pre?.extraMod === "" && [e8.s1, e8.s2, e8.s3].every(s => s?.pre?.kind === "abstain" && /automatic weapon/i.test(s?.pre?.note ?? "")) && e8.s3?.fired?.after?.count === null, J({ s1: e8.s1?.pre, s2: e8.s2?.pre, s3: e8.s3?.pre, after: e8.s3?.fired?.after }));
 const e10 = E.e10 ?? {};
 ok("E10 an automatic with a printed semi-auto rate of 3: shots 2 and 3 continue the action at that rate (the line names it), shot 4 starts a new count at -3; the field survives on the document", e10.stored === 3 && e10.s1?.pre?.extraMod === "" && e10.s2?.pre?.kind === "continue" && /semi-auto rate of 3/i.test(e10.s2?.pre?.note ?? "") && /shot 2 of 3/.test(e10.s2?.pre?.note ?? "") && e10.s3?.pre?.kind === "continue" && e10.s4?.pre?.kind === "rofSpent" && e10.s4?.pre?.extraMod === "-3" && e10.s4?.fired?.after?.count === 2, J({ stored: e10.stored, s1: e10.s1?.pre, s2: e10.s2?.pre, s3: e10.s3?.pre, s4: e10.s4?.pre, after: e10.s4?.fired?.after }));
+const e11 = E.e11 ?? {}, e12 = E.e12 ?? {}, e13 = E.e13 ?? {}, e14 = E.e14 ?? {};
+ok("E11a burst-fire weapon, printed single-shot rate 1: the first single shot opens action 1 (nothing seeded, counter 1)", e11.s1?.pre?.extraMod === "" && e11.s1?.fired?.after?.count === 1, J(e11.s1));
+ok("E11b printed single-shot rate 1: the second single shot opens a NEW action (count 2, -3 seeded), not shot 2 of 3", e11.s2?.pre?.kind === "rofSpent" && e11.s2?.pre?.extraMod === "-3" && e11.s2?.fired?.after?.count === 2 && !/of 3/.test(e11.s2?.pre?.note ?? ""), J(e11.s2));
+ok("E11c the dialog note on that second shot names the printed rate 1 and not the automatic-weapon wording", /ROF of 1\b/.test(e11.s2?.pre?.note ?? "") && /action 2/.test(e11.s2?.pre?.note ?? "") && !/automatic weapon/i.test(e11.s2?.pre?.note ?? ""), J(e11.s2?.pre));
+ok("E12a printed single-shot rate 2: the second single shot continues (shot 2 of 2, nothing seeded, counter still 1)", e12.s1?.fired?.after?.count === 1 && e12.s2?.pre?.kind === "continue" && Number(e12.s2?.pre?.extraMod || 0) === 0 && /shot 2 of 2/.test(e12.s2?.pre?.note ?? "") && e12.s2?.fired?.after?.count === 1, J({ s1: e12.s1?.fired?.after, s2: e12.s2 }));
+ok("E12b the continue note uses the burst-fire wording and names the printed single-shot rate of 2, not the automatic-weapon wording", /burst-fire/.test(e12.s2?.pre?.note ?? "") && /single-shot rate of 2/.test(e12.s2?.pre?.note ?? "") && !/automatic weapon/i.test(e12.s2?.pre?.note ?? ""), J(e12.s2?.pre));
+ok("E12c printed single-shot rate 2: the third single shot opens a new action (count 2, -3 seeded)", e12.s3?.pre?.kind === "rofSpent" && e12.s3?.pre?.extraMod === "-3" && e12.s3?.fired?.after?.count === 2, J(e12.s3));
+ok("E13 a three-round burst from the burst-fire weapon is one action spending 3 rounds (offered, nothing seeded, counter 1, round tally 3, loaded rounds down by 3)", (e13.modeOffered ?? []).includes("ThreeRoundBurst") && e13.b1?.pre?.extraMod === "" && e13.b1?.fired?.after?.count === 1 && Object.values(e13.b1?.fired?.after?.attack?.roundShots ?? {})[0] === 3 && (e13.loadedBefore - e13.loadedAfter) === 3, J({ modes: e13.modeOffered, b1: e13.b1, before: e13.loadedBefore, after: e13.loadedAfter }));
+ok("E14 a plain semi-automatic at rof 3 with no printed single-shot rate: three single shots in one action (shot 3 of 3, counter 1), plain continue wording", e14.s2?.pre?.kind === "continue" && e14.s3?.pre?.kind === "continue" && /shot 3 of 3/.test(e14.s3?.pre?.note ?? "") && Number(e14.s3?.pre?.extraMod || 0) === 0 && e14.s3?.fired?.after?.count === 1 && !/burst-fire|single-shot rate/.test(e14.s3?.pre?.note ?? ""), J({ s2: e14.s2?.pre, s3: e14.s3 }));
 const e9 = E.e9 ?? {};
 ok("E9 a second burst past the round's ROF carries the ceiling clause; the first does not", e9.b1?.rounds && e9.b2?.rounds && !/past its ROF/.test(e9.b1?.pre?.note ?? "") && /past its ROF/.test(e9.b2?.pre?.note ?? "") && e9.b2?.pre?.extraMod === "-3" && e9.b2?.fired?.after?.count === 2, J({ b1: e9.b1?.pre, b2: e9.b2?.pre, after: e9.b2?.fired?.after, r1: e9.b1?.rounds, r2: e9.b2?.rounds }));
 const e6 = E.e6 ?? {};
