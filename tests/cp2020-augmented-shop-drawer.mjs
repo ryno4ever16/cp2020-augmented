@@ -162,7 +162,9 @@ try {
       // 67 → 68 (electro-thermal Barrett), melee 20 → 22 (Tessen, SPM-2), exotics 27 → 28 (Stun Knuks), armor 85 → 96.
       ["supplement-pistols", "Weapons/Pistols", 67], ["supplement-submachineguns", "Weapons/SMGs", 20],
       ["supplement-rifles", "Weapons/Rifles", 43], ["supplement-shotguns", "Weapons/Shotguns", 19],
-      ["supplement-heavy", "Weapons/Heavy", 68],
+      // 2026-10-09, heavy 68 → 66: the two minelet records left the pack by ruling (the book prints them only as
+      // suit and vehicle loads; the vehicle-weapons catalog keeps the BIM Minelet Volley).
+      ["supplement-heavy", "Weapons/Heavy", 66],
       // ⏪ 19 → 20 (2026-08-29, found by this sweep): NOT a settings-trim change and not a regression.
       //    Commit ed1e3cd split the two-blade entry into its two printed blades, so the pack source and
       //    the compiled pack both carry one more row than this pinned count was written against.
