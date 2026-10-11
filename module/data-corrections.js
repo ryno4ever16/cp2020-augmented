@@ -101,6 +101,11 @@ const FINGER_NOTE = "Dynalar cyberfinger option (Chromebook 3 p.22). Requires an
 /** packId → itemId → correction: { name?, cost?, flavor?, priceRange?{min,max}, notesAppend? } */
 export const DATA_CORRECTIONS = {
   [CYBERWARE_OLD]: {
+    // Advanced Muscle and Bone Lace II is the Core item at its own tier: Chromebook 4 p.17 prints it as
+    // "identical in all other respects to the item found in CP2020" with the same +2 BODY, 1500eb, N surgery and
+    // HC 1D6/2 as Muscle and Bone Lace (Core p.85), so the shop lists the Core record only (user ruling, 2026-10-11).
+    // Tiers I (+1) and III (+3) stay; they are the book's additions.
+    Xf9N8yswXWLkh9v3: { duplicateOf: "cyberpunk2020.cyberware-old.W9lGAar8fYg3SYZh" },
     // Super Compact Braindance → the book's full product name (Chromebook 3 p.23).
     tsY2j88C5WxOTbDG: { name: "Super Compact Braindance Recorder" },
     // LiveWires: 400eb is the NON-implant wearable's price; the body implant costs 200eb (CB3 p.24).

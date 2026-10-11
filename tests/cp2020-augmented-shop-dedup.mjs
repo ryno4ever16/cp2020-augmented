@@ -93,6 +93,12 @@ const snapshot = () => p.evaluate(async () => {
     withDuplicateOf: rows.filter(r => r.duplicateOf).length,
     hk: ["5PIcgtNXDW6FgPEo", "x0X4jTAKqegwNUPk", "Y5Y4fkvE0YWeS5M8"].map(id => rows.filter(r => r.id === id).length),
     hkCopies: rows.filter(r => r.packId === "cyberpunk2020.smgs-add").length,
+    // Muscle and Bone Lace (Core p.85) and Advanced Muscle and Bone Lace II (Chromebook 4 p.17, "identical in
+    // all other respects to the item found in CP2020"): the Core record is offered, tier II is marked its copy.
+    lace: { core: rows.filter(r => r.packId === "cyberpunk2020.cyberware-old" && r.id === "W9lGAar8fYg3SYZh").map(r => `${r.name}|${r.cost}`),
+            tier2Shelf: rows.filter(r => r.packId === "cyberpunk2020.cyberware-old" && r.id === "Xf9N8yswXWLkh9v3").length,
+            tier2Index: all.find(i => i.packId === "cyberpunk2020.cyberware-old" && i.id === "Xf9N8yswXWLkh9v3")?.duplicateOf ?? null,
+            tiers13: rows.filter(r => r.packId === "cyberpunk2020.cyberware-old" && ["ZNQwBhJbGgImAMkI", "w2XrdOLZB9ImxRrO"].includes(r.id)).map(r => `${r.name}|${r.cost}`).sort() },
     sameName: sameName.length, sameNameSample: sameName.slice(0, 4).map(g => g.join(" = ")),
     indexScraped: all.filter(i => SCRAPED.includes(i.packId)).length,
     dupRecords: dupRecords.length, dupTargetsExist: dupRecords.every(i => keys.has(i.duplicateOf)),
@@ -117,7 +123,10 @@ try {
     on.labelled.join(" | ") === "Digital Recorder (cyberlimb built-in) | Digital Recorder (implant) | Digital Recorder (handheld) | Audio/Video Recorder (cyberlimb built-in) | Audio/Video Recorder (implant) | Cybermodem (cyberlimb built-in) | Cybermodem (basic deck, used) | Cybermodem (basic deck, new) | Cyberlimbed Deck (basic) | Cyberlimbed Deck (cellular)"
       && on.stillShared.length === 0, `${on.labelled.join(" | ")} ; still shared: ${on.stillShared.join(", ")}`);
   check("B1 the full index still holds the scraped packs' records", on.indexScraped > 100, `${on.indexScraped} records`);
-  check("B2 every `duplicateOf` names a record that exists", on.dupRecords === 3 && on.dupTargetsExist === true, `${on.dupRecords} marked, targets exist: ${on.dupTargetsExist}`);
+  check("B2 every `duplicateOf` names a record that exists", on.dupRecords === 4 && on.dupTargetsExist === true, `${on.dupRecords} marked, targets exist: ${on.dupTargetsExist}`);
+  check("B4 the Core muscle lace is offered once at 1500 and its Chromebook 4 tier-II copy is marked, off the shelf, tiers I and III kept",
+    on.lace.core.join() === "Muscle and Bone Lace|1500" && on.lace.tier2Shelf === 0 && on.lace.tier2Index === "cyberpunk2020.cyberware-old.W9lGAar8fYg3SYZh"
+      && on.lace.tiers13.join(" ; ") === "Advanced Muscle and Bone Lace I|1000 ; Advanced Muscle and Bone lace III|3000", JSON.stringify(on.lace));
   check("B3 a shop stocking an item from a hidden pack still resolves it", on.vendor?.available === true && on.vendor.name === on.vendor.expected, JSON.stringify(on.vendor));
 
   await setHide(false);
