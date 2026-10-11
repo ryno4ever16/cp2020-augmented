@@ -13,7 +13,7 @@
     "lastOwnerId": "",
     "surgCode": "",
     "humanityCost": "",
-    "cyberwareType": "",
+    "cyberwareType": "CYBERHAND",
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,

@@ -13,7 +13,7 @@
     "lastOwnerId": "",
     "surgCode": "",
     "humanityCost": "1D6/2",
-    "cyberwareType": "",
+    "cyberwareType": "BIOWARE",
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,

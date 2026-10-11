@@ -13,7 +13,7 @@
     "lastOwnerId": "",
     "surgCode": "",
     "humanityCost": "0",
-    "cyberwareType": "",
+    "cyberwareType": "CYBERLIMB",
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,
