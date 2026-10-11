@@ -68,11 +68,14 @@ console.log("PART A — supplement-shotguns source values");
   let parseFailures = 0, encodingFailures = [];
   for (const f of files) {
     const raw = fs.readFileSync(path.join(SRC, f), "utf8");
-    if (raw.charCodeAt(0) === 0xFEFF || raw.includes("\r")) encodingFailures.push(f);
+    // A BOM fatals Foundry's JSON reads; a bare CR is a corrupt file. CRLF is tolerated: with
+    // core.autocrlf=true and no .gitattributes, every file a rebase re-checks out comes back CRLF
+    // while the committed blob stays LF (the wiring census reads source the same way).
+    if (raw.charCodeAt(0) === 0xFEFF || /\r(?!\n)/.test(raw)) encodingFailures.push(f);
     try { const d = JSON.parse(raw); byName[d.name] = d; } catch { parseFailures++; }
   }
   check("every source JSON parses", parseFailures === 0, `${parseFailures} parse failures`);
-  check("every source JSON is BOM-free with LF endings",
+  check("every source JSON is BOM-free with no bare CR (LF or CRLF line endings)",
     encodingFailures.length === 0, encodingFailures.join(", "));
 
   const wrong = [];
@@ -241,8 +244,14 @@ try {
   // ── OFF: restore the snapshotted ownership ──
   const off = await gm.page.evaluate(async ({ SCOPE, PACK_IDS }) => {
     await game.settings.set(SCOPE, "hideScrapedPacks", false);      // onChange runs the restore
-    await new Promise((r) => setTimeout(r, 600));
     const player = game.users.find((u) => !u.isGM && u.role === CONST.USER_ROLES.PLAYER);
+    // The restore is one `pack.configure` per pack and then the stamp write, in sequence; a fixed
+    // wait read between the two packs ([2,0]) on a loaded rig. Poll the engine's own answer to a bound.
+    for (let i = 0; i < 80; i++) {
+      const prior = game.settings.get(SCOPE, "hideScrapedPacksPrior") ?? {};
+      if (PACK_IDS.every((id) => game.packs.get(id)?.getUserLevel(player) === 2 && !(id in prior))) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
     return {
       prior: foundry.utils.deepClone(game.settings.get(SCOPE, "hideScrapedPacksPrior")),
       packs: PACK_IDS.map((id) => {
@@ -285,7 +294,12 @@ try {
   const back = await gm.page.evaluate(async ({ SCOPE, PACK_IDS }) => {
     const S = await import(`/modules/${SCOPE}/module/settings.js`);
     await game.settings.set(SCOPE, "hideScrapedPacks", true);
-    await new Promise((r) => setTimeout(r, 600));
+    const playerForPoll = game.users.find((u) => !u.isGM && u.role === CONST.USER_ROLES.PLAYER);
+    for (let i = 0; i < 80; i++) {   // same bound as the OFF read: both packs hidden and both stamped
+      const prior = game.settings.get(SCOPE, "hideScrapedPacksPrior") ?? {};
+      if (PACK_IDS.every((id) => game.packs.get(id)?.getUserLevel(playerForPoll) === 0 && id in prior)) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
     const first = PACK_IDS.map((id) => foundry.utils.deepClone(game.packs.get(id)?.config?.ownership ?? null));
     const priorAfterFirst = foundry.utils.deepClone(game.settings.get(SCOPE, "hideScrapedPacksPrior"));
     await S.applyScrapedPackVisibility();       // the ready-hook re-assert: must be a no-op

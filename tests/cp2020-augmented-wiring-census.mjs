@@ -237,6 +237,8 @@ const MANIFEST = [
   ["module/shop/catalog.js:886", "_activateRowChoices", "shop-catalog", "change", ".cp-cat-price b", "", null, null],
   ["module/shop/catalog.js:896", "_activateRowChoices", "shop-catalog", "change", ".cp-catalog-style", "", "the style picker paints only on fashion rows (r.fashion) in the catalog view — the windowed opening paint's rows hold none", null],
   ["module/shop/catalog.js:914", "_activateBuyerPick", "shop-catalog", "change", ".cp-buyer-pick", "", null, null],
+  // The buyer strip's one-shot light: the lit class comes off when the strip's OWN animation ends (a72f334).
+  ["module/shop/catalog.js:1073", "_cpSyncBuyer", "shop-catalog", "animationend", ".cp-catalog-buyer", "", null, null],
   ["module/shop/catalog.js:992", "activateListeners", "shop-catalog", "click", ".cp-shop-back", "", null, null],
   ["module/shop/catalog.js:995", "activateListeners", "shop-home", "click", ".cp-home-catalog", "", null, null],
   ["module/shop/catalog.js:996", "activateListeners", "shop-storefront", "click", ".cp-shop-manage", "", null, null],
