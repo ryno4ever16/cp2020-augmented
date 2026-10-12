@@ -12,7 +12,7 @@
   "flags": {},
   "system": {
     "flavor": "40mm grappling hook: propellant charge and hook, line sold by the 20 m.",
-    "notes": "<p>THE BOOK: Home of the Brave p.87, \"Grapnel: This round comes in three parts. The propellant charge (5 eb.) is breech-loaded into the launcher. The grappling hook (25 eb.) is loaded into the muzzle of the launcher, and the line (1 eb. per 20 meters) trails from the hook.\" A hit on a person does 1D6 blunt.</p><p>MODEL: the 30eb is the charge plus the hook as printed; buy the line by the 20 m separately.</p><p>MODEL: the round has no blast radius of its own, so blastRadius is 0.5 m - the module's area flow then reaches the target's own square and nothing beyond it (a 0 would fall back to the 5 m grenade row of CP2020 p.99).</p>",
+    "notes": "<p>THE BOOK: Home of the Brave p.87, \"Grapnel: This round comes in three parts. The propellant charge (5 eb.) is breech-loaded into the launcher. The grappling hook (25 eb.) is loaded into the muzzle of the launcher, and the line (1 eb. per 20 meters) trails from the hook.\" \"The round has a Weapon Accuracy of -2; this is to hit the target. If the target is hit, it takes 1D6 blunt damage\".</p><p>MODEL: the 30eb is the charge plus the hook as printed; buy the line by the 20 m separately.</p><p>MODEL: the round has no blast radius of its own, so blastRadius is 0.5 m - the module's area flow then reaches the target's own square and nothing beyond it (a 0 would fall back to the 5 m grenade row of CP2020 p.99).</p>",
     "cost": 30,
     "weight": 0.5,
     "equipped": true,
@@ -25,7 +25,7 @@
     "rawDamageMult": 1,
     "penDamageMult": 1,
     "bonusDamageFormula": "1d6",
-    "accuracyMod": 0,
+    "accuracyMod": -2,
     "stunSaveOnHit": false,
     "stunSaveMod": 0,
     "dotEnabled": false,
