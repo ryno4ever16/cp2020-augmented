@@ -63,7 +63,7 @@ const OPEN_AMMO = {
     ".40 S&W", ".454", "7 mm", "6.5 mm C", "5.45S", "7 mm C", "8 mm", "6.5 mm", ".50 AE", "14mm", "4.5 mm C",
     "5.7 mm", "4.7 mm", "5.8 mm", "12.7mm", "3.5FF", ".300WM", ".477", "micromissile", "7mm caseless", "7mm",
     "6.5 ET", "6.5mm Hybrid", "6.5mm", ".454 C", ".454 ET", "5.45SV", ".50S", "4.5 mm LP", ".41AE", ".41",
-    ".41 ET", ".300M", "15mm Kurz", "15mm BMG", "15mm", "30mm", "30mm EHI", "30mm caseless", ".666",
+    ".41 ET", ".300M", "15mm Kurz", "15mm BMG", "15mm", "30mm", "30mm EHI", ".666",
     ".666 Magnum", "18mm G", "18mm HEAT", ".338", "5.2 mm", "7.5LP", "8.5mm Ramjet", "13mm", "14.5mm",
   ],
   /* Calibers on the 44 book-mined weapons added 2026-08 (commit 7f7eed8), after this allowlist's
@@ -84,10 +84,12 @@ const OPEN_AMMO = {
    * columns ("B6" = Body Minimum 6, "200m" = a range, "4m3" = a burst volume). CLOSES WHEN: never
    * by aliasing — these are correct as descriptive text (proposal §7d). */
   notACartridge: [
-    "NA", "Grenade", "40mm grenade", "25mm mini-grenade", "Missile", "Squirt", "1", "25mm grenade",
-    "25mm grenades", "Hard SP/2", "5.56 (also 10mm/12mm/.357mag)", "varies (.22LR to 12mm CL)", ".22/5mm",
-    "B6", "200m", "sleep darts", "4m3", "ATGM missile", "rifle grenade", "beanbag", "polymer capsule",
+    "NA", "Missile", "Squirt",
+    "Hard SP/2", "5.56 (also 10mm/12mm/.357mag)", "varies (.22LR to 12mm CL)", ".22/5mm",
+    "B6", "200m", "sleep darts", "4m3", "ATGM missile", "beanbag", "polymer capsule",
     "wire darts",
+    /* 2026-10-12: "Grenade", "40mm grenade", "25mm grenade(s)", "25mm mini-grenade" and "rifle grenade" left this
+     * list - they are the launched-grenade round families now (lookups.js GRENADE_CALIBERS) and resolve. */
   ],
   /* The weapon carries no cartridge by design — 3 strings / 5 items: energy weapons that recharge
    * (Laser / Microwave, "Special"), battery melee, and a thrown weapon. CLOSES WHEN: never. */
@@ -118,7 +120,7 @@ const OPEN_DAMAGE = {
     "Blind", "Chemical", "Chemical (odor)", "Deaf", "Drugs", "EMP (electronics)", "EMP Effect", "Entangle",
     "Gas", "Net", "Special", "Special (1D6 splatballs)",
     "Stun", "Stun (.45 LVD)", "Stun (beanbag)", "Stun -3", "Tangle (15mm)", "Varies",
-    "Varies (12mm)", "Varies (13mm)", "Varies (25mm)", "Varies (25mm/10ga)", "Varies (30mm)",
+    "Varies (12mm)", "Varies (13mm)", "Varies (25mm)", "Varies (25mm HP)", "Varies (25mm/10ga)", "Varies (30mm)",
     "Varies (40mm)", "d6/2+2x1d6/3",
   ],
   /* Damage strings on the 44 book-mined weapons added 2026-08 (commit 7f7eed8), after this
@@ -351,7 +353,9 @@ try {
             }
             const raw = String(wb.ammoType ?? "");
             if (raw.trim() !== "") {
-              const resolves = Object.prototype.hasOwnProperty.call(L.getCalibers(), L.normalizeCaliber(raw));
+              // A caliber resolves through the bullet registry OR the launched-grenade families
+              // (lookups.js GRENADE_CALIBERS, 2026-10-12): a launcher chambered "25mm grenade" is wired, not rot.
+              const resolves = Object.prototype.hasOwnProperty.call(L.getCalibers(), L.normalizeCaliber(raw)) || L.isGrenadeRoundCaliber(raw);
               if (!resolves) { seenAmmo.add(raw); if (!allowedAmmo.has(raw)) flag("ammo", raw, where); }
             }
             const dmg = String(wb.damage ?? "");

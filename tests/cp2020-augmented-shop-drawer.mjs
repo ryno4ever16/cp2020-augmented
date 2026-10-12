@@ -164,7 +164,9 @@ try {
       ["supplement-rifles", "Weapons/Rifles", 43], ["supplement-shotguns", "Weapons/Shotguns", 19],
       // 2026-10-09, heavy 68 → 66: the two minelet records left the pack by ruling (the book prints them only as
       // suit and vehicle loads; the vehicle-weapons catalog keeps the BIM Minelet Volley).
-      ["supplement-heavy", "Weapons/Heavy", 66],
+      // 2026-10-12, heavy 66 → 64 on the Weapons shelf: the two "Launched Grenades" placeholder weapons became
+      // typed rounds. The pack's rounds (37 ammo documents: the 6 Core rounds + 31 launcher rounds) are rows on
+      // the Ammo shelf now, so the heavy pack is the one pack with two cells — asserted below, not here.
       // ⏪ 19 → 20 (2026-08-29, found by this sweep): NOT a settings-trim change and not a regression.
       //    Commit ed1e3cd split the two-blade entry into its two printed blades, so the pack source and
       //    the compiled pack both carry one more row than this pinned count was written against.
@@ -176,6 +178,8 @@ try {
       ["supplement-programs", "Programs/", 221],
     ];
     for (const [p, cell, n] of pinned) chk(`cell count: ${p} → ${n} in ${cell}, and nowhere else`, only(p, cell, n), JSON.stringify(cells(p)));
+    chk("cell count: supplement-heavy → 64 in Weapons/Heavy and 37 rounds in Ammo/, and nowhere else",
+      JSON.stringify(cells("supplement-heavy")) === JSON.stringify({ "Ammo/": 37, "Weapons/Heavy": 64 }), JSON.stringify(cells("supplement-heavy")));
 
     // Cyberware: the pack names no sub, so item data still decides the shelf inside Cyberware.
     const cw = cells("supplement-cyberware");
