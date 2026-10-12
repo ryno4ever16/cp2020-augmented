@@ -9,6 +9,7 @@
   a form nested inside another — which took this root's classes, and the label styling keyed on them, with it.
 --}}
 <div class="cyberpunk cp-cyber-install">
+  {{#if installedAlready}}<div class="cp-cyber-install-note">{{CPLocal "CyberInstallRechargeNote"}}</div>{{/if}}
   {{#if showPart}}<div>{{CPLocal "CyberPartCost"}}: {{#if partUnpriced}}<b>{{CPLocal "ShopPriceUnset"}}</b>{{else}}<b>{{partPrice}}</b>eb{{/if}}</div>{{/if}}
   <div>{{CPLocal "CyberSurgeryCost"}} ({{surgeryLabel}}): <b>{{surgeryCost}}</b>eb</div>
   {{#unless partUnpriced}}<div>{{CPLocal "CyberTotalCost"}}: <b>{{total}}</b>eb</div>{{/unless}}
@@ -19,7 +20,7 @@
   </label>
   {{/if}}
   <label>
-    <input type="checkbox" name="rollHumanity" checked/> {{CPLocal "CyberRollHumanity"}} ({{hc}})
+    <input type="checkbox" name="rollHumanity" {{#unless rolledAlready}}checked{{/unless}}/> {{CPLocal "CyberRollHumanity"}} ({{hc}}){{#if rolledAlready}} — {{CPLocal "CyberHumanityRolledAlready" n=humanityLoss}}{{/if}}
   </label>
   <label>
     <input type="checkbox" name="applyDamage" checked/> {{CPLocal "CyberApplyDamage"}} ({{surgeryDamage}})

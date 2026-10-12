@@ -26,10 +26,15 @@
         A chip is slotted, not implanted (cw.isChip): same control, worded for what it does — no surgery. --}}
   {{#if item.isEmbedded}}
   {{#if system.equipped}}
-  <div class="field inactive">
+  <div class="field{{#if cw.isChip}} inactive{{/if}}">
     <label>{{#if cw.isChip}}{{CPLocal "ChipSlot"}}{{else}}{{CPLocal "CyberInstall"}}{{/if}}</label>
     <span class="flex-pad"></span>
-    <span>{{#if cw.isChip}}{{CPLocal "ChipSlotted"}}{{else}}{{CPLocal "CyberInstalledLabel"}}{{/if}}</span>
+    {{#if cw.isChip}}
+    <span>{{CPLocal "ChipSlotted"}}</span>
+    {{else}}
+    <span class="cp-cyber-installed-label">{{CPLocal "CyberInstalledLabel"}}</span>
+    <button type="button" class="cyber-install" title="{{CPLocal "CyberChargeTip"}}">🔧 {{CPLocal "CyberCharge"}}</button>
+    {{/if}}
   </div>
   {{else}}
   <div class="field">

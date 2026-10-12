@@ -508,6 +508,64 @@ try {
   check("Install button: item still uninstalled, waiting on that card", g1.equipped === false && g1.waiting === q7[0]?.id, `${g1.equipped} ${g1.waiting}`);
   await pc.evaluate(({ actorId, itemId }) => game.actors.get(actorId).items.get(itemId)?.sheet?.close(), { actorId: S.actorId, itemId: G.id });
 
+  /* ─────────────────── §7b the button is the PAID path, always (owner ruling 2026-10-12) ─────────────────── */
+  // The drag back into a body location stays free for chrome that has been in this body (§2). The
+  // sheet's button opens the install dialog every time: for chrome created already installed with no
+  // Humanity rolled (a macro-made character) it charges and rolls; for chrome that was installed
+  // through the flow and taken out it charges again and offers the Humanity roll UNTICKED.
+  console.log("\n§7b item sheet button = the paid path (approvals off, GM client)");
+  await gm.evaluate((SCOPE) => game.settings.set(SCOPE, "shopBuySource", "catalog"), SCOPE);
+  const pressButton = (page, actorId, itemId) => page.evaluate(async ({ actorId, itemId }) => {
+    const it = game.actors.get(actorId).items.get(itemId);
+    await it.sheet.render(true);
+    const t0 = Date.now(); let el = null;
+    while (!el && Date.now() - t0 < 8000) { el = it.sheet.element?.querySelector?.(".cyber-install"); if (!el) await new Promise(r => setTimeout(r, 100)); }
+    const label = el?.textContent?.trim() ?? null;
+    if (el) el.click();
+    return { found: !!el, label };
+  }, { actorId, itemId });
+  const dialogTicks = (page) => page.evaluate(() => {
+    const d = [...foundry.applications.instances.values()].find(a => !!a.element?.querySelector?.('[name="rollHumanity"]'));
+    const r = d?.element; if (!r) return null;
+    return { roll: r.querySelector('[name="rollHumanity"]')?.checked ?? null, pay: r.querySelector('[name="paySurgery"]')?.checked ?? null };
+  });
+  // (a) created INSTALLED, unstamped, no loss - the macro-made case.
+  const M = await mkItem(gm, S.actorId, "__PW__STAMP Macro Arm", { system: { equipped: true } });
+  const m0 = await itemState(gm, S.actorId, M.id);
+  const mb = await pressButton(gm, S.actorId, M.id);
+  check("§7b macro-made chrome (installed, no stamp, no loss): the sheet offers the paid button", mb.found === true, JSON.stringify(mb));
+  const md = await waitDialog(gm);
+  const mt = await dialogTicks(gm);
+  check("§7b its dialog opens with Humanity ticked (none rolled yet) and the fee ticked", !!md && mt?.roll === true && mt?.pay === true, JSON.stringify(mt));
+  await answerDialog(gm, "ok");
+  await gm.waitForTimeout(1500);
+  const m1 = await itemState(gm, S.actorId, M.id);
+  check("§7b OK: fee charged, Humanity rolled, stamped, still installed", m1.funds === m0.funds - FEE && m1.loss > 0 && m1.stamp === S.actorUuid && m1.equipped === true, JSON.stringify({ before: m0.funds, after: m1.funds, loss: m1.loss, stamp: m1.stamp, eq: m1.equipped }));
+  await gm.evaluate(({ actorId, itemId }) => game.actors.get(actorId).items.get(itemId)?.sheet?.close(), { actorId: S.actorId, itemId: M.id });
+  // (b) installed through the flow (stamped, loss rolled), taken out: the button charges again, Humanity unticked.
+  await gm.evaluate(({ actorId, itemId }) => game.actors.get(actorId).items.get(itemId).update({ "system.equipped": false }), { actorId: S.actorId, itemId: M.id });
+  await gm.waitForTimeout(400);
+  const r0 = await itemState(gm, S.actorId, M.id);
+  const rb = await pressButton(gm, S.actorId, M.id);
+  const rd = await waitDialog(gm);
+  const rt = await dialogTicks(gm);
+  check("§7b taken out and pressed again: a dialog, not a free re-install; Humanity UNticked (already rolled), fee ticked", rb.found === true && !!rd && rt?.roll === false && rt?.pay === true, JSON.stringify({ rb, rt }));
+  await answerDialog(gm, "ok");
+  await gm.waitForTimeout(1500);
+  const r1 = await itemState(gm, S.actorId, M.id);
+  check("§7b OK: charged again, loss unchanged, installed", r1.funds === r0.funds - FEE && r1.loss === r0.loss && r1.equipped === true, JSON.stringify({ before: r0.funds, after: r1.funds, loss0: r0.loss, loss1: r1.loss, eq: r1.equipped }));
+  await gm.evaluate(({ actorId, itemId }) => game.actors.get(actorId).items.get(itemId)?.sheet?.close(), { actorId: S.actorId, itemId: M.id });
+  // (c) the drag back in is still free (the §2 contract, restated beside the button's).
+  await gm.evaluate(({ actorId, itemId }) => game.actors.get(actorId).items.get(itemId).update({ "system.equipped": false }), { actorId: S.actorId, itemId: M.id });
+  await gm.waitForTimeout(400);
+  const x0 = await itemState(gm, S.actorId, M.id);
+  check("§7b harness: GM's sheet renders the zone target", await openSheet(gm, S.actorId) === true, "");
+  check("§7b drop event dispatched on zone:l-arm", await drop(gm, S.actorId, M.uuid, "zone:l-arm") === true, "");
+  await gm.waitForTimeout(1200);
+  const xd = await gm.evaluate(() => [...foundry.applications.instances.values()].some(a => !!a.element?.querySelector?.('[name="rollHumanity"]')));
+  const x1 = await itemState(gm, S.actorId, M.id);
+  check("§7b the drag back into a body location is still free: no dialog, installed, funds unchanged", xd === false && x1.equipped === true && x1.funds === x0.funds, JSON.stringify({ dialog: xd, eq: x1.equipped, before: x0.funds, after: x1.funds }));
+
   /* ─────────────────── §8 shop Buy & Install / Buy Only ─────────────────── */
   console.log("\n§8 shop Buy & Install stamps, Buy Only does not");
   const buy = async (action, name) => {

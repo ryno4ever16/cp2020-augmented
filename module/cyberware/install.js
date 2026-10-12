@@ -162,6 +162,9 @@ async function _confirmInstall(o) {
   const total = (o.showPart ? (Number(o.partPrice) || 0) : 0) + (Number(o.surgeryCost) || 0);
   const content = await renderDialogTemplate("modules/cp2020-augmented/templates/dialog/cyber-install.hbs", {
     showPart: o.showPart,
+    installedAlready: o.installedAlready === true,
+    rolledAlready: o.rolledAlready === true,
+    humanityLoss: Number(o.item.system?.humanityLoss) || 0,
     partUnpriced: o.partUnpriced === true,
     partPrice: Number(o.partPrice) || 0,
     surgeryLabel: tryLocalize(o.surgery.label),
@@ -520,11 +523,16 @@ export function pendingInstallRequest(item) {
  * @param {object} [o]       { placement: { updates, severFlesh } | null }
  * @returns {Promise<boolean>} true when it was installed here and now
  */
-export async function beginCyberwareInstall(actor, item, { placement = null } = {}) {
+export async function beginCyberwareInstall(actor, item, { placement = null, fromSheet = false } = {}) {
   if (!actor || !item || item.type !== "cyberware") return false;
   // Never a surgery (see isSlottedChip): the sheets slot a chip themselves and do not come here.
   if (isSlottedChip(item)) return false;
-  if (item.system?.equipped === true) {
+  // THE SHEET'S BUTTON IS THE PAID PATH, ALWAYS (owner ruling 2026-10-12): it opens the dialog for chrome
+  // that is already in the body too, so a piece that arrived installed without the flow (a macro-made
+  // character) can still be charged and rolled. A drop onto a body location keeps the free re-install
+  // for chrome that has been in this body before (wasInstalledHere, read by the actor sheet).
+  const installedAlready = item.system?.equipped === true;
+  if (installedAlready && !fromSheet) {
     ui.notifications?.warn(localize("CyberAlreadyInstalled", { item: item.name }));
     return false;
   }
@@ -541,7 +549,11 @@ export async function beginCyberwareInstall(actor, item, { placement = null } = 
     const listedFee = isShopSetupMode() ? 0 : surgery.cost;
     const choices = await _confirmInstall({
       title: localize("CyberInstallTitle", { item: item.name }),
-      item, surgery, surgeryCost: listedFee, showPart: false
+      item, surgery, surgeryCost: listedFee, showPart: false,
+      installedAlready,
+      // Humanity already rolled on this piece: the roll is offered UNTICKED so a second press does not
+      // double the loss; the owner can tick it back on. A piece with no loss yet rolls by default.
+      rolledAlready: (Number(item.system?.humanityLoss) || 0) > 0,
     });
     if (!choices) return false;
     const fee = await settleSurgeryFee({
