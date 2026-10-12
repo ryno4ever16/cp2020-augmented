@@ -647,8 +647,55 @@ const CALIBER_ALIASES = {
 
   // Non-cartridge projectiles that already have a registry entry.
   "quarrels":       "Bolt",     // three crossbows — were being offered firearm loads
-  "fuel (4 shots)": "Napalm"
+  "fuel (4 shots)": "Napalm",
+
+  // Launched grenades — the spellings the launcher records print, folded onto the four round families
+  // of GRENADE_CALIBERS below. "30mm" launchers take 40mm rounds: Solo of Fortune 2 p.68 has the
+  // Soviet underbarrel GL, the Mi-52 and the Mi-32 "count as 40mm", and Maximum Metal p.77 prints no
+  // 30mm round list of its own ("similar to the 40mm"). The Wrist Rocket's bare "30mm" is a rocket
+  // caliber and is left alone.
+  "25mm grenades":     "25mm grenade",
+  "25mm mini-grenade": "25mm grenade",
+  "40mm grenades":     "40mm grenade",
+  "30mm grenade":      "40mm grenade",
+  "30mm caseless":     "40mm grenade"
 };
+
+/**
+ * The four LAUNCHED-GRENADE round families, plus the Core's own "Grenade" (CP2020 p.111: every grenade
+ * type comes "in hand or rifle-propelled versions", so the Core launcher's rounds are the Core grenades).
+ * These are NOT entries of CALIBERS: a caliber there gets a generated box row in the shop and a load
+ * list, which is the bullet model. A grenade round is a pack DOCUMENT with its own warhead (blast
+ * radius, effect words, burn), and the shop offers those documents instead (shop/catalog.js).
+ *   25mm grenade     Militech low-velocity: Mini-Grenade Launcher (Chromebook 1 p.46), U-55 Cowboy
+ *                    (Corpbook 2 p.62), the pistol-grenade adaptor (Chromebook 2 p.48), Home of the Brave p.86
+ *   25mm HP grenade  Arasaka Tsunami high-pressure (Solo of Fortune 2 p.12: "cannot be used in the Militech Mini-GL")
+ *   40mm grenade     Home of the Brave p.86-87, Maximum Metal p.77; 30mm launchers load these (alias above)
+ *   rifle grenade    muzzle-launched from any 5.56mm+ military rifle (Home of the Brave p.87)
+ */
+export const GRENADE_CALIBERS = Object.freeze({
+  "Grenade":         { label: "Grenade (Core)" },
+  "25mm grenade":    { label: "25mm grenade" },
+  "25mm HP grenade": { label: "25mm high-pressure grenade" },
+  "40mm grenade":    { label: "40mm grenade" },
+  "rifle grenade":   { label: "Rifle grenade" }
+});
+
+/** Is this (normalised) caliber one of the launched-grenade families? Pure. */
+export function isGrenadeRoundCaliber(id) {
+  return Object.prototype.hasOwnProperty.call(GRENADE_CALIBERS, normalizeCaliber(id));
+}
+
+/**
+ * Calibers a weapon ALSO accepts beyond its own. The Core's "Grenade Launchers" (CP2020 p.63) print no
+ * caliber; Blackhand's Street Weapons p.42 restates the same entry — 150eb, 225m, under-barrel on any
+ * assault rifle — as "Commercial Grenade Launchers ... VARIES (30-40MM)", so the Core launcher takes the
+ * 40mm rounds, and a 40mm launcher takes the Core's rifle-propelled grenades in turn (user ruling 2026-10-12).
+ */
+const CALIBER_ACCEPTS = Object.freeze({
+  "Grenade":      ["40mm grenade"],
+  "40mm grenade": ["Grenade"]
+});
 
 /** Canonical caliber id for a stored value (resolves known typos/aliases). Never throws. */
 export function normalizeCaliber(id) {
@@ -665,7 +712,9 @@ export function normalizeCaliber(id) {
 export function caliberMatches(weaponCaliber, ammoCaliber) {
   const a = normalizeCaliber(ammoCaliber);
   if (a === "") return true;
-  return normalizeCaliber(weaponCaliber) === a;
+  const w = normalizeCaliber(weaponCaliber);
+  if (w === a) return true;
+  return (CALIBER_ACCEPTS[w] ?? []).includes(a);
 }
 
 export let martialActions = {
