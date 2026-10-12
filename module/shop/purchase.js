@@ -287,12 +287,25 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
     const hasQty = typeHasQty && Number.isFinite(Number(data.system?.quantity));
     let toCreate;
     if (hasQty) {
-      data.system.quantity = n;
-      toCreate = [data];
+      // A second buy of the same round joins the stack the buyer already carries (same compendium
+      // source), the way buy-ammo.js stacks a caliber. A pack round ships at quantity 0 with its
+      // quantity LOCKED (it is a catalog entry); a bought stack is the buyer's, so the lock comes off.
+      const sourceUuid = String(data._stats?.compendiumSource ?? source?.uuid ?? "");
+      const existing = sourceUuid
+        ? (actor.itemTypes?.[data.type] ?? actor.items.filter(i => i.type === data.type)).find(i => String(i._stats?.compendiumSource ?? "") === sourceUuid)
+        : null;
+      if (existing) {
+        await existing.update({ "system.quantity": Number(existing.system?.quantity ?? 0) + n, "system.qtyLocked": false });
+        toCreate = [];
+      } else {
+        data.system.quantity = n;
+        if ("qtyLocked" in (data.system ?? {})) data.system.qtyLocked = false;
+        toCreate = [data];
+      }
     } else {
       toCreate = Array.from({ length: n }, () => foundry.utils.deepClone(data));
     }
-    await actor.createEmbeddedDocuments("Item", toCreate);
+    if (toCreate.length) await actor.createEmbeddedDocuments("Item", toCreate);
   } catch (err) {
     console.error("cp2020-augmented | Shop purchase failed to stock, refunding.", err);
     await actor.update({ "system.eurobucks": funds });

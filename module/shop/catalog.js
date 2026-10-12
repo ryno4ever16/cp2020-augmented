@@ -11,7 +11,7 @@ import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
 import { isShopViewAsPlayer, toggleShopViewAsPlayer } from "./view-as-player.js";
 import { renderChatCard, getHtmlElement } from "../compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
-import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature, AMMO_MODIFIERS, modifierAppliesToCaliber } from "../lookups.js";
+import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature, AMMO_MODIFIERS, modifierAppliesToCaliber, isGrenadeRoundCaliber } from "../lookups.js";
 import { purchaseAmmo, canBuyAmmo } from "./buy-ammo.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
 import {
@@ -254,14 +254,19 @@ async function buildCatalogIndex() {
     // `system.attackType` + `system.ammoType` ride the index for the Goon Factory's chemical-posture
     // steer (npcgen/goon-factory.js chemicalCapableRow) — the delivery mechanism and the chambered
     // caliber are what identify a chemical-capable weapon without loading the document.
-    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "system.cyberwareSubtype", "system.attackType", "system.ammoType", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
+    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "system.cyberwareSubtype", "system.attackType", "system.ammoType", "system.caliber", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
     catch (e) { return []; }
     const items = [];
     for (const e of idx) {
       const type = e.type ?? "misc";
-      if (EXCLUDED_TYPES.has(type)) continue;
+      // A LAUNCHED-GRENADE ROUND is the one ammo document the catalog offers as itself. Bullets are
+      // generated caliber x load rows (_buildAmmoCatalogRows) and their documents stay out; a grenade
+      // round is a pack document with its own warhead (lookups.js GRENADE_CALIBERS), so it is a row on
+      // the Ammo shelf like any other good, keyed, priced at its record and stockable in a shop.
+      const grenadeRound = type === "ammo" && isGrenadeRoundCaliber(e.system?.caliber ?? e.system?.ammoType);
+      if (EXCLUDED_TYPES.has(type) && !grenadeRound) continue;
       // Pack identity, then item data — the precedence lives in categories.js (resolveCategory).
-      const { category, sub } = resolveCategory(packName, type, e.system, e.flags);
+      const { category, sub } = grenadeRound ? { category: "Ammo", sub: "" } : resolveCategory(packName, type, e.system, e.flags);
       const { supplement, canon } = classifySupplement(e.system?.source);
       // Book-verified corrections to base-pack data (name/cost/priceRange) — data-corrections.js.
       const corr = correctionFor(pack.collection, e._id);
