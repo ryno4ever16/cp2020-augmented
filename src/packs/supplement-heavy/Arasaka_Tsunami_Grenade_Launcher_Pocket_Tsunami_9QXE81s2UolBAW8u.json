@@ -4,8 +4,8 @@
   "type": "weapon",
   "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
-    "flavor": "",
-    "notes": "",
+    "flavor": "Six-shot revolver launcher for high-pressure 25mm mini-grenades; a borg or ACPA support gun.",
+    "notes": "<p>Solo of Fortune 2 p.12: \"Heavy 0 L P Varies (25mm mini-gren) 6 1 ST 200m 1250eb\"; \"These are high-pressure mini-grenades and cannot be used in the Militech Mini-GL\"; \"Borg support gun BOD min=11, ACPA pistol BOD min=23\". Loads the Tsunami 25mm HP rounds (Fragmentation 3d6+1, HE 5d6, HEP 5d6, Incendiary); the launcher's own damage column is the round's, so it reads Varies. The 3d6+1 it carried before was the fragmentation line alone.</p>",
     "cost": 1250,
     "weight": 0,
     "equipped": false,
@@ -15,11 +15,11 @@
     "accuracy": 0,
     "concealability": "ConcealLongcoat",
     "availability": "Poor",
-    "ammoType": "25mm mini-grenade",
+    "ammoType": "25mm HP grenade",
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "3d6+1",
+    "damage": "Varies (25mm HP)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -37,7 +37,7 @@
     "burstCapable": false,
     "reliability": "Standard",
     "range": 200,
-    "attackType": "",
+    "attackType": "Grenade",
     "attackSkill": "Heavy Weapons"
   },
   "effects": [],

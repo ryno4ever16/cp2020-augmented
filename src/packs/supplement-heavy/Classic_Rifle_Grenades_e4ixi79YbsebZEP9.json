@@ -59,7 +59,7 @@
     "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 100,
-    "attackType": "",
+    "attackType": "Grenade",
     "attackSkill": "Heavy Weapons"
   },
   "_stats": {},
