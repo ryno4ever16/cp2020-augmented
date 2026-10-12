@@ -77,6 +77,19 @@ const r = await p.evaluate(async () => {
   const row = dlg.element?.querySelector(rowSel);
   out.fireRow = { present: !!row, ticked: !!row?.checked,
     label: dlg.element?.querySelector(`${rowSel}`)?.closest(".field")?.querySelector("label")?.textContent?.trim() ?? "" };
+  // GRID PLACEMENT (reported 2026-10-12): the gear row rendered as a group of its own, one cell wide in a
+  // two-column grid, so its checkbox sat mid-dialog. It belongs in the toggles grid, after Turning to Face,
+  // with its checkbox on the same column edge as the toggles'.
+  {
+    const ambush = dlg.element?.querySelector('input[name="ambush"]');
+    const turn = dlg.element?.querySelector('input[name="turningToFace"]');
+    const rowField = row?.closest(".field"), ambushField = ambush?.closest(".field");
+    const sameList = !!rowField && !!ambushField && rowField.parentElement === ambushField.parentElement;
+    const rb = row?.getBoundingClientRect(), ab = ambush?.getBoundingClientRect(), tb = turn?.getBoundingClientRect();
+    const fields = rowField?.parentElement ? [...rowField.parentElement.querySelectorAll(":scope > .field")] : [];
+    out.fireGrid = { sameList, rightEdgeDelta: rb && ab ? Math.abs(rb.right - ab.right) : null,
+      belowTurnFace: rb && tb ? rb.top > tb.top : null, afterTurnFace: fields.indexOf(rowField) === fields.indexOf(turn?.closest(".field")) + 1 };
+  }
   let before = new Set(game.messages.contents.map(m => m.id));
   dlg.element.querySelector("button.fire")?.click();
   await sleep(1500);
@@ -164,6 +177,9 @@ const checks = [
   ["e2e: activated link → one provider", r.e2eActiveProviders === 1],
   ["e2e: fire dialog shows the row pre-ticked", r.fireRow.present === true && r.fireRow.ticked === true],
   ["e2e: fire-dialog row label = name (+2)", /Smartgun Link \(\+2\)/.test(r.fireRow.label)],
+  ["e2e: the gear row sits in the toggles grid, right after Turning to Face, its box on the same column edge as Ambush's",
+    r.fireGrid?.sameList === true && r.fireGrid.afterTurnFace === true && r.fireGrid.belowTurnFace === true && r.fireGrid.rightEdgeDelta !== null && r.fireGrid.rightEdgeDelta < 2,
+    JSON.stringify(r.fireGrid)],
   // UN-PARKED (2026-07-06): the earlier miss was a readback-location issue, not a lost modifier —
   // this card's message attaches NO rolls (Multiroll.execute without addRoll), so the term
   // breakdown is read from the card markup instead. Last numeric term = the folded gear mod.
@@ -175,7 +191,7 @@ const checks = [
   ["0 console errors", errors.length === 0]
 ];
 let fail = 0;
-for (const [n, ok] of checks) { console.log(`  ${ok ? "PASS" : "FAIL"}  ${n}`); if (!ok) fail++; }
+for (const [n, ok, detail] of checks) { console.log(`  ${ok ? "PASS" : "FAIL"}  ${n}${!ok && detail ? "  — " + detail : ""}`); if (!ok) fail++; }
 if (errors.length) console.log("errors:", errors.slice(0, 6));
 await b.close();
 process.exit(fail ? 1 : 0);

@@ -159,6 +159,25 @@ export function gearModGroup(providers) {
   }));
 }
 
+/**
+ * Place the gear rows INSIDE the dialog's toggle grid, right after its last toggle, instead of as a group
+ * of their own. Each group renders as a two-column grid (templates/dialog/modifiers.hbs `.field-list`),
+ * so a one-row group put a lone checkbox in a half-width cell between the number rows (reported
+ * 2026-10-12: "the smartgun checkbox is not aligned with the others"). The toggle grid is found by its
+ * last toggle's data path; a dialog without one (a melee roll) keeps the rows as their own group. Pure
+ * apart from the splice into the array it is handed.
+ * @param {Array<Array<object>>} groups  the dialog's modifier groups
+ * @param {Array<object>} rows           gearModGroup(providers)
+ * @param {string} [afterPath]           the data path of the toggle the rows follow
+ */
+export function placeGearRows(groups, rows, afterPath = "turningToFace") {
+  if (!rows?.length) return groups;
+  const grid = groups.find(g => Array.isArray(g) && g.some(f => f?.dataPath === afterPath));
+  if (!grid) { groups.push(rows); return groups; }
+  grid.splice(grid.findIndex(f => f?.dataPath === afterPath) + 1, 0, ...rows);
+  return groups;
+}
+
 /** Sum of the providers whose dialog checkbox came back ticked. Pure. */
 export function gearModSum(options, providers) {
   let sum = 0;

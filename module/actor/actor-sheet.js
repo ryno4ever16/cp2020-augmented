@@ -11,7 +11,7 @@ import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML
 import { isUnreadableNumberField, refuseUnreadableNumberFields, refuseOutOfRangeNumberFields } from "../form-number-guard.js";
 import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
 import { damageFormulaIsRollable, warheadDamageFor, weaponDetonates, areaDeliveryKind, wordWarheadOf, WORD_WARHEAD_FORMULA } from "../combat/area-delivery.js";
-import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
+import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum, placeGearRows } from "../mech/roll-mods.js";
 import { extraPartsOf } from "../combat/attack-breakdown.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
@@ -1026,7 +1026,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
     if(isRanged) {
       modifierGroups = rangedModifiers(item, targetTokens, savedAttackOptions);
-      if (gearProviders.length) modifierGroups.push(gearModGroup(gearProviders));
+      // The gear rows join the toggle grid (after Turning to Face), not a grid of their own.
+      if (gearProviders.length) placeGearRows(modifierGroups, gearModGroup(gearProviders));
 
       // ── Automated Rangefinding ──────────────────────────────────────────
       // If enabled and exactly one target is selected, measure the token
