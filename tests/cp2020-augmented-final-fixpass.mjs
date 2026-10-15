@@ -210,12 +210,15 @@ const legC = await p.evaluate(async () => {
     out.ok.fundsUnchanged = (Number(actor.system?.eurobucks) || 0) === fundsAfter;
     out.ok.damageUnchanged = (Number(actor.system?.damage) || 0) === dmgAfter;
 
-    // sheet AFTER install: button gone, installed indicator present
+    // sheet AFTER install (ruling 2026-10-12, d64d177): the control STAYS — the sheet button is the paid
+    // "charge surgery" path every time (the free re-install is the drag onto a body location) — and the
+    // installed label sits beside it in the same row.
     await item.sheet.render(true); await sleep(600);
     const root = item.sheet.element;
-    out.ok.buttonGoneAfterInstall = !root?.querySelector(".cyber-install");
-    out.ok.installedIndicatorShown = [...(root?.querySelectorAll(".field.inactive") ?? [])]
-      .some(d => d.querySelector("label") && d.querySelectorAll("span").length >= 2 && !d.querySelector("button"));
+    const chargeBtn = root?.querySelector(".cyber-install");
+    const chargeLabel = game.i18n.localize("CYBERPUNK.CyberCharge");
+    out.ok.chargeButtonAfterInstall = !!chargeBtn && !!chargeLabel && chargeBtn.textContent.includes(chargeLabel);
+    out.ok.installedIndicatorShown = !!chargeBtn?.closest(".field")?.querySelector(".cp-cyber-installed-label");
     await item.sheet.close().catch(() => {});
 
     await actor.delete().catch(() => {});
@@ -617,8 +620,8 @@ add("c", "c: re-click returns false", legC.ok?.reClickFalse);
 add("c", "c: re-click raises a warning", legC.ok?.reClickWarned);
 add("c", "c: re-click leaves funds unchanged", legC.ok?.fundsUnchanged);
 add("c", "c: re-click leaves damage unchanged", legC.ok?.damageUnchanged);
-add("c", "c: install button gone post-install", legC.ok?.buttonGoneAfterInstall);
-add("c", "c: installed indicator shown post-install", legC.ok?.installedIndicatorShown);
+add("c", "c: install control stays post-install as the paid charge button", legC.ok?.chargeButtonAfterInstall);
+add("c", "c: installed indicator shown beside it post-install", legC.ok?.installedIndicatorShown);
 
 // d
 add("d", "d: combatant resolves on started combat", legD.ok?.combatantResolves);

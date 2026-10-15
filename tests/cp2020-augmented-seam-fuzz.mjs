@@ -695,13 +695,26 @@ try {
      * Read the RATIFIED SPELLINGS out of the served source rather than restating them here, so the
      * probe covers whatever the module actually ships and cannot drift away from it. */
     let spellings = [];
+    // The chambers a weapon ALSO accepts beyond its own (lookups.js CALIBER_ACCEPTS — the Core launcher
+    // takes 40mm rounds and the reverse, user ruling 2026-10-12), read off the same served source so the
+    // negative below exempts exactly what the module declares and nothing restated here.
+    let accepts = {};
     try {
       const src = await (await fetch(`/modules/${scope}/module/lookups.js`, { cache: "no-store" })).text();
       const start = src.indexOf("const CALIBER_ALIASES");
       const end = src.indexOf("export function normalizeCaliber");
       spellings = [...src.slice(start, end).matchAll(/^\s*"((?:[^"\\]|\\.)*)"\s*:/gm)].map(m => m[1]);
-    } catch (e) { spellings = []; }
-    const registry = Object.keys(L.CALIBERS);
+      const acceptsStart = src.indexOf("const CALIBER_ACCEPTS");
+      if (acceptsStart >= 0) {
+        for (const m of src.slice(acceptsStart, end).matchAll(/^\s*"((?:[^"\\]|\\.)*)"\s*:\s*\[([^\]]*)\]/gm)) {
+          accepts[m[1]] = [...m[2].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(x => x[1]);
+        }
+      }
+    } catch (e) { spellings = []; accepts = {}; }
+    // Two registries make up the chambers: the bullet list (CALIBERS) and the launched-grenade round
+    // families (GRENADE_CALIBERS), kept out of the bullet list on purpose so no ammo-box rows are
+    // generated for them (lookups.js, 2026-10-12). A ratified spelling may land in either.
+    const registry = [...Object.keys(L.CALIBERS), ...Object.keys(L.GRENADE_CALIBERS ?? {})];
     const garbage = Array.from({ length: 40 }, () => junkString());
     const corpus = [...spellings, ...registry, ...garbage, "", "   ", "\t"];
 
@@ -742,16 +755,23 @@ try {
         wrong.length === 0, wrong.length ? `${wrong.length}: ${wrong.slice(0, 4).join(", ")}` : `${spellings.length} spelling(s) chamber`);
     }
     {
-      const crossFits = [];
+      // A cross-fit is a defect UNLESS the module declares it (CALIBER_ACCEPTS, parsed above); the declared
+      // pairs get their own positive beside the negative, so both halves of the rule are pinned.
+      const crossFits = [], declared = [];
       for (const w of registry) {
         for (const a of registry) {
           if (w === a) continue;
-          if (L.caliberMatches(w, a) === true) crossFits.push(`${a} → ${w}`);
+          const fits = L.caliberMatches(w, a) === true;
+          if ((accepts[w] ?? []).includes(a)) declared.push({ w, a, fits });
+          else if (fits) crossFits.push(`${a} → ${w}`);
         }
       }
-      add("cartridge: two different cartridges never chamber in each other (the negative beside it)",
+      add("cartridge: two different cartridges never chamber in each other unless declared (the negative beside it)",
         crossFits.length === 0,
-        crossFits.length ? `${crossFits.length}: ${crossFits.slice(0, 4).join(", ")}` : `${registry.length}×${registry.length - 1} cross pairs refused`);
+        crossFits.length ? `${crossFits.length}: ${crossFits.slice(0, 4).join(", ")}` : `${registry.length}×${registry.length - 1} cross pairs refused, ${declared.length} declared`);
+      add("cartridge: every declared acceptance chambers (Core launcher ↔ 40mm)",
+        declared.length > 0 && declared.every(d => d.fits),
+        declared.length ? declared.map(d => `${d.a} → ${d.w}${d.fits ? "" : " REFUSED"}`).join(", ") : "no acceptance pairs parsed off the served source");
     }
     {
       let bad = 0;

@@ -54,6 +54,9 @@ const TIMEOUT_MS = Number(process.env.CP_BATTERY_TIMEOUT_MS || 420000);
 const SUITE_TIMEOUT_MS = {
   // ~640 s observed worst case + headroom for a slower rig; it is pacing, not a hang.
   "cp2020-augmented-fx-rail": 1_200_000,
+  // 405 s green on 2026-10-11, killed at the 420 s default on 2026-10-14 two hours into a battery; its
+  // 234 checks print only at the end, so a kill leaves an EMPTY log. Pacing, not a hang.
+  "cp2020-augmented-shop-drawer": 720_000,
 };
 for (const pair of String(process.env.CP_BATTERY_TIMEOUT_OVERRIDES || "").split(",")) {
   const [k, v] = pair.split("=").map((s) => (s || "").trim());
