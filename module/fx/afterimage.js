@@ -1138,6 +1138,9 @@ export function registerQuietMovementHighlight() {
     } catch (_e) { /* fail toward the stock picture */ }
     return style;
   }
+  // Carry the markers of any wrap beneath (combat/movement-allowance.js wraps the same seam) so each
+  // registration's idempotency check still sees its own flag whichever wrap ended up outermost.
+  for (const k of Object.keys(orig)) if (k.startsWith("__cp")) quietGridHighlight[k] = orig[k];
   quietGridHighlight.__cpAfterimageQuiet = true;
   proto._getGridHighlightStyle = quietGridHighlight;
   return true;

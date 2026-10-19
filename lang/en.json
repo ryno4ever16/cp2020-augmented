@@ -426,6 +426,8 @@
     "BorgModeOff": "Not a Borg",
     "BorgModeHint": "Whether this actor is a full-conversion cyborg — every zone takes structural damage instead of the wound track, and a destroyed head or torso is fatal. Auto detects it from an equipped full-borg body item; override to force it on or off.",
     "MovementLockedAfterAction": "Over the turn's allowance: this character has already acted this turn (one move plus one action per turn, CP2020 p.99).",
+    "MovementRunReadout": "{used} / {run}",
+    "MovementOverRun": "{name} has moved {used} {units} this turn, past the Run allowance of {run} {units} (MA × 3, CP2020 p.99). The move went through.",
     "Mortal": "Mortal {mortality}",
     "StunWoundPenaltyClause": " − {penalty} (wound penalty)",
     "StunTaserPenaltyClause": " − {penalty} (taser)",

@@ -2190,6 +2190,11 @@ body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
 /* ACPA pilot has declared more actions than ½ REF allows (MM p.54) — advisory highlight, not a block. */
 .cp-action-count-badge.cp-over-cap { background: rgba(209, 80, 47, 0.85); color: #fff; }
 
+/* Movement allowance on the token ruler label (combat/movement-allowance.js): the running total reads
+   "used / Run" and takes the status colour of its state; the path itself is tinted by the ruler. */
+.waypoint-label.cp-run-at .total-measurement { color: #c0791a; }
+.waypoint-label.cp-run-over .total-measurement { color: #d1502f; }
+
 /* "Missiles in Flight" combat-tracker panel (replaces the inline h4/ul/li/span/button styles). */
 .cp-missiles-panel .cp-missiles-head { margin: 6px 0 2px; border-top: 1px solid var(--color-border-dark-tertiary); padding-top: 4px; }
 

@@ -16,6 +16,7 @@ import { registerCoverZoneBehavior, registerCoverZoneVisibilityDefault } from ".
 import { registerCoverSocket, registerCoverTools, registerCoverWallConfig, registerCoverRepairButton } from "./combat/cover.js";
 import { registerSpreadZoneLook } from "./combat/spread-zone-look.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
+import { registerMovementAllowance } from "./combat/movement-allowance.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
@@ -866,6 +867,8 @@ Hooks.once("ready", function () {
   if (doCombat) {
     wire("damage hooks", registerDamageHooks);
     wire("movement gate", registerMovementGate);
+    // The distance half of p.99: the ruler reads "used / Run" for the turn and a player's drop past it is advised.
+    wire("movement allowance", registerMovementAllowance);
     wire("save-roll handlers", registerSaveRollHandlers);
   }
   if (doVehicles) {
