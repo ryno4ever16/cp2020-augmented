@@ -11,6 +11,9 @@
 import { chromium } from "@playwright/test";
 const BASE = process.env.FVTT_URL || "http://localhost:30004";
 const GM_PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
+// A page error's first stack frame rides along with its message: a bare "Cannot set properties of null"
+// names nothing (the 2026-10-20 battery read one and could not say whose line it was).
+const frameOf = (e) => { const f = String(e?.stack ?? "").split("\n").find(l => /\bat\b/.test(l)); return f ? " @ " + f.trim() : ""; };
 async function joinAs(page, match, pws){await page.goto(BASE+"/join",{waitUntil:"domcontentloaded"});const s=page.locator('select[name="userid"]');await s.waitFor({state:"visible",timeout:30000});const us=await s.locator("option").evaluateAll(o=>o.map(x=>({v:x.value,l:(x.textContent||"").trim()})).filter(x=>x.v));const u=us.find(x=>match.test(x.l));for(const pw of pws){await s.selectOption(u.v);await page.locator('input[name="password"]').fill(pw);await Promise.all([page.waitForNavigation({url:/\/game/,timeout:15000}).catch(()=>{}),page.locator('button[name="join"]').click()]);try{await page.waitForFunction(()=>window.game?.ready===true,undefined,{timeout:15000});return u.l;}catch{await page.goto(BASE+"/join",{waitUntil:"domcontentloaded"}).catch(()=>{});await s.waitFor({state:"visible"}).catch(()=>{});}}throw new Error("join "+u.l);}
 
 const b = await chromium.launch({ headless: true });
@@ -91,7 +94,7 @@ try {
   // assert, and the stub is what lets the substituted formula be READ BACK at the moment the base's roll
   // would have consumed it.
   let armed = false; const errs = [];
-  gm.on("pageerror", e => { if (armed) errs.push("pageerror: " + e.message); });
+  gm.on("pageerror", e => { if (armed) errs.push("pageerror: " + e.message + frameOf(e)); });
   gm.on("console", m => { if (armed && m.type() === "error") errs.push("console: " + m.text()); });
 
   armed = true;
@@ -182,7 +185,7 @@ try {
   // three; the CONSEQUENCE landing on exactly the figures the detonation's own enumeration named;
   // and the timed conditions counting down on the combat's own cadence.
   let armed2 = false; const errs2 = [];
-  gm.on("pageerror", e => { if (armed2) errs2.push("pageerror: " + e.message); });
+  gm.on("pageerror", e => { if (armed2) errs2.push("pageerror: " + e.message + frameOf(e)); });
   gm.on("console", m => { if (armed2 && m.type() === "error") errs2.push("console: " + m.text()); });
 
   armed2 = true;
@@ -416,7 +419,9 @@ try {
     const read = (id) => { const a = game.actors.get(id);
       const raw = a.getFlag("cp2020-augmented", "wordConditionState");
       return { marks: Array.isArray(raw) ? raw : (raw ? [raw] : []), blind: a.statuses?.has("blind") === true }; };
-    for (let i = 0; i < 30; i++) { if (read(d.npcId).marks.length) break; await new Promise(r => setTimeout(r, 200)); }
+    // Poll for the status mirror as well as the marker (as the deaf leg does): the marker lands first and the
+    // condition follows through the effect pipeline; a read between the two is a race, not a verdict.
+    for (let i = 0; i < 30; i++) { const r = read(d.npcId); if (r.marks.length && r.blind) break; await new Promise(r => setTimeout(r, 200)); }
     return { inside: read(d.npcId), outside: read(d.farId) };
   }, { npcId: S.npcId, farId: S.farId });
 
@@ -442,6 +447,23 @@ try {
     // last turn an expiry card and a status toggle as well), so a fixed wait races the longest of them
     // — measured as a trail ending [3,2,1,1] on a run where the fourth tick had simply not landed yet.
     // Each advance waits for the value to actually MOVE, which is the harness's own standing rule.
+    // ⚠ AND LET EACH ROUND'S CHAT SETTLE BEFORE THE NEXT ADVANCE. A round change also posts the wounded
+    // combatant's per-turn save prompt and DELETES last round's unanswered copy (save-rolls.js
+    // _supersedeUnansweredPrompt). With the chat tab not in view, core animates every new card into its
+    // notification strip over ~100 ms and re-queries the card's element afterwards with no null guard
+    // (chat.mjs #postNotification) — so advancing again inside that window, which no table does and this
+    // loop did at ~200 ms, deleted the card mid-animation and raised core's "Cannot set properties of
+    // null (setting 'hidden')" into the error leg (2026-10-20 battery, 2 of 3 advances). Settle = the
+    // message count unchanged for 300 ms, polled, bounded.
+    const chatSettled = async () => {
+      let n = game.messages.size, stable = 0;
+      for (let w = 0; w < 30 && stable < 300; w++) {
+        await new Promise(r => setTimeout(r, 100));
+        const m = game.messages.size;
+        if (m === n) stable += 100; else { n = m; stable = 0; }
+      }
+    };
+    await chatSettled();
     const trail = [];
     let want = 4;
     for (let i = 0; i < 4; i++) {
@@ -449,6 +471,7 @@ try {
       want -= 1;
       for (let w = 0; w < 40 && left() !== want; w++) await new Promise(r => setTimeout(r, 200));
       trail.push(left());
+      await chatSettled();
     }
     // The status comes off inside the same tick as the last decrement; give that write its own poll.
     for (let w = 0; w < 25 && npc.statuses?.has("blind"); w++) await new Promise(r => setTimeout(r, 200));
@@ -500,7 +523,7 @@ try {
   // and deliberately NOT 0.05, which lands face 10 and sends the base's exploding die into a recursion
   // that never terminates against a constant generator. The to-hit is carried by `extraMod` instead.
   let armed3 = false; const errs3 = [];
-  gm.on("pageerror", e => { if (armed3) errs3.push("pageerror: " + e.message); });
+  gm.on("pageerror", e => { if (armed3) errs3.push("pageerror: " + e.message + frameOf(e)); });
   gm.on("console", m => { if (armed3 && m.type() === "error") errs3.push("console: " + m.text()); });
   armed3 = true;
 

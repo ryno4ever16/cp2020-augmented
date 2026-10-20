@@ -2638,11 +2638,17 @@ const res = await page.evaluate(async () => {
       const confirm20 = [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone")).pop();
       const btn20 = confirm20 ? document.querySelector(`[data-message-id="${confirm20.id}"] .cp-confirm-spread-zone`) : null;
       ok("§20 the multi-victim corridor posted its confirm card with its one control", !!btn20);
+      const before20 = new Set(game.messages.map(m => m.id));
       btn20?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-      await sleep(3500);
-
-      const card20 = [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).pop();
-      const node20 = card20 ? document.querySelector(`[data-message-id="${card20.id}"]`) : null;
+      // Poll for a NEW result card on screen rather than a fixed wait: the two-body resolution's latency
+      // moves with rig load (a fixed 3.5 s read no card on a loaded rig while both bodies already carried
+      // the damage this section then asserted against).
+      let card20 = null, node20 = null;
+      for (let i = 0; i < 75 && !node20; i++) {
+        await sleep(200);
+        card20 = [...game.messages].filter(m => !before20.has(m.id) && (m.content ?? "").includes("cp-spread-result-list")).pop();
+        node20 = card20 ? document.querySelector(`[data-message-id="${card20.id}"]`) : null;
+      }
       ok("§20 the result card is on screen for the resolved corridor", !!node20);
       const discs = node20 ? [...node20.querySelectorAll("details.cp-area-breakdown")] : [];
       ok("§20 ⭐ EVERY caught figure's row carries its own collapsed disclosure",

@@ -36,7 +36,10 @@ const r = await p.evaluate(async () => {
     const md = new ModifiersDialog(actor, { weapon, modifierGroups: [], targetTokens: [], onConfirm() {} });
     md.render(true);
     let v1app = null;
-    for (let i = 0; i < 30 && !v1app; i++) { await sleep(200); v1app = Object.values(ui.windows ?? {}).find(w => w?.options?.id === "weapon-modifier" && w.rendered); }
+    // A loaded rig renders the base's V1 window late (the 2026-10-20 battery read none inside 6 s and was
+    // green standalone): wait longer, and record whether the WINDOW came so a red names which half failed.
+    for (let i = 0; i < 75 && !v1app; i++) { await sleep(200); v1app = Object.values(ui.windows ?? {}).find(w => w?.options?.id === "weapon-modifier" && w.rendered); }
+    out.v1Window = !!v1app;
     const rowBox = v1app?.element?.[0]?.querySelector?.(".cp-free-fire-row input.cp-ammo-tracking") ?? null;
     out.rowInjected = !!rowBox;
     out.rowChecked = rowBox?.checked === true;   // reflects tracking-on

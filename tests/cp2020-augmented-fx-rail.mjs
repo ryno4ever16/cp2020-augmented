@@ -785,6 +785,7 @@ const res = await page.evaluate(async () => {
     const line = Math.hypot(to.x - from.x, to.y - from.y);
     const seen = new Map();
     const t0 = performance.now();
+    let sawAny = false, done = false;
     const iv = setInterval(() => {
       for (const e of (globalThis.Sequencer?.EffectManager?.effects ?? [])) {
         if (!/bullet/.test(String(e.data?.file ?? "")) || !e.position) continue;
@@ -809,10 +810,18 @@ const res = await page.evaluate(async () => {
       // sampler caught four of six on a software rasteriser and the retry could not help — every attempt
       // sampled the same too-short window. Measured with a stand-alone probe at the wider window: 6 of 6
       // every run, worst 42px from centre against a 50px half-width, fractions 0.976–1.024.
-      if (performance.now() - t0 > 3600) clearInterval(iv);
+      // ⏱ AND BOUNDED BY THE EFFECTS' OWN END SINCE 2026-10-20, not by the clock alone. Probed on a
+      // loaded host (CPU ~50%, a game running): this 8 ms interval actually fired every 130–290 ms, each
+      // pellet sat at the sentinel for several samples, and the LAST pellet of the fan was first observed
+      // off-origin at 3398 / 3449 ms — all six landed 3–29 px from centre, but the fixed 3600 ms stop
+      // read five of them on three runs straight. The sampler now runs until every bullet effect it has
+      // seen is gone (or 6 s), so a slow engine moves the stop instead of truncating the sample.
+      const live = (globalThis.Sequencer?.EffectManager?.effects ?? []).filter(e => /bullet/.test(String(e.data?.file ?? ""))).length;
+      if (live > 0) sawAny = true;
+      if ((sawAny && live === 0) || performance.now() - t0 > 6000) { clearInterval(iv); done = true; }
     }, 8);
     await fx.fxShot(shooter, target, { weaponClass: "shotgun", hit, light: false });
-    await sleep(3800);
+    for (let w = 0; w < 65 && !done; w++) await sleep(100);
     clearInterval(iv);
     return [...seen.values()].map(p => ({
       fraction: +(Math.hypot(p.x - from.x, p.y - from.y) / line).toFixed(3),
@@ -1810,8 +1819,10 @@ const res = await page.evaluate(async () => {
   await game.settings.set(SCOPE, "combatFxEnabled", true);
   plays = [];
   Hooks.callAll("cyberpunk2020.weaponFired", payload({ shotsFired: 2, areaDamages: { Torso: [{ damage: 2 }] } }));
-  await sleep(500);
-  ok("switch on: wired listener drives the rail", plays.length === 2, String(plays.length));
+  // Drained like every other count (the 2026-09-15 ruling): each play is a TIMER `audioPhaseMs()` after
+  // its round, and a fixed 500 ms read one of the two on a loaded host three runs out of four (2026-10-20).
+  const switchDrainMs = await drainAudio(2, 2);
+  ok("switch on: wired listener drives the rail", plays.length === 2, `${plays.length} play(s) after a ${switchDrainMs} ms drain`);
   await sleep(900);
   await game.settings.set(SCOPE, "combatFxEnabled", settingWas);
 
