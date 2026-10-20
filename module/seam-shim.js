@@ -37,6 +37,9 @@ const SUPPRESSIVE_FIRE = "cyberpunk2020.suppressiveFire";
 const SKILL_ROLLED = "cyberpunkSkillRolled";
 const MULTI_HIT_TEMPLATE = "systems/cyberpunk2020/templates/chat/multi-hit.hbs";
 const SUPPRESSIVE_TEMPLATE = "systems/cyberpunk2020/templates/chat/suppressive.hbs";
+// The base's generic roll card (dice.js DefaultRollTemplate): what a martial action WITHOUT damage (hold,
+// grapple, sweep, disarm, escape…) renders instead of multi-hit.hbs — and what every skill roll renders too.
+const DEFAULT_ROLL_TEMPLATE = "systems/cyberpunk2020/templates/chat/default-roll.hbs";
 // The base system's five ranged/melee fire resolvers; each builds the per-location areaDamages and
 // renders multi-hit.hbs. Matches the seam PR (item.js: __fullAuto/__threeRoundBurst/__semiAuto/__meleeBonk),
 // plus __martialBonk — item.__weaponRoll routes a martial strike there and it renders multi-hit.hbs the same
@@ -112,6 +115,11 @@ export function rollIsNaturalOne(roll) {
 // stale clear would drop the payload. multi-hit.hbs is only ever rendered by a fire, and every fire
 // refreshes this first, so leaving the last context set is correct and never mis-attributes.
 let _fireCtx = null;
+
+// Set ONLY while a shim-wrapped __martialBonk call is in flight (see fireWrapper). The default roll card it
+// renders for a damage-less action is the same template every skill roll uses, so the render wrap may emit
+// for that template only inside this window — never from a stale context.
+let _martialRollOnlyCtx = null;
 
 // Set while a SHIM-wrapped __suppressiveFire runs, so the renderTemplate wrap below can emit the
 // suppressiveFire hook for the suppressive card it renders. The base method AWAITS its render inside the
@@ -306,7 +314,7 @@ function installWeaponFiredShim(ItemProto) {
     const orig = ItemProto?.[name];
     if (typeof orig === "function") foundAny = true;           // the method exists (base's or already ours)
     if (!shouldPatch(orig)) continue;                          // missing or already ours → skip
-    function fireWrapper(attackMods, ...rest) {
+    async function fireWrapper(attackMods, ...rest) {
       // Check the rail at the one moment it matters — the shot — and repair it in time for THIS one.
       // See the note on _renderWrapper for why this is the half that can vanish quietly.
       assertRenderEmit();
@@ -343,6 +351,10 @@ function installWeaponFiredShim(ItemProto) {
         // time, like the dialog does, so it reflects the token the shot was actually aimed at; null when
         // nothing is targeted.
         fxTargetTokenId: _firstTargetTokenId(),
+        // HOW MANY figures were aimed at: the melee contest (martial/melee-contest.js) runs for exactly one
+        // defender, and a swing declared at several is left on the card-and-button road. Read at call time
+        // for the same reason as the aim above.
+        targetCount: (() => { try { return game.user?.targets?.size ?? 0; } catch (_e) { return 0; } })(),
         // ⭐ THE CORRIDOR A SPREAD SHOT WAS AIMED ALONG BEFORE THE TRIGGER WAS PULLED (2026-08-11).
         // It arrives on the attack modifiers because that object is the one thing that travels from the
         // fire gesture into the base's own fire method — the aim is declared by the shooter several
@@ -401,6 +413,16 @@ function installWeaponFiredShim(ItemProto) {
         attackType: (this._getWeaponSystem?.() ?? this.system)?.attackType ?? null,
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
+      // ⭐ A MARTIAL ACTION WITH NO DAMAGE RENDERS THE DEFAULT CARD, NOT multi-hit.hbs (base item.js
+      // __martialBonk: "Defensive/non-damaging martial actions keep the compact default roll card"), so the
+      // render wrap below never saw a hold, grapple, sweep or disarm and the shot never emitted — no contest
+      // (martial/melee-contest.js), no action counted. The default template is every skill roll's as well,
+      // so the wrap may emit for it only WHILE this call is in flight: the window opens here and closes when
+      // the base's method settles (it awaits its own render, so the card is rendered inside the window).
+      if (name === "__martialBonk") {
+        _martialRollOnlyCtx = _fireCtx;
+        try { return await orig.call(this, attackMods, ...rest); } finally { _martialRollOnlyCtx = null; }
+      }
       return orig.call(this, attackMods, ...rest);
     }
     fireWrapper.__cpSeamShim = true;
@@ -451,6 +473,44 @@ function _signpostSpreadScatter(faces) {
   } catch (_e) { /* no UI on this client — the pattern still scatters */ }
 }
 
+/**
+ * The shot event for a martial action that rolled no damage (the base's default roll card, rendered inside a
+ * __martialBonk call). The same identity fields as the multi-hit emission, an empty damage map, the attack
+ * total read off the card's first roll (the base adds the attack roll first), and `fxMute`: nothing was
+ * swung home, so the presentation rail sits it out. Readers that key on damage see none and do nothing; the
+ * melee contest and the action counter are what it exists for.
+ */
+function _emitRollOnlyMartial(data) {
+  const ctx = _martialRollOnlyCtx;
+  const attackRoll = data?.rolls?.[0]?.roll ?? null;
+  Hooks.callAll(WEAPON_FIRED, {
+    attackerId: ctx.attackerId,
+    attackerTokenId: ctx.attackerTokenId ?? null,
+    weaponName: ctx.weaponName,
+    weaponId: ctx.weaponId,
+    fireId: ctx.fireId ?? null,
+    fireMethod: ctx.fireMethod ?? null,
+    dualWield: ctx.dualWield === true,
+    attackContext: ctx.attackContext ?? null,
+    attackType: ctx.attackType ?? null,
+    areaDamages: {},
+    targetTokenId: null,
+    fxTargetTokenId: ctx.fxTargetTokenId ?? null,
+    targetCount: ctx.targetCount ?? null,
+    spreadAim: null, aimPoint: null, spreadRangeM: ctx.spreadRangeM ?? null, spreadScatter: null, blastScatter: null,
+    attackTotal: Number.isFinite(Number(attackRoll?.total)) ? Number(attackRoll.total) : null,
+    toHitDC: null, baseHit: null, baseHits: null,
+    firedByUserId: game.user?.id ?? null,
+    targetActorId: ctx.fallbackTargetActorId ?? null,
+    fumble: rollIsNaturalOne(attackRoll),
+    fumbleRuled: !!data?.fumble,
+    fumbleClass: null,
+    rollOnly: true,
+    fxMute: true,
+    ...(ctx.effectFields ?? {}),
+  });
+}
+
 /** Wrap the global renderTemplate ONCE so each fire-card render emits its hook, combining the captured
  *  method context with the render's own computed data: multi-hit.hbs → weaponFired (one per resolved
  *  target); suppressive.hbs → suppressiveFire. Idempotent — either shim half may install it. */
@@ -484,6 +544,12 @@ function installRenderEmit() {
         const breakdown = attackBreakdownRows(data.attackRoll, _fireCtx.attackContext, data);
         if (breakdown) out = injectAttackBreakdown(out, breakdown);
       } catch (e) { console.warn("cp2020-augmented | attack breakdown skipped", e); }
+    }
+    // The roll-only martial card (see the window in fireWrapper): emitted with no damage, so the contest and
+    // the action counter see the attempt. Marked like every other card so a stacked wrapper cannot emit twice.
+    if (_martialRollOnlyCtx && path === DEFAULT_ROLL_TEMPLATE && data && !_emittedFor.has(data)) {
+      _emittedFor.add(data);
+      try { _emitRollOnlyMartial(data); } catch (e) { console.warn(`${SCOPE} | seam-shim roll-only martial emit failed`, e); }
     }
     try {
       if (_fireCtx && path === MULTI_HIT_TEMPLATE && !(data && _emittedFor.has(data))) {
@@ -589,6 +655,9 @@ function installRenderEmit() {
           fireId: _fireCtx.fireId ?? null,
           fireMethod: _fireCtx.fireMethod ?? null,
           dualWield: _fireCtx.dualWield === true,
+          // The attack's own context as captured at the trigger pull — the martial ACTION and style among
+          // its fields. Read by the melee contest (which manoeuvre lands on a hit) and by nothing else yet.
+          attackContext: _fireCtx.attackContext ?? null,
           // WHAT KIND OF ATTACK THIS WEAPON MAKES — carried for the readers that never see the item
           // (the GM's client, resolving a relayed payload). See the note where it is captured.
           attackType: _fireCtx.attackType ?? null,
@@ -617,6 +686,7 @@ function installRenderEmit() {
           //     to this, and the damage handler never reads it at all.
           targetTokenId: target?.id ?? null,
           fxTargetTokenId: _fireCtx.fxTargetTokenId ?? null,
+          targetCount: _fireCtx.targetCount ?? null,
           // The declared corridor, carried whole. Null on every shot that was not aimed first — every
           // consumer treats a null as "nobody declared an aim" and computes one, which is the behaviour
           // that shipped before the placement gesture existed.

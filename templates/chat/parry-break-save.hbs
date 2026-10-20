@@ -1,0 +1,11 @@
+{{!--
+  A declared parry with a bladed weapon took the hit (CP2020 p.112): the blade's break save, already rolled
+  (1D10, 9 or lower holds). Rendered from _postBreakSave() in module/martial/melee-contest.js; the roll rides
+  the message's rolls[].
+--}}
+<div class="cyberpunk save-prompt parry-break-save">
+  <h3>{{title}}</h3>
+  <div class="save-info">
+    <span class="{{#if broke}}result-fail{{else}}result-success{{/if}}">{{{body}}}</span>
+  </div>
+</div>

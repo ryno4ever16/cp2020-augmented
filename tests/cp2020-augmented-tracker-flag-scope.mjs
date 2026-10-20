@@ -228,7 +228,8 @@ const r = await p.evaluate(async () => {
     out.parry.rendered      = !!parryBtn;
     out.parry.combatantIdOk = (parryBtn?.dataset?.combatantId || "") === cU2.id;
     parryBtn?.click();
-    for (let i = 0; i < 50 && raw(u2, "parrying") !== true; i++) await sleep(120);
+    // The parry stance is the object naming what parries ({ object: "rArm" … }), not a bare true.
+    for (let i = 0; i < 50 && !raw(u2, "parrying"); i++) await sleep(120);
     await sleep(400);
     out.parry.tokenActor = raw(u2, "parrying");
     out.parry.worldActor = raw(base, "parrying");
@@ -240,14 +241,14 @@ const r = await p.evaluate(async () => {
     // used here because it renders on every row, active or not.
     ui.combat?.render(true); await sleep(700);
     rowBtn(cU1, ".cp-parry-btn")?.click();
-    for (let i = 0; i < 50 && raw(u1, "parrying") !== true; i++) await sleep(120);
+    for (let i = 0; i < 50 && !raw(u1, "parrying"); i++) await sleep(120);
     await sleep(400);
     out.parry.bothDeclared = { first: raw(u1, "parrying"), second: raw(u2, "parrying"), world: raw(base, "parrying") };
 
     // (C3) cancelling ONE figure leaves the other standing.
     ui.combat?.render(true); await sleep(700);
     rowBtn(cU1, ".cp-parry-btn")?.click();
-    for (let i = 0; i < 50 && raw(u1, "parrying") === true; i++) await sleep(120);
+    for (let i = 0; i < 50 && !!raw(u1, "parrying"); i++) await sleep(120);
     await sleep(400);
     out.parry.oneCancelled = { cancelled: raw(u1, "parrying"), other: raw(u2, "parrying"), world: raw(base, "parrying") };
     await clearAll();
@@ -445,13 +446,14 @@ const checks = [
   // (C) parry
   ["parry control renders on a non-active unlinked row with the right combatant id",
     r.parry.rendered === true && r.parry.combatantIdOk === true],
-  ["parry write lands on that row's token actor (true)", r.parry.tokenActor === true],
+  // The parry stance is the object naming what parries ({ object: "rArm" … }); a cleared one reads null.
+  ["parry write lands on that row's token actor (the stance object)", !!r.parry.tokenActor && typeof r.parry.tokenActor === "object" && typeof r.parry.tokenActor.object === "string"],
   ["parry write does NOT land on the world actor", r.parry.worldActor === null],
   ["parry write does NOT reach the sibling figure", r.parry.sibling === null],
   ["second act — both unlinked figures can stand declared at once (world actor still clean)",
-    r.parry.bothDeclared?.first === true && r.parry.bothDeclared?.second === true && r.parry.bothDeclared?.world === null],
+    !!r.parry.bothDeclared?.first?.object && !!r.parry.bothDeclared?.second?.object && r.parry.bothDeclared?.world === null],
   ["second act — cancelling one figure leaves the other standing (world actor still clean)",
-    r.parry.oneCancelled?.cancelled === null && r.parry.oneCancelled?.other === true && r.parry.oneCancelled?.world === null],
+    r.parry.oneCancelled?.cancelled === null && !!r.parry.oneCancelled?.other?.object && r.parry.oneCancelled?.world === null],
 
   // (D) add-action
   ["add-action control renders on the unlinked row with the right combatant id",

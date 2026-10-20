@@ -1,0 +1,23 @@
+{{!--
+  Melee defense window (DialogV2 content), rendered from openDefenseWindow() in module/martial/melee-contest.js.
+  name="defense" (the chosen option id) and name="extraMod" are read by the Roll button's callback — keep them
+  verbatim. `options` arrive pre-labelled and pre-sorted with the best preselected. The root is a <div>, not a
+  <form>: DialogV2 wraps its content in a form of its own. i18n via CPLocal.
+--}}
+<div class="cyberpunk cp-melee-defense">
+  <p class="cp-field-lead">{{{lead}}}</p>
+  <div class="field-list one-col">
+    <div class="field">
+      <label>{{CPLocal "MeleeDefenseSkillLabel"}}</label>
+      <select name="defense" class="cp2020ae-install-picker">
+        {{#each options}}
+        <option value="{{id}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+        {{/each}}
+      </select>
+    </div>
+    <div class="field">
+      <label>{{CPLocal "MeleeDefenseExtraLabel"}}</label>
+      <input type="number" name="extraMod" class="number" value="0" step="1">
+    </div>
+  </div>
+</div>

@@ -39,6 +39,30 @@ Fire from a weapon's sheet or macro → the shot resolves, draws, and sounds →
 window opens after the on-screen action. Per-hit rows show location, SP, and damage; each row
 expands to a full math breakdown naming every SP source (armor layers, cover, AP effects, BTM).
 
+### Melee is opposed (added 1.2.12)
+
+A melee attack — a weapon swing or a martial action — rolls as before, but the damage is not applied until
+the defender has rolled against it (CP2020 p.111: attacker REF + skill + 1D10 vs defender REF + skill + 1D10;
+a tie goes to the defender, p.39). After the attack card a **Defense** card appears for the target:
+
+- **Choose defense** opens a window for the defender's player (or the GM; for an NPC, the GM only) listing
+  every skill the book allows — Melee, Fencing, Brawling, Dodge & Escape, Athletics, and each trained
+  martial art as a Block row and a Dodge row with the style's key bonus — with the total each would roll on.
+  The best is preselected; the Referee says which one applies ("roll fencing"), the player rolls it. An
+  extra-modifier box takes whatever the table agrees.
+- The result card shows both totals and the verdict. A **hit** opens the Apply Damage window as a shot
+  would; a **miss** ends there. Hold, Grapple, Choke, Throw and Sweep land their effect on a hit; a Throw's
+  stun save is at −2.
+- **Hit (GM)** / **Miss (GM)** on the Defense card rule without a roll. A stunned (out-of-combat, p.104)
+  defender cannot defend and the card resolves itself as a hit; a fumbled attack resolves as a miss.
+
+**Dodge and Parry are declarations, not rolls** (p.112). The combat tracker's 🛡 and ⛨ sit on every
+combatant's row, and the combat tab's Dodge and Block/Parry buttons make the same declaration. Each costs an
+action (so the next action that round is at −3); a dodge puts −2 on every melee attack against the declarer
+(pre-filled into the attacker's dialog); a parry names what parries — an arm takes the hit on that arm, a
+bladed weapon takes no damage but rolls to avoid breaking (9 or lower on 1D10). The book places declarations
+at the start of the round; a later one is accepted with a warning. Both clear when the round ends.
+
 ## 3. Cover (post-rework shape)
 
 - **Place cover:** scene tools → **Regions** group → Place Cover → pick a preset ("Brick Wall

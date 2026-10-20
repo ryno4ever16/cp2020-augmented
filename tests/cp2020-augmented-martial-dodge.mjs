@@ -306,7 +306,10 @@ const r = await p.evaluate(async () => {
       btn(".cp-parry-btn")?.click();
       for (let i = 0; i < 40 && !attacker.getFlag(SCOPE, "parrying"); i++) await sleep(120);
       await sleep(300);
-      out.stance.parrySetsFlag = attacker.getFlag(SCOPE, "parrying") === true;
+      // The parry stance is the OBJECT that names what parries (combat/damage-hooks.js toggleDeclaredStance:
+      // { object: "rArm" | "lArm" | "weapon", … }), not a bare true.
+      const parryStance = attacker.getFlag(SCOPE, "parrying");
+      out.stance.parrySetsFlag = !!parryStance && typeof parryStance === "object" && typeof parryStance.object === "string";
       out.stance.parryCountsAction = count() === c1 + 1;
 
       // Second act: the same gesture again is the CANCEL, and a cancel is not a new action.

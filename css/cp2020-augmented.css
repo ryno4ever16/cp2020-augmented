@@ -407,6 +407,13 @@
 .cp-cyber-install-dialog .dialog-buttons { gap: 6px; }
 .cp-cyber-install-dialog .dialog-buttons button { flex: 1 1 0; white-space: nowrap; min-width: 0; }
 
+/* Melee defense window (martial/melee-contest.js): the same two-button row as the install dialog; the lead
+   line sits above the field rows. The parry declare card's object buttons light the standing choice. */
+.cp-melee-defense-dialog .dialog-buttons { gap: 6px; }
+.cp-melee-defense-dialog .dialog-buttons button { flex: 1 1 0; white-space: nowrap; min-width: 0; }
+.cp-melee-defense .cp-field-lead { margin: 0 0 6px; }
+.cyberpunk .parry-declare .save-buttons button.cp-active { color: #44aaff; border-color: #44aaff; }
+
 /* Apply-damage "Select Target" dialog: three buttons share the footer row and the long
    "Use Canvas Target" label spilled out of its third.
    ⚠ TWO FOOTER SELECTORS, and the second one is the one that does the work. A DialogV2 on

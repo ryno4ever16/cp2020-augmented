@@ -17,6 +17,7 @@ import { registerCoverSocket, registerCoverTools, registerCoverWallConfig, regis
 import { registerSpreadZoneLook } from "./combat/spread-zone-look.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerMovementAllowance } from "./combat/movement-allowance.js";
+import { registerMeleeContest } from "./martial/melee-contest.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
@@ -866,6 +867,8 @@ Hooks.once("ready", function () {
   wire("movement echo trail", registerAfterimage);
   if (doCombat) {
     wire("damage hooks", registerDamageHooks);
+    // The opposed melee roll (p.111): the contest card, its window and the verdict's consequence.
+    wire("melee contest", registerMeleeContest);
     wire("movement gate", registerMovementGate);
     // The distance half of p.99: the ruler reads "used / Run" for the turn and a player's drop past it is advised.
     wire("movement allowance", registerMovementAllowance);

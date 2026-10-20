@@ -1,0 +1,19 @@
+{{!--
+  Parry DECLARATION card (CP2020 p.112). Rendered from _postParryDeclareCard() in module/combat/damage-hooks.js
+  when ⛨ (or the combat tab's Block/Parry button) declares: it names what parries and carries the buttons that
+  re-point it — the card is the chooser. The buttons' data-* are read by _hookParryObjectButtons(): the
+  actor's owner or the GM may change it while the parry stands. Reuses the shared save-prompt CSS classes.
+--}}
+<div class="cyberpunk save-prompt parry-declare">
+  <h3>{{title}}</h3>
+  <div class="save-info">
+    <span>{{{body}}}</span>
+    <br><span class="save-note">{{lead}}</span>
+  </div>
+  <div class="save-buttons">
+    {{#each options}}
+    <button class="cp-parry-object{{#if selected}} cp-active{{/if}}" data-object="{{value}}"
+            data-actor-id="{{../actorId}}" data-token-id="{{../tokenId}}">{{label}}</button>
+    {{/each}}
+  </div>
+</div>

@@ -1,0 +1,12 @@
+{{!--
+  Melee contest RESULT card. Rendered from _postResult() in module/martial/melee-contest.js: the defender's
+  breakdown (empty when the GM ruled without a roll, or the card resolved itself) and the verdict line. The
+  opposed roll rides the message's rolls[]. The presenting client reacts to this card's flag.
+--}}
+<div class="cyberpunk save-prompt melee-defense-result {{#if hit}}cp-verdict-hit{{else}}cp-verdict-miss{{/if}}">
+  <h3>{{title}}</h3>
+  <div class="save-info">
+    {{#if breakdown}}<span>{{{breakdown}}}</span><br>{{/if}}
+    <span class="{{#if hit}}result-fail{{else}}result-success{{/if}}">{{{verdict}}}</span>
+  </div>
+</div>

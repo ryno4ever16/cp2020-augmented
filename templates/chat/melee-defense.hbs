@@ -1,0 +1,21 @@
+{{!--
+  Melee CONTEST card (CP2020 p.111 opposed roll). Rendered from postMeleeDefenseCard() in
+  module/martial/melee-contest.js for every melee attack aimed at one figure; the shot's payload rides the
+  message flag. The buttons are read by the delegated handler in registerMeleeContest(): [Choose defense]
+  opens the window for the defender's owner or the GM; [Hit]/[Miss] are the GM's rulings without a roll.
+  `autoResolved` = the card resolved itself (the defender cannot defend, or the attack fumbled): no buttons.
+  Reuses the shared save-prompt CSS classes.
+--}}
+<div class="cyberpunk save-prompt melee-defense">
+  <h3>{{title}}</h3>
+  <div class="save-info">
+    <span>{{{body}}}</span>
+  </div>
+  {{#unless autoResolved}}
+  <div class="save-buttons">
+    <button class="cp-melee-defense-choose">{{CPLocal "MeleeDefenseChooseBtn"}}</button>
+    <button class="cp-melee-defense-force" data-verdict="hit">{{CPLocal "MeleeDefenseForceHitBtn"}}</button>
+    <button class="cp-melee-defense-force" data-verdict="miss">{{CPLocal "MeleeDefenseForceMissBtn"}}</button>
+  </div>
+  {{/unless}}
+</div>

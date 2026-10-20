@@ -417,6 +417,7 @@ const MANIFEST = [
   ["module/combat/damage-hooks.js:334", "onGlobalClick", "combat-tracker", "click", ".cp-parry-btn", "", "as above, and only while the declared-defense feature is on", null],
   ["module/combat/damage-hooks.js:334", "onGlobalClick", "combat-tracker", "click", ".cp-add-action-btn", "", "as above, and only while multi-action tracking is on", null],
   ["module/combat/damage-hooks.js:334", "onGlobalClick", "combat-tracker", "click", ".cp-manual-tick-btn", "", "as above, and only while manual round-ticking is on", null],
+  ["module/combat/damage-hooks.js:619", "onGlobalClick", "chat-card", "click", ".cp-parry-object", "actorId,object,tokenId", "the parry declare card's object buttons (Weapon / Left arm / Right arm) — present only once a parry has been declared", null],
   ["module/combat/damage-hooks.js:334", "onGlobalClick", "chat-card", "click", "[data-message-id]", "", "the card wrapper each of the above resolves through — present only once one of those cards is posted", null],
   ["module/combat/damage-hooks.js:821", "_injectApplyDamageControl", "chat-card", "click", ".cp2020-apply-damage-btn", "", "injected only onto a card carrying an areaDamages payload, for a GM or the attacker's owner", null],
   ["module/combat/cover.js:1047", "onGlobalClick", "chat-card", "click", ".cp-cover-repair", "wallUuid", "renders on a cover-DESTRUCTION card and only for a wall that BREACHED — needs a valued wall shot to zero structure; GM-only by render gate", null],

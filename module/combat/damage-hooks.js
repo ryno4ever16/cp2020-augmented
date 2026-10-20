@@ -49,6 +49,10 @@ import { mechRoundTickEnabled, combatFxEnabled, specialMeleeEffectsEnabled } fro
 import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, firingActorOf, localize, localizeParam, tryLocalize, cappedWoundDamage } from "../utils.js";
 import { renderChatCard, getHtmlElement }                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
+// The opposed melee roll (p.111): PATH A hands a melee card aimed at one figure to the contest instead of the
+// window; the verdict comes back through applyResolvedMeleeHit below. (A module cycle: both sides use the
+// other only inside functions, never at load.)
+import { contestApplies, postMeleeDefenseCard }               from "../martial/melee-contest.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, areaDeleteHook, usesRegions, moveArea } from "./area-shapes.js";
 // The area↔cover split and the chew it books (user ruling 2026-08-25). `areaCoverVerdict` is the ONE
 // predicate that tells a valued barrier (soaks + chews) from a naked wall (exempt, unchanged); the
@@ -504,6 +508,130 @@ function _multiActionNoteFor(actor, ev) {
  * The `dataset.actorId` fallback is the compatibility leg: a tracker DOM rendered before this change
  * (or by an older client) carries no combatant id, and behaves exactly as it did.
  */
+/** Has the round begun — is anyone past the moment the book places declarations at ("the start of the
+ *  turn", p.112)? Past the first combatant's slot, or the acting combatant has already acted. */
+function _roundHasBegun(combat) {
+  if ((combat?.turn ?? 0) > 0) return true;
+  const cur = combat?.combatants?.get?.(combat?.current?.combatantId)?.actor ?? null;
+  return !!cur && _getActionCount(cur) > 0;
+}
+
+/** The label a parry declaration prints for its object. */
+function _parryObjectLabel(parry) {
+  if (parry?.object === "weapon") return localizeParam("ParryObjectWeapon", { weapon: parry.weaponName ?? "" });
+  return localize(parry?.object === "lArm" ? "ParryObjectLeftArm" : "ParryObjectRightArm");
+}
+
+/**
+ * Declare — or cancel — a stance (CP2020 p.112 Dodge / Parry) for an actor in a started encounter. ONE home for
+ * the tracker's 🛡/⛨ controls and the combat tab's Dodge / Block-Parry buttons, so the two cannot drift.
+ *
+ * The book's two halves, and why neither is charged twice: the dodge's −2 is pre-filled into the attacker's
+ * melee dialog (_hookDeclaredDefensePrefill); the "−3 to the defender's other actions" is not a second penalty
+ * invented here — a declaration IS an action (p.98), so counting it is exactly what makes this actor's next
+ * action this round pre-fill −3 through the shared multi-action counter. A parry is stored WITH what parries
+ * (`{ object, bladed?, weaponName?, itemId? }`) so the contest can send the hit there (melee-contest.js).
+ *
+ * ADVISORY, per the user's ruling: a declaration made after the round began is accepted and the table is told
+ * (p.112 places it at the start of the turn). Both stances clear at round end (the updateCombat handler).
+ *
+ * @returns {Promise<boolean|null>} true declared · false cancelled · null refused (no started encounter)
+ */
+export async function toggleDeclaredStance(actor, kind, { combat = game?.combat ?? null, parry = null } = {}) {
+  if (!actor || (kind !== "dodging" && kind !== "parrying")) return null;
+  if (!combat?.started) { ui.notifications?.warn(localize("DeclareNeedsEncounter")); return null; }
+  const current = actor.getFlag("cp2020-augmented", kind);
+  if (current) {
+    await actor.unsetFlag("cp2020-augmented", kind);
+    ui.notifications?.info(localizeParam(kind === "dodging" ? "DodgeCancelled" : "ParryCancelled", { name: actor.name }));
+    ui.combat?.render();
+    return false;
+  }
+  const value = kind === "parrying" ? (parry ?? defaultParryObjectFor(actor)) : true;
+  await actor.setFlag("cp2020-augmented", kind, value);
+  await _incrementActionCount(actor);
+  if (_roundHasBegun(combat)) ui.notifications?.warn(localizeParam("DeclareAfterRoundBegan", { name: actor.name }));
+  if (kind === "dodging") {
+    await postSavePromptCard({
+      title: localizeParam("DodgeDeclareTitle", { name: actor.name }),
+      body: localizeParam("DodgeDeclareBody", { name: actor.name }),
+      speaker: ChatMessage.getSpeaker({ actor }),
+    });
+  } else {
+    // The parry card names what parries and carries the buttons to change it (the card is the chooser —
+    // no modal on a one-click control; a cancel-and-redeclare would cost a second action).
+    await _postParryDeclareCard(actor, value);
+  }
+  ui.combat?.render();
+  return true;
+}
+
+/** Is this weapon a blade — the kind p.112 lets parry without taking damage (break save 9− instead)? */
+function _isBladeWeapon(w) {
+  return /blade|sword|knife|katana|axe|machete|sabre|saber|rapier|dagger/i.test(String(w?.name ?? "") + " " + String(w?.system?.weaponType ?? ""));
+}
+
+/** The equipped melee weapons a parry could name (a martial-arts "weapon" is the body — not listed). */
+function _parryWeaponsOf(actor) {
+  return (actor?.items ?? []).filter(i => i.type === "weapon" && i.system?.equipped !== false
+    && i.isRanged?.() === false && i.system?.attackType !== "Martial");
+}
+
+/** What a parry defaults to: an equipped bladed weapon when there is one (it saves instead of taking the
+ *  hit), else the right arm. The declare card's buttons change it; the apply window's location stays editable. */
+export function defaultParryObjectFor(actor) {
+  const blade = _parryWeaponsOf(actor).find(_isBladeWeapon);
+  if (blade) return { object: "weapon", itemId: blade.id, weaponName: blade.name, bladed: true };
+  return { object: "rArm" };
+}
+
+/** A parry object from a declare-card button's value: "weapon:<itemId>" | "lArm" | "rArm". */
+function _parryObjectFromValue(actor, value) {
+  const v = String(value ?? "");
+  if (v.startsWith("weapon:")) {
+    const w = actor?.items?.get?.(v.slice(7));
+    if (w) return { object: "weapon", itemId: w.id, weaponName: w.name, bladed: _isBladeWeapon(w) };
+  }
+  return { object: v === "lArm" ? "lArm" : "rArm" };
+}
+
+/** The parry declare card: the stance as declared, with the buttons that re-point it. */
+async function _postParryDeclareCard(actor, parry) {
+  const weapons = _parryWeaponsOf(actor);
+  const options = [
+    ...weapons.map(w => ({ value: `weapon:${w.id}`, label: localizeParam("ParryObjectWeapon", { weapon: w.name }), selected: parry?.object === "weapon" && parry?.itemId === w.id })),
+    { value: "rArm", label: localize("ParryObjectRightArm"), selected: parry?.object === "rArm" },
+    { value: "lArm", label: localize("ParryObjectLeftArm"), selected: parry?.object === "lArm" },
+  ];
+  const content = await renderChatCard("parry-declare.hbs", {
+    title: localizeParam("ParryDeclareTitle", { name: actor.name }),
+    body: localizeParam("ParryDeclareBodyObject", { name: actor.name, object: _parryObjectLabel(parry) }),
+    lead: localize("ParryObjectLead"),
+    options,
+    actorId: actor.id,
+    tokenId: actor.token?.id ?? "",
+  });
+  await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
+}
+
+/** The declare card's Weapon / Left arm / Right arm buttons: re-point a standing parry (owner or GM). */
+function _hookParryObjectButtons() {
+  onGlobalClick(async (ev) => {
+    const btn = ev.target?.closest?.(".cp-parry-object");
+    if (!btn) return;
+    ev.preventDefault();
+    const tokenActor = btn.dataset.tokenId ? canvas?.tokens?.get?.(btn.dataset.tokenId)?.actor : null;
+    const actor = tokenActor ?? (btn.dataset.actorId ? game.actors.get(btn.dataset.actorId) : null);
+    if (!actor) return;
+    if (!game.user.isGM && !actor.isOwner) { ui.notifications?.warn(localize("ParryObjectNotAllowed")); return; }
+    if (!actor.getFlag("cp2020-augmented", "parrying")) { ui.notifications?.warn(localizeParam("ParryNotDeclared", { name: actor.name })); return; }
+    const parry = _parryObjectFromValue(actor, btn.dataset.object);
+    await actor.setFlag("cp2020-augmented", "parrying", parry);
+    ui.notifications?.info(localizeParam("ParryObjectSet", { name: actor.name, object: _parryObjectLabel(parry) }));
+    ui.combat?.render();
+  });
+}
+
 function _combatantControlActor(btn) {
   const combatantId = btn?.dataset?.combatantId;
   if (combatantId) {
@@ -530,6 +658,7 @@ export function registerDamageHooks() {
   _hookAimTracking();
   _hookWaitForTurn();
   _hookDodgeParry();
+  _hookParryObjectButtons();
   _hookDotEffects();
   _hookGasCloud();
   _hookGasCloudPerTurn();
@@ -674,50 +803,14 @@ export function registerDamageHooks() {
       ev.preventDefault();
       const actor = _combatantControlActor(dodgeBtn);
       if (!actor) return;
-      const alreadyDodging = actor.getFlag("cp2020-augmented", "dodging") ?? false;
-      if (alreadyDodging) {
-        await actor.unsetFlag("cp2020-augmented", "dodging");
-        ui.notifications.info(localizeParam("DodgeCancelled", { name: actor.name }));
-      } else {
-        await actor.setFlag("cp2020-augmented", "dodging", true);
-        // THE OTHER HALF OF THE BOOK CLAUSE, AND WHY IT IS NOT CHARGED TWICE. p.112 reads "DODGE = -2
-        // TO ATTACKER ROLL, -3 TO DEFENDER'S OTHER ACTIONS". The −2 half is pre-filled into the
-        // attacker's melee dialog (_hookDeclaredDefensePrefill); the −3 half is not a second penalty
-        // to invent here — a dodge IS an action, so counting it is exactly what makes this actor's
-        // NEXT action this round pre-fill −3 through the shared multi-action counter. Adding a
-        // separate −3 on top would charge the same clause twice.
-        // ⏪ The auto-track gate is retired (settings-trim 2026-08-29): the counter always stamps.
-        await _incrementActionCount(actor);
-        await postSavePromptCard({
-          title: localizeParam("DodgeDeclareTitle", { name: actor.name }),
-          body: localizeParam("DodgeDeclareBody", { name: actor.name }),
-          speaker: ChatMessage.getSpeaker({ actor }),
-        });
-      }
-      ui.combat?.render();
+      await toggleDeclaredStance(actor, "dodging");
     }
 
     if (parryBtn) {
       ev.preventDefault();
       const actor = _combatantControlActor(parryBtn);
       if (!actor) return;
-      const alreadyParrying = actor.getFlag("cp2020-augmented", "parrying") ?? false;
-      if (alreadyParrying) {
-        await actor.unsetFlag("cp2020-augmented", "parrying");
-        ui.notifications.info(localizeParam("ParryCancelled", { name: actor.name }));
-      } else {
-        await actor.setFlag("cp2020-augmented", "parrying", true);
-        // Same joint as the dodge above: p.112's "-3 TO DEFENDER'S OTHER ACTIONS" is represented by
-        // counting the parry as an action, not by a second penalty of its own.
-        // ⏪ The auto-track gate is retired (settings-trim 2026-08-29): the counter always stamps.
-        await _incrementActionCount(actor);
-        await postSavePromptCard({
-          title: localizeParam("ParryDeclareTitle", { name: actor.name }),
-          body: localize("ParryDeclareBody"),
-          speaker: ChatMessage.getSpeaker({ actor }),
-        });
-      }
-      ui.combat?.render();
+      await toggleDeclaredStance(actor, "parrying");
     }
 
     if (actNowBtn) {
@@ -861,6 +954,23 @@ function _hookWeaponFired() {
     // ask who may present this shot, a question the base document already answers, and re-pointing
     // them would move the presentation seat as a side effect of a weapon-breakage fix.
     await _maybeBreakMonoWeapon(payload, firingActorOf(payload) ?? attackerActor);
+
+    // ⭐ MELEE IS OPPOSED (CP2020 p.111), damage or no damage. A melee card aimed at one figure does not open
+    // the window: the contest card is posted in its place, carrying this payload, and the VERDICT reopens
+    // the road PATH A takes below (applyResolvedMeleeHit — the same re-roll → dispatch → window sequence).
+    // Caught HERE, ahead of the no-damage return, because a hold / grapple / sweep / disarm card carries no
+    // areaDamages at all and would never reach PATH A — and its contest is the whole point of it. A vehicle
+    // defender rolls no defense and keeps the resolver; a swing declared at several figures stays on the
+    // card-and-button road.
+    if (contestApplies(payload)) {
+      const defender = _resolveTarget(payload);
+      if (defender && defender.type !== "cp2020-augmented.vehicle") {
+        payload.handled = "cp2020-augmented";
+        if (hasAreaDamages) _rememberCardFor(payload);
+        await postMeleeDefenseCard(payload, defender, { defenderTokenId: payload.targetTokenId ?? payload.fxTargetTokenId ?? null });
+        return;
+      }
+    }
 
     if (!hasAreaDamages) return;
 
@@ -1033,17 +1143,13 @@ function _injectApplyDamageControl(message, html) {
   btn.textContent = localize("ApplyDamageBtn");
 
   btn.addEventListener("click", async () => {
-    // Prefer a currently-targeted token; fall back to payload IDs
-    let target = null;
-
-    const currentTargets = game.user.targets;
-    if (currentTargets.size > 0) {
-      const tok = currentTargets.first();
-      target = tok.actor;
-      payload.targetTokenId = tok.id;
+    // The card's OWN target first, the current canvas target only for a card that has none (see
+    // fallbackTargetFor — the reported mis-route with several figures still targeted).
+    let target = fallbackTargetFor(payload);
+    if (target && !_resolveTarget(payload)) {
+      const tok = game.user.targets.first();
+      payload.targetTokenId = tok?.id ?? null;
       payload.targetActorId = target?.id ?? null;
-    } else {
-      target = _resolveTarget(payload);
     }
 
     if (!target) {
@@ -1449,6 +1555,29 @@ export async function _executeSuppressionEvasion({ actorId, tokenId, sceneId, sa
   }
 }
 
+/**
+ * The figure an Apply-Damage button applies to. A card that carries its own target (a window dismissed
+ * after a targeted shot — full auto's per-card target, the seam's aim) keeps it; only a card aimed at
+ * nothing takes whatever is targeted on the canvas now. It used to be the other way round, so with three
+ * figures still targeted after a burst, Apply on the second card landed on the first.
+ */
+export function fallbackTargetFor(payload, currentTargets = game.user?.targets) {
+  const own = _resolveTarget(payload ?? {});
+  if (own) return own;
+  const tok = currentTargets?.first?.() ?? null;
+  return tok?.actor ?? null;
+}
+
+/**
+ * What a melee hit does once the contest has ruled it (martial/melee-contest.js): exactly the sequence PATH A
+ * runs for a targeted shot — the gone-limb re-roll, the vehicle/penetration resolver, else the apply window.
+ */
+export async function applyResolvedMeleeHit(payload, target) {
+  payload.areaDamages = await rerollGoneLimbAreaDamages(target, payload.areaDamages);
+  if (await dispatchAttack(payload, target)) return;
+  new DamageDialog(payload, target).render(true);
+}
+
 function _resolveTarget(payload) {
   if (payload.targetTokenId) {
     const token = canvas.tokens?.get(payload.targetTokenId);
@@ -1741,20 +1870,19 @@ function _hookDodgeParry() {
       li.querySelectorAll(".cp-dodge-btn, .cp-parry-btn").forEach(e => e.remove()); // idempotent across re-renders
 
       const controls = li.querySelector(".combatant-controls") ?? li.querySelector("menu") ?? li;
-      const isDodging  = actor.getFlag("cp2020-augmented", "dodging")  ?? false;
-      const isParrying = actor.getFlag("cp2020-augmented", "parrying") ?? false;
-      const isActive   = combatant.id === combat.current?.combatantId;
+      const isDodging  = !!actor.getFlag("cp2020-augmented", "dodging");
+      const isParrying = !!actor.getFlag("cp2020-augmented", "parrying");
 
-      if (isActive) {
-        const dodgeBtn = document.createElement("a");
-        dodgeBtn.classList.add("cp-dodge-btn", "combatant-control");
-        dodgeBtn.dataset.combatantId = combatant.id;
-        dodgeBtn.dataset.actorId = actor.id;
-        dodgeBtn.title = isDodging ? localize("DodgeTitleActive") : localize("DodgeTitle");
-        if (isDodging) dodgeBtn.classList.add("cp-active");
-        dodgeBtn.innerHTML = isDodging ? "🛡✓" : "🛡";
-        controls.prepend(dodgeBtn);
-      }
+      // On EVERY row (user ruling 2026-10-19): the book declares a dodge at the start of the round, before
+      // anyone acts, so it is not the acting combatant's control — any figure may declare, advisory after.
+      const dodgeBtn = document.createElement("a");
+      dodgeBtn.classList.add("cp-dodge-btn", "combatant-control");
+      dodgeBtn.dataset.combatantId = combatant.id;
+      dodgeBtn.dataset.actorId = actor.id;
+      dodgeBtn.title = isDodging ? localize("DodgeTitleActive") : localize("DodgeTitle");
+      if (isDodging) dodgeBtn.classList.add("cp-active");
+      dodgeBtn.innerHTML = isDodging ? "🛡✓" : "🛡";
+      controls.prepend(dodgeBtn);
 
       const parryBtn = document.createElement("a");
       parryBtn.classList.add("cp-parry-btn", "combatant-control");
@@ -1767,25 +1895,32 @@ function _hookDodgeParry() {
     }
   });
 
+  // Both stances last THE ROUND (p.112: "any attacks made against them in that turn") and clear when it ends —
+  // for every combatant, not just the one whose turn comes up. ⏪ The dodge used to clear at the dodger's NEXT
+  // turn, which let a mid-round declaration run into the following round (user ruling 2026-10-19). A fresh
+  // encounter starts with no stances. Primary GM session only — keeps multi-client tables from
+  // double-clearing (idempotent, but consistent with the other per-round handlers).
+  const _clearStances = async (combat) => {
+    for (const combatant of combat.combatants) {
+      const actor = combatant.actor;
+      if (!actor) continue;
+      const hasDodge = !!actor.getFlag("cp2020-augmented", "dodging");
+      const hasParry = !!actor.getFlag("cp2020-augmented", "parrying");
+      if (!hasDodge && !hasParry) continue;
+      await actor.update({
+        "flags.cp2020-augmented.-=dodging":  null,
+        "flags.cp2020-augmented.-=parrying": null,
+      }).catch(() => {});
+    }
+  };
   Hooks.on("updateCombat", async (combat, updateData) => {
-    // Primary GM session only — keeps multi-client tables from double-clearing dodge/parry flags
-    // (idempotent, but consistent with the other per-turn handlers).
+    if (updateData.round === undefined) return;
     if (!isPrimaryGMSession()) return;
-    if (updateData.turn === undefined && updateData.round === undefined) return;
-
-    const combatant = combat.combatant;
-    if (!combatant?.actor) return;
-
-    const actor = combatant.actor;
-    if (actor.getFlag("cp2020-augmented", "dodging")) {
-      await actor.unsetFlag("cp2020-augmented", "dodging").catch(() => {});
-    }
-    // Parry lasts until the round ends. (It used to say "consumed in item.js on hit" — that was the
-    // FORK's item.js. Nothing consumes it on a vanilla host: the module posts the reminder and the GM
-    // adjudicates the opposed roll, so the round boundary is the only clear.)
-    if (updateData.round !== undefined && actor.getFlag("cp2020-augmented", "parrying")) {
-      await actor.unsetFlag("cp2020-augmented", "parrying").catch(() => {});
-    }
+    await _clearStances(combat);
+  });
+  Hooks.on("combatStart", async (combat) => {
+    if (!isPrimaryGMSession()) return;
+    await _clearStances(combat);
   });
 
   _hookDeclaredDefensePrefill(isEnabled);

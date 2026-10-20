@@ -2251,6 +2251,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const action = button.dataset.action;
     if (!action) return;
 
+    // Dodge and Block/Parry are DECLARATIONS (CP2020 p.112), not attack rolls: the same stance the combat
+    // tracker's 🛡 / ⛨ controls declare, through the same home (combat/damage-hooks.js), so the two never
+    // drift. The lone attack-formula card the base rolled for them compared with nothing.
+    if (action === martialActions.dodge || action === martialActions.blockParry) {
+      const D = await import("../combat/damage-hooks.js");
+      await D.toggleDeclaredStance(this.actor, action === martialActions.dodge ? "dodging" : "parrying");
+      return;
+    }
+
     let item = this._cpResolveMartialActionItem(action, button.dataset.itemId);
     if (!item) item = await this._cpBuildTransientMartialItem(action);
 
@@ -2284,24 +2293,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         // so this is a pass-through in practice — but the guard is where a word-instead-of-a-formula
         // is refused, and a martial action fired through a hand-authored weapon is no exception.
         await this._cpFireThroughDamageGuard(item, () => item.__weaponRoll(attackMods, targetTokens));
-        // Special martial hit-effect (A6 → the offered contest): a hold / grapple / choke / throw /
-        // sweep on a single target no longer applies on-declare — it posts the defense-offer card
-        // (martial.js postMartialDefenseOffer): the target's owner may roll the opposed defense, and
-        // the GM adjudicates [lands / evaded / apply-without-contest]. Escape stays immediate — it is
-        // the actor freeing themselves, not an attack on the target. Damage adjudication is unchanged
-        // (Apply-Damage). Both paths self-gate on specialMeleeEffectsEnabled.
-        if (targetTokens.length === 1) {
+        // Every melee attack is now OPPOSED through the contest card the shot path posts
+        // (martial/melee-contest.js): a hold / grapple / choke / throw / sweep lands its status on the hit
+        // verdict there, so nothing is offered or applied from here. ⏪ The separate defense-OFFER card
+        // this used to post for those five made two contests for one swing. Escape stays immediate — it
+        // is the actor freeing themselves, not an attack on the target (self-gated on
+        // specialMeleeEffectsEnabled inside the effect).
+        if (action === martialActions.escape && targetTokens.length === 1) {
           const targetActor = canvas?.tokens?.get(targetTokens[0].id)?.actor ?? null;
-          if (targetActor) {
-            const M = await import("../martial/martial.js");
-            const offered = M.CONTESTED_MARTIAL_ACTIONS.has(action)
-              ? await M.postMartialDefenseOffer({
-                  attackerActor: this.actor, targetActor,
-                  targetTokenId: targetTokens[0].id, action,
-                })
-              : false;
-            if (!offered) await this._cpApplyOrRelayMartialEffect(action, targetActor);
-          }
+          if (targetActor) await this._cpApplyOrRelayMartialEffect(action, targetActor);
         }
       },
     });
