@@ -314,6 +314,21 @@ const r = await gm.evaluate(async () => {
       await attacker.setFlag(SCOPE, "parrying", { object: "rArm" });
       await combat.nextRound(); await sleep(900);
       add("§3 stance: both stances clear at round end", !defender.getFlag(SCOPE, "dodging") && !attacker.getFlag(SCOPE, "parrying"), JSON.stringify({ d: defender.getFlag(SCOPE, "dodging"), p: attacker.getFlag(SCOPE, "parrying") }));
+      // the style picker opens on the BEST fighting skill: Karate 4 over Brawling 0 for the defender; a fighter
+      // with no trained art opens on Brawling (user ruling 2026-10-21 — a weapon-less NPC remembers nothing)
+      {
+        const pickerFor = async (actor) => {
+          await actor.sheet._cpOpenMartialActionDialog({ dataset: { action: "Strike", itemId: "" } });
+          const dlg = await waitFor(() => [...foundry.applications.instances.values()].find(a => a.constructor.name === "ModifiersDialog" && a.rendered), 6000);
+          await sleep(400);
+          const v = dlg?.element?.querySelector('select[name="martialArt"]')?.value ?? null;
+          await dlg?.close({ animate: false }).catch(() => {});
+          return v;
+        };
+        const forDefender = await pickerFor(defender), forAttacker = await pickerFor(attacker);
+        add("§3 picker: a trained art outranking Brawling is the preselected style", /Karate/.test(forDefender ?? ""), forDefender);
+        add("§3 picker (negative): with no trained art the style stays Brawling", forAttacker === "Brawling", forAttacker);
+      }
       // the sheet's Dodge button is the same declaration — no lone roll card
       const sheet = attacker.sheet; const msgs = game.messages.size;
       await sheet._cpOpenMartialActionDialog({ dataset: { action: "Dodge", itemId: fists.id } });

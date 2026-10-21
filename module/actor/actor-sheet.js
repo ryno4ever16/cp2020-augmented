@@ -2267,10 +2267,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       name: target.document.name, id: target.id,
     }));
 
+    // The style picker opens on the actor's BEST fighting skill (user ruling 2026-10-21, "default to best
+    // trained"), never on Brawling by habit: a weapon-less NPC's transient item remembers no choice between
+    // swings, and on the rig Bigfoot's Hold went out as Brawling 0 instead of Animal Kung Fu 7.
+    const { getSkillVal } = await import("../martial/martial.js");
     const dialog = new ModifiersDialog(this.actor, {
       weapon: item,
       targetTokens,
-      modifierGroups: martialOptions(this.actor),
+      modifierGroups: martialOptions(this.actor, { martialArt: this._cpBestFightingSkill(getSkillVal) }),
       onConfirm: async (fireOptions) => {
         // The Jump Kick's to-hit penalty is AUTOMATIC and priced with the maneuver, not offered as a
         // choice: its 1D6+5 would otherwise strictly dominate a plain Kick. Folded into the dialog's
@@ -2314,6 +2318,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   async _cpApplyOrRelayMartialEffect(action, targetActor) {
     const { applyOrRelayMartialEffect } = await import("../martial/martial.js");
     await applyOrRelayMartialEffect(action, targetActor, this.actor);
+  }
+
+  /** The actor's best fighting skill for the style picker: the highest of Brawling and every trained art, an
+   *  art winning a tie (it carries the damage bonus and the keys). null → martialOptions' own default. */
+  _cpBestFightingSkill(getSkillVal) {
+    const level = (key) => Number(getSkillVal(this.actor, key)) || 0;
+    let best = null, bestLevel = -1;
+    for (const m of this.actor.trainedMartials?.() ?? []) {
+      const key = typeof m === "string" ? m : m?.value;
+      if (!key) continue;
+      const lv = level(key);
+      if (lv > bestLevel) { best = key; bestLevel = lv; }
+    }
+    return level("Brawling") > bestLevel ? "Brawling" : best;
   }
 
   _prepareSkills(sheetData) {
