@@ -99,11 +99,16 @@ const r = await gm.evaluate(async () => {
   await setSkill(defender, "Melee", 5); await setSkill(defender, "Fencing", 2); await setSkill(defender, "Athletics", 3);
   const karate = defender.items.find(i => i.type === "skill" && /Karate/.test(i.name));
   if (karate) await karate.update({ "system.level": 4 });
-  const [blade, fists, pistol] = await attacker.createEmbeddedDocuments("Item", [
+  // ⚠ createEmbeddedDocuments returns in ITS order, not the input's (rig-keeper gotcha): a run on 2026-10-21
+  // destructured the pistol as `fists`, fired it for the Hold and the Throw (nothing emitted, no card) and
+  // the fists for the ranged leg (a contest card for a "pistol") — five reds from one swap. By name.
+  const madeItems = await attacker.createEmbeddedDocuments("Item", [
     { name: "__PW__MC Blade", type: "weapon", system: { weaponType: "Melee", attackType: "Melee", damage: "1d6", attackSkill: "Melee" } },
     { name: "__PW__MC Fists", type: "weapon", system: { weaponType: "Melee", attackType: "Martial", damage: "1d6/2" } },
     { name: "__PW__MC Pistol", type: "weapon", system: { weaponType: "Pistol", attackType: "SemiAuto", damage: "2d6", range: 50, shots: 10, shotsLeft: 10, rof: 1, attackSkill: "Handgun" } },
   ]);
+  const madeByName = (n) => madeItems.find(i => i.name === n) ?? attacker.items.getName(n);
+  const blade = madeByName("__PW__MC Blade"), fists = madeByName("__PW__MC Fists"), pistol = madeByName("__PW__MC Pistol");
   const gs = scene.grid.size;
   const toks = await scene.createEmbeddedDocuments("Token", [
     { name: attacker.name, actorId: attacker.id, actorLink: true, x: scene.dimensions.sceneX + 4 * gs, y: scene.dimensions.sceneY + 4 * gs },
@@ -233,6 +238,31 @@ const r = await gm.evaluate(async () => {
     add("§2 manoeuvre: the status lands on the hit verdict", rr.result?.verdict === "hit" && held === attacker.id, JSON.stringify({ v: rr.result?.verdict, held }));
     await defender.unsetFlag(SCOPE, "heldBy").catch(() => {});
     await closeWindows();
+  }
+  // the Throw's −2 rides the stun prompt the APPLY posts (p.111); a plain hit's prompt carries 0
+  {
+    const promptFor = (from) => game.messages.contents.slice(from).map(m => document.querySelector(`[data-message-id="${m.id}"] .cp-stun-save-roll[data-actor-id="${defender.id}"]`)).filter(Boolean).pop() ?? null;
+    const applyAndRead = async () => {
+      const win = await waitFor(() => windows()[0], 8000);
+      if (!win) return { opened: false };
+      await sleep(500);
+      const from = game.messages.size;
+      win.element.querySelector('button[data-action="applyDamage"]')?.click();
+      const btn = await waitFor(() => promptFor(from), 8000);
+      return { opened: true, prompt: !!btn, saveMod: btn?.dataset?.saveMod ?? null };
+    };
+    await swing(fists, { action: "Throw", martialArt: "Brawling", extraMod: 40 }, [defTok]);
+    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    const rt = card ? await rollWindowDefault(card) : { opened: false };
+    const thrown = rt.result?.verdict === "hit" ? await applyAndRead() : { opened: false, noHit: true };
+    add("§2 throw: the apply's stun prompt carries the Throw's −2 on its control", thrown.prompt && String(thrown.saveMod) === "-2", JSON.stringify({ v: rt.result?.verdict, ...thrown }));
+    await closeWindows(); await sleep(300);
+    await swing(blade, { extraMod: 40 }, [defTok]);
+    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    const rp = card ? await rollWindowDefault(card) : { opened: false };
+    const plain = rp.result?.verdict === "hit" ? await applyAndRead() : { opened: false, noHit: true };
+    add("§2 throw (negative): a plain hit's stun prompt carries no penalty", plain.prompt && String(plain.saveMod) === "0", JSON.stringify({ v: rp.result?.verdict, ...plain }));
+    await closeWindows(); await sleep(300);
   }
   // parry: arm → the window opens on that arm; blade → no window, a break-save card
   {

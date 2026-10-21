@@ -5085,7 +5085,12 @@ function _hookSocketRelay() {
           // Mortal half deferred to the ledger, as at every other apply-loop tail.
           if (woundState >= 4) {
             if (!severityBatchHandledMortal(severity, target, liveToken)) await postDeathSavePrompt(target, liveToken);
-          } else if (woundState > 0) await postStunSavePrompt(target, liveToken);
+          } else if (woundState > 0) {
+            // The event's own penalty rides the prompt here as it does on the presenting client's own
+            // apply (DamageDialog.js _postSavePrompts) — a Throw's −2; never a shock rider's, whose
+            // `stunSaveMod` the threshold already reads through the taser state.
+            await postStunSavePrompt(target, liveToken, { saveMod: data.stunSaveOnHit ? 0 : (Number(data.stunSaveMod) || 0) });
+          }
         }
       }
 

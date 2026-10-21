@@ -561,7 +561,11 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // Gate the stun/death prompt on FLESH HP actually written — a hit fully soaked by a cyberlimb's
     // SDP raises no consciousness check (H7: was `totalApplied`, which counted cyberlimb-soaked damage).
     if (applied > 0) {
-      await _postSavePrompts(this.target, token, severity);
+      // The event's own stun-save penalty rides the wound prompt (as the area rail has always carried a
+      // word's −5): a Throw's −2 arrives here on `stunSaveMod` (martial/melee-contest.js). NOT for a shock
+      // rider — its `stunSaveMod` is the taser's per-hit accumulation, read by the threshold itself
+      // (updateTaserState above), and carrying it on the card as well would charge it twice.
+      await _postSavePrompts(this.target, token, severity, { saveMod: this.payload.stunSaveOnHit ? 0 : (Number(this.payload.stunSaveMod) || 0) });
     }
 
     this._damageApplied = true;   // an applied close — see the flag's note in the constructor
@@ -642,7 +646,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   static async _formHandler(event, form, formData) {}
 }
 
-async function _postSavePrompts(actor, token = null, severityBatch = null) {
+async function _postSavePrompts(actor, token = null, severityBatch = null, { saveMod = 0 } = {}) {
   const woundState = actor.woundState?.() ?? 0;
   if (woundState === 0) return;
   const tok = token ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === actor.id) ?? null;
@@ -660,8 +664,8 @@ async function _postSavePrompts(actor, token = null, severityBatch = null) {
     // application's ledger where there IS one — so this posts only when the ledger is not carrying it,
     // which is the same test the mortal half above makes and for the same reason. Death first, in the
     // single-target rail's own order: the more urgent question is the one a reader should meet first.
-    if (!severityBatchHandledStun(severityBatch, actor, tok)) await postStunSavePrompt(actor, tok);
+    if (!severityBatchHandledStun(severityBatch, actor, tok)) await postStunSavePrompt(actor, tok, { saveMod });
   } else {
-    await postStunSavePrompt(actor, tok);
+    await postStunSavePrompt(actor, tok, { saveMod });
   }
 }
