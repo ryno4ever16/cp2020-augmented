@@ -29,6 +29,7 @@ import { getWeaponLongRange } from "./combat/rangefinding.js";
 // as `fumbleClass` and every consumer reads the FIELD, never the derivation.
 import { rangedFumbleClassFrom } from "./combat/fumble-outcome.js";
 import { buildAttackContext, attackBreakdownRows, injectAttackBreakdown } from "./combat/attack-breakdown.js";
+import { skillItemFor } from "./martial/martial.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -320,6 +321,8 @@ function installWeaponFiredShim(ItemProto) {
       assertRenderEmit();
       _fireCtx = {
         attackerId: this.actor?.id ?? null,
+        // The document itself, for the skill-use report below (never copied onto the payload).
+        attackerDoc: this.actor ?? null,
         // WHICH FIGURE FIRED, as opposed to whose it is (see firingTokenIdOf). Read at CALL time for
         // the same reason the aim is: it is a fact about this trigger pull.
         attackerTokenId: firingTokenIdOf(this.actor),
@@ -486,6 +489,31 @@ function _signpostSpreadScatter(faces) {
  * swung home, so the presentation rail sits it out. Readers that key on damage see none and do nothing; the
  * melee contest and the action counter are what it exists for.
  */
+/**
+ * Report the attack's SKILL USE to the IP tracker through the same seam a plain skill roll raises
+ * (`cyberpunkSkillRolled`, see installSkillRolledShim). Reported from the table (2026-10-21): a night of
+ * Handgun, Fencing and martial-art rolls never reached the tracker, because only `rollSkill` ever emitted and
+ * an attack goes through the fire methods instead. The skill is the weapon's attack skill, or the style of a
+ * martial swing (Brawling included); a skill the actor carries no item for reports nothing, exactly as
+ * `rollSkill` does for an unknown id. Once per trigger pull — a full-auto walk renders one card per figure
+ * and this is called for each, so the pull's own context remembers that it has reported.
+ */
+function _emitAttackSkillRolled(ctx, total) {
+  try {
+    if (!ctx || ctx.skillReported) return;
+    const actor = ctx.attackerDoc ?? null;
+    const ac = ctx.attackContext ?? null;
+    if (!actor || !ac || !Number.isFinite(Number(total))) return;
+    const key = ctx.fireMethod === "__martialBonk" ? (ac.martialArt || "Brawling") : ac.skillKey;
+    const skill = key ? skillItemFor(actor, key) : null;
+    if (!skill) return;
+    ctx.skillReported = true;
+    Hooks.callAll(SKILL_ROLLED, { actorId: actor.id, skillId: skill.id, actorName: actor.name, skillName: skill.name, total: Number(total) });
+  } catch (e) {
+    console.warn(`${SCOPE} | seam-shim attack skill emit failed`, e);
+  }
+}
+
 function _emitRollOnlyMartial(data) {
   const ctx = _martialRollOnlyCtx;
   const attackRoll = data?.rolls?.[0]?.roll ?? null;
@@ -515,6 +543,7 @@ function _emitRollOnlyMartial(data) {
     fxMute: true,
     ...(ctx.effectFields ?? {}),
   });
+  _emitAttackSkillRolled(ctx, attackRoll?.total);
 }
 
 /** Wrap the global renderTemplate ONCE so each fire-card render emits its hook, combining the captured
@@ -805,6 +834,7 @@ function installRenderEmit() {
           fumbleClass,
           ...(_fireCtx.effectFields ?? {}),   // explosion/gas/spread/DOT/taser/AP/pen fields from the ammo
         });
+        _emitAttackSkillRolled(_fireCtx, data?.attackRoll?.total);
       } else if (_suppressiveCtx && path === SUPPRESSIVE_TEMPLATE) {
         // suppressive.hbs carries the base method's already-computed saveDC/dmgFormula/weaponName/width;
         // the wrapper supplies the actor/token/range context the render data lacks. Matches the fork's

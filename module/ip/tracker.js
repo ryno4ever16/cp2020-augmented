@@ -1,7 +1,7 @@
 import {
   getQueue, queueRolls, pruneOrphanQueue, pruneQueueRoll, updateQueueRow, resolveQueueRow,
   dismissQueueRow, clearQueue, applyPending, resetThrottle, awardPending, addToPool, pendingForSkill,
-  bankForSkill, poolForActor, setActorPool, setSkillBank
+  bankForSkill, poolForActor, setActorPool, setSkillBank, isTrackedActor
 } from "./ip.js";
 import { ipRawTracking, ipAwardModel, ipThrottle, ipAutoBaselineAmount } from "../settings.js";
 import { localize } from "../utils.js";
@@ -75,17 +75,21 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
         open: this._openRows.has(r.id),
         // Newest first: a spree is read from its latest roll backwards.
         rolls: rolls.slice().sort((a, b) => b.ts - a.ts).map(x => ({ id: x.id, total: x.total, age: _rollAge(x.ts) })),
+        // The totals of a coalesced row, inline on the label in the same order: a GM read "×3" and had to
+        // open the row to see what was rolled (reported 2026-10-21).
+        totals: rolls.slice().sort((a, b) => b.ts - a.ts).map(x => x.total).join(" · "),
       };
     }).sort((a, b) => b.newestTs - a.newestTs);   // fresh activity stays at the top of the list
     // Forget rows that have since been awarded or discarded, so the open-set can't grow forever.
     this._openRows = new Set(rows.filter(r => r.open).map(r => r.id));
 
     // GM correction / balances view: one collapsed header per actor (pool + everything banked),
-    // opening to the skills that carry IP. Pool + bank are GM-editable; pending is read-only.
+    // opening to the skills that carry IP. Pool + bank are GM-editable; pending is read-only. Player
+    // characters only (isTrackedActor) — a figure no player owns is not an IP ledger.
     const balances = [];
     let pendingTotal = 0;
     let bankedTotal = 0;
-    for (const a of game.actors.filter(x => x.type === "character" || x.type === "npc")) {
+    for (const a of game.actors.filter(x => isTrackedActor(x))) {
       const skills = [];
       let bankTotal = 0;
       for (const s of a.items) {
@@ -293,8 +297,9 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
   /** Manual add: pick an actor, then a skill (RAW mode), then an IP amount (or add to the pool in
    *  simple mode). Singleton — re-invoking focuses the open dialog instead of stacking a new one. */
   async _manualAdd() {
-    const actors = game.actors.filter(a => a.type === "character" || a.type === "npc");
-    if (!actors.length) return;
+    // The same set the queue follows: player characters, not every figure in the world (isTrackedActor).
+    const actors = game.actors.filter(a => isTrackedActor(a)).sort((x, y) => x.name.localeCompare(y.name));
+    if (!actors.length) { ui.notifications?.warn(localize("IpManualNoPlayers")); return; }
     if (_manualDlg?.rendered) { (_manualDlg.bringToFront ?? _manualDlg.bringToTop)?.call(_manualDlg); return _manualDlg; }   // singleton
 
     const simple = !ipRawTracking();

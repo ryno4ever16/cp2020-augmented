@@ -80,7 +80,11 @@ try {
       await game.settings.set(SCOPE, "ipQueue", []);
 
       for (const x of game.actors.filter(x => x.name === "__PW__ IP Pipeline")) await x.delete().catch(() => {});
-      actor = await Actor.create({ name: "__PW__ IP Pipeline", type: "character" });
+      // A PLAYER character: the tracker follows actors a player owns (ip.js isTrackedActor) — an unowned
+      // fixture reports nothing, which is the rule, not a harness fault.
+      const playerId = game.users.find(u => !u.isGM)?.id ?? null;
+      actor = await Actor.create({ name: "__PW__ IP Pipeline", type: "character", ownership: playerId ? { default: 0, [playerId]: 3 } : { default: 0 } });
+      ok("fixture is owned by a player (the tracked set)", actor.hasPlayerOwner === true, actor.hasPlayerOwner);
       const skills = actor.items.filter(i => i.type === "skill");
       const [sA, sB, sC] = skills;
       ok("fixture carries three distinct skills", !!(sA && sB && sC), skills.length);
@@ -188,7 +192,8 @@ try {
       await game.settings.set(SCOPE, "ipQueue", []);
 
       for (const x of game.actors.filter(x => x.name === "__PW__ IP Coalesce")) await x.delete().catch(() => {});
-      actor = await Actor.create({ name: "__PW__ IP Coalesce", type: "character" });
+      const playerId = game.users.find(u => !u.isGM)?.id ?? null;
+      actor = await Actor.create({ name: "__PW__ IP Coalesce", type: "character", ownership: playerId ? { default: 0, [playerId]: 3 } : { default: 0 } });
       const [sA, sB] = actor.items.filter(i => i.type === "skill");
 
       const record = async (skill, total) => {
@@ -210,11 +215,29 @@ try {
       app = new T.IpTracker();
       await app.render(true);
       await sleep(600);
+      // The tracked set is PLAYER characters (ip.js isTrackedActor): an actor no player owns never queues, and
+      // the manual-add pick-list offers the same set — the referee's NPC rolls used to fill both.
+      {
+        const npc = await Actor.create({ name: "__PW__ IP Coalesce NPC", type: "npc" });
+        try {
+          const [nSkill] = npc.items.filter(i => i.type === "skill");
+          await IP.recordSkillRoll({ actorId: npc.id, skillId: nSkill.id, actorName: npc.name, skillName: nSkill.name, total: 15 });
+          await sleep(300);
+          ok("an actor no player owns never queues (the tracked set is player characters)", !queue().some(r => r.actorId === npc.id), queue().filter(r => r.actorId === npc.id).length);
+          ok("isTrackedActor: a player-owned actor is tracked, an unowned one is not", IP.isTrackedActor(actor) === true && IP.isTrackedActor(npc) === false, `${IP.isTrackedActor(actor)}/${IP.isTrackedActor(npc)}`);
+          const manual = await app._manualAdd();
+          await sleep(500);
+          const options = [...(manual?.element?.querySelectorAll('select[name="actor"] option') ?? [])].map(o => o.value);
+          ok("the manual-add list offers the player character and not the unowned NPC", options.includes(actor.id) && !options.includes(npc.id), JSON.stringify({ n: options.length, pc: options.includes(actor.id), npc: options.includes(npc.id) }));
+          try { await manual?.close({ animate: false }); } catch {}
+        } finally { await npc.delete().catch(() => {}); }
+      }
       const root = app.element;
       const rowEl = root?.querySelector(`.cp-ip-row[data-row-id="${grouped.id}"]`);
       const label = rowEl?.querySelector(".cp-ip-row-label")?.textContent?.replace(/\s+/g, " ").trim();
       ok("the collapsed row shows a count", /×\s*3/.test(label || ""), label);
       ok("the collapsed row shows no aggregate figure", !/\(\d+\)/.test(label || ""), label);
+      ok("the collapsed row prints its totals inline, newest first", /\(9 · 21 · 14\)/.test(label || ""), label);
 
       const single = root?.querySelector(`.cp-ip-row[data-row-id="${q.find(r => r.skillId === sB.id).id}"] .cp-ip-row-label`)?.textContent?.replace(/\s+/g, " ").trim();
       ok("a one-roll row still shows its total inline", /\(17\)/.test(single || ""), single);
@@ -324,8 +347,10 @@ try {
       await game.settings.set(SCOPE, "ipQueue", []);
 
       for (const nm of ["__PW__ IP Layout", "__PW__ IP Layout Two"]) for (const x of game.actors.filter(x => x.name === nm)) await x.delete().catch(() => {});
-      actor = await Actor.create({ name: "__PW__ IP Layout", type: "character" });
-      other = await Actor.create({ name: "__PW__ IP Layout Two", type: "character" });
+      const playerId = game.users.find(u => !u.isGM)?.id ?? null;
+      const owned = playerId ? { default: 0, [playerId]: 3 } : { default: 0 };
+      actor = await Actor.create({ name: "__PW__ IP Layout", type: "character", ownership: owned });
+      other = await Actor.create({ name: "__PW__ IP Layout Two", type: "character", ownership: owned });
       const skills = actor.items.filter(i => i.type === "skill");
       const [sA, sB, sC] = skills;
       const oSkill = other.items.filter(i => i.type === "skill")[0];
@@ -515,7 +540,8 @@ try {
       await game.settings.set(SCOPE, "ipThrottle", "off");
       await game.settings.set(SCOPE, "ipNeglectMuted", true);
       await game.settings.set(SCOPE, "ipQueue", []);
-      const actor = await Actor.create({ name: "__PW__ IP Relay", type: "character" });
+      const playerId = game.users.find(u => !u.isGM)?.id ?? null;
+      const actor = await Actor.create({ name: "__PW__ IP Relay", type: "character", ownership: playerId ? { default: 0, [playerId]: 3 } : { default: 0 } });
       const [sA, sB] = actor.items.filter(i => i.type === "skill");
       for (const t of [12, 18, 7]) await IP.recordSkillRoll({ actorId: actor.id, skillId: sA.id, actorName: actor.name, skillName: sA.name, total: t });
       await IP.recordSkillRoll({ actorId: actor.id, skillId: sB.id, actorName: actor.name, skillName: sB.name, total: 20 });

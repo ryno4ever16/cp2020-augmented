@@ -967,7 +967,13 @@ function _hookWeaponFired() {
       if (defender && defender.type !== "cp2020-augmented.vehicle") {
         payload.handled = "cp2020-augmented";
         if (hasAreaDamages) _rememberCardFor(payload);
-        await postMeleeDefenseCard(payload, defender, { defenderTokenId: payload.targetTokenId ?? payload.fxTargetTokenId ?? null });
+        const defenderTokenId = payload.targetTokenId ?? payload.fxTargetTokenId ?? null;
+        await postMeleeDefenseCard(payload, defender, {
+          defenderTokenId,
+          // The figure's SCENE rides beside its token id: the contest resolves the defender through the
+          // scene's token document, so a client looking elsewhere reads the same figure, not the prototype.
+          defenderSceneId: (defenderTokenId ? canvas?.tokens?.get(defenderTokenId)?.document?.parent?.id : null) ?? canvas?.scene?.id ?? null,
+        });
         return;
       }
     }

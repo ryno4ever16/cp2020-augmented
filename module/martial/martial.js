@@ -132,15 +132,16 @@ export function martialBonusesFor(skill) {
 // Public actor helpers (vendored from CyberpunkActor; this -> actor).
 // ---------------------------------------------------------------------------
 
-/** Effective level of a skill (built-in martial arts resolve by stable id; others by localized/raw name). */
-export function getSkillVal(actor, skillName) {
-  if (!actor) return 0;
+/** The skill ITEM a skill key names on this actor — a built-in martial art by its stable id, anything else by
+ *  its localized or raw name. The lookup `getSkillVal` reads a level through, exposed on its own because a
+ *  caller that must name the item resolves it the same way: the IP tracker keys its queue rows by skill id,
+ *  and an attack or a defense reports the skill it rolled through this. Null when the actor carries no such
+ *  item (a built-in art the actor lacks is null too, exactly as its level reads 0). */
+export function skillItemFor(actor, skillName) {
+  if (!actor || !skillName) return null;
 
   const martialId = MARTIAL_ART_ID_BY_KEY?.[skillName];
-  if (martialId) {
-    const byId = getSkillByStableId(actor, martialId);
-    return byId ? realSkillValue(byId) : 0;
-  }
+  if (martialId) return getSkillByStableId(actor, martialId) ?? null;
 
   const nameLoc = localize("Skill" + skillName);
   const prefixLoc = localize("SkillMartialArts");
@@ -154,7 +155,12 @@ export function getSkillVal(actor, skillName) {
   }
   candidates.add(normalizeSkillName(skillName));
 
-  const skillItem = actor.itemTypes.skill.find((s) => candidates.has(normalizeSkillName(s.name)));
+  return actor.itemTypes.skill.find((s) => candidates.has(normalizeSkillName(s.name))) ?? null;
+}
+
+/** Effective level of a skill (built-in martial arts resolve by stable id; others by localized/raw name). */
+export function getSkillVal(actor, skillName) {
+  const skillItem = skillItemFor(actor, skillName);
   return skillItem ? realSkillValue(skillItem) : 0;
 }
 

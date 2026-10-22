@@ -54,6 +54,9 @@ const r = await gm.evaluate(async () => {
   out.notes.railAtStart = S.renderEmitLive();
   out.notes.swings = [];
   Hooks.on("cyberpunk2020.weaponFired", (p) => shots.push({ method: p.fireMethod, targets: p.targetCount, fx: p.fxTargetTokenId, tt: p.targetTokenId, fired: p.firedByUserId === game.user.id, total: p.attackTotal, keys: Object.keys(p.areaDamages ?? {}), applies: M.contestApplies(p) }));
+  // Every skill use the fire path and the contest report to the IP tracker (the seam the skill-roll shim raises).
+  const skillUses = [];
+  Hooks.on("cyberpunkSkillRolled", (p) => skillUses.push({ actor: p?.actorName, skill: p?.skillName, skillId: p?.skillId, total: p?.total }));
 
   // ── §1 pure rules ─────────────────────────────────────────────────────────────────────────────
   const v = (o) => M.meleeVerdict({ attackTotal: 15, defenseTotal: 14, ...o });
@@ -262,7 +265,35 @@ const r = await gm.evaluate(async () => {
     const rp = card ? await rollWindowDefault(card) : { opened: false };
     const plain = rp.result?.verdict === "hit" ? await applyAndRead() : { opened: false, noHit: true };
     add("§2 throw (negative): a plain hit's stun prompt carries no penalty", plain.prompt && String(plain.saveMod) === "0", JSON.stringify({ v: rp.result?.verdict, ...plain }));
+    // the card carries the defender's SCENE beside the token id, so a client on another scene resolves the same figure
+    add("§2 card: the contest carries the defender's scene id", card?.getFlag(SCOPE, "meleeContest")?.defenderSceneId === scene.id, card?.getFlag(SCOPE, "meleeContest")?.defenderSceneId);
     await closeWindows(); await sleep(300);
+  }
+  // Escape (p.100): the swing is the ESCAPEE's. Nothing lands before the verdict; a win frees the escapee (their
+  // own mark, their name on the card); a loss leaves them held. ⏪ The sheet used to apply it at the roll, before
+  // any verdict, and to the TARGET — it cleared the holder's marks and named the holder as the one freed.
+  {
+    const freedCards = () => game.messages.contents.filter(m => /breaks free/i.test(m.content ?? ""));
+    await attacker.setFlag(SCOPE, "heldBy", defender.id);
+    const eBefore = freedCards().length;
+    await swing(fists, { action: "Escape", martialArt: "Brawling", extraMod: 40 }, [defTok]);
+    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    add("§2 escape: the swing posts a contest card and applies nothing before the verdict", !!card && card.getFlag(SCOPE, "meleeContest")?.action === "Escape" && attacker.getFlag(SCOPE, "heldBy") === defender.id && freedCards().length === eBefore, JSON.stringify({ a: card?.getFlag(SCOPE, "meleeContest")?.action, held: attacker.getFlag(SCOPE, "heldBy"), cards: freedCards().length - eBefore }));
+    const re = card ? await rollWindowDefault(card) : { opened: false };
+    const freed = await waitFor(() => !attacker.getFlag(SCOPE, "heldBy"), 6000);
+    const eCard = await waitFor(() => freedCards().length > eBefore ? freedCards().at(-1) : null, 6000);
+    const plainText = (eCard?.content ?? "").replace(/<[^>]+>/g, "");
+    add("§2 escape: a win clears the ESCAPEE's hold mark and the freed card names the escapee", re.result?.verdict === "hit" && freed === true && !!eCard && plainText.includes(attacker.name) && !defender.getFlag(SCOPE, "heldBy"), JSON.stringify({ v: re.result?.verdict, held: attacker.getFlag(SCOPE, "heldBy"), card: plainText.slice(0, 90) }));
+    // the loss: the defender's +40 in the window beats the plain swing
+    await attacker.setFlag(SCOPE, "heldBy", defender.id);
+    const eBefore2 = freedCards().length;
+    await swing(fists, { action: "Escape", martialArt: "Brawling", extraMod: 0 }, [defTok]);
+    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    const rl = card ? await rollWindowDefault(card, { extra: 40 }) : { opened: false };
+    await sleep(1000);
+    add("§2 escape (negative): a loss leaves the escapee held and posts no freed card", rl.result?.verdict === "miss" && attacker.getFlag(SCOPE, "heldBy") === defender.id && freedCards().length === eBefore2, JSON.stringify({ v: rl.result?.verdict, held: attacker.getFlag(SCOPE, "heldBy"), cards: freedCards().length - eBefore2 }));
+    await attacker.unsetFlag(SCOPE, "heldBy").catch(() => {});
+    await closeWindows();
   }
   // parry: arm → the window opens on that arm; blade → no window, a break-save card
   {
@@ -297,6 +328,17 @@ const r = await gm.evaluate(async () => {
     add("§2 ranged: no contest card; the apply window opens as before", flagged("meleeContest").length === contests && !!opened, JSON.stringify({ c: flagged("meleeContest").length - contests, w: windows().length }));
     await closeWindows();
     add("§2 counter: the defense rolls never touched the defender's action count", (Number(defender.getFlag(SCOPE, "actionCount")) || 0) === 0, defender.getFlag(SCOPE, "actionCount"));
+  }
+  // the IP tracker's seam: every attack and every defense above reported the skill it rolled (reported from the
+  // table 2026-10-21: a night of combat rolls was invisible to the tracker, which only ever heard plain skill rolls)
+  {
+    const by = (actorName, re) => skillUses.filter(u => u.actor === actorName && re.test(String(u.skill ?? "")));
+    out.notes.skillUses = skillUses.map(u => `${u.actor}:${u.skill}=${u.total}`);
+    add("§2 skill report: a melee weapon swing reports the weapon's attack skill (Melee)", by(attacker.name, /^Melee$/).length >= 1, JSON.stringify(by(attacker.name, /^Melee$/).slice(0, 2)));
+    add("§2 skill report: a martial swing reports the style it was thrown with (Brawling)", by(attacker.name, /Brawling/).length >= 1, JSON.stringify(by(attacker.name, /Brawling/).slice(0, 2)));
+    add("§2 skill report: a ranged shot reports the weapon's attack skill (Handgun)", by(attacker.name, /Handgun/).length >= 1, JSON.stringify(by(attacker.name, /Handgun/).slice(0, 2)));
+    add("§2 skill report: a defense roll reports the chosen skill (the defender's Karate)", by(defender.name, /Karate/).length >= 1, JSON.stringify(by(defender.name, /Karate/).slice(0, 2)));
+    add("§2 skill report: every report carries the roll's total and the skill item's id", skillUses.length > 0 && skillUses.every(u => Number.isFinite(Number(u.total)) && typeof u.skillId === "string" && u.skillId.length > 0), JSON.stringify(skillUses.filter(u => !Number.isFinite(Number(u.total)) || !u.skillId).slice(0, 3)));
   }
 
   // ── §3 declarations ────────────────────────────────────────────────────────────────────────────

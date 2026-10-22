@@ -31,9 +31,9 @@
     <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpQueue"}} {{#if rowCount}}({{rowCount}}){{/if}}</h2>
     <div class="cp-ip-queue">
         {{#if rowCount}}
-        {{!-- One row per character+skill. Repeats coalesce behind a count; the row opens to the
-              individual rolls, where each can be pruned out. The award stays at ROW level: one
-              amount, one ✓, one throttle count for the group. --}}
+        {{!-- One row per character+skill. Repeats coalesce behind a count with their totals inline
+              (newest first); the row opens to the individual rolls, where each can be pruned out. The
+              award stays at ROW level: one amount, one ✓, one throttle count for the group. --}}
         {{#each rows as |row|}}
         <div class="cp-ip-row" data-row-id="{{row.id}}">
             <div class="flexrow cp-ip-row-main">
@@ -41,7 +41,7 @@
                       {{#unless row.single}}data-action="ipOpenRow" title="{{localize "CYBERPUNK.IpRollsOpenTip"}}"{{else}}title="{{CPLocal 'IpRolledTip' total=row.total}}"{{/unless}}>
                     {{row.actorName}} · <b>{{row.skillName}}</b>
                     {{#if row.single}}<span class="cp-ip-row-total">({{row.total}})</span>
-                    {{else}}<span class="cp-ip-row-count">×{{row.count}}</span>{{/if}}
+                    {{else}}<span class="cp-ip-row-count">×{{row.count}}</span> <span class="cp-ip-row-total">({{row.totals}})</span>{{/if}}
                 </span>
                 {{#if ../auto}}
                 <label title="{{CPLocal 'IpSuccessTip' baseline=../baseline}}"><input type="checkbox" class="cp-ip-success" {{#if row.success}}checked{{/if}}/> {{localize "CYBERPUNK.IpSuccess"}}</label>

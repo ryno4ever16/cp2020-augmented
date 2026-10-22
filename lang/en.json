@@ -1610,6 +1610,7 @@
     "IpAwardTip": "Award this row's IP (to pending).",
     "IpSkipTip": "Discard this row (no IP).",
     "IpManualTitle": "Add IP",
+    "IpManualNoPlayers": "No player characters to award — the tracker follows the actors a player owns.",
     "IpManualActor": "Character",
     "IpManualSkill": "Skill",
     "IpManualAmount": "IP amount",

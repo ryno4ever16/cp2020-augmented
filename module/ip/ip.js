@@ -295,8 +295,20 @@ async function _notifyQueueOverflow() {
  */
 export function recordSkillRoll(payload) {
   if (!ipRawTracking()) return;
+  if (!isTrackedActor(payload?.actorId)) return;
   if (isPrimaryGMSession()) return _enqueue(payload);
   else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "ipSkillRolled", payload });
+}
+
+/**
+ * The figures the tracker follows: PLAYER characters — any actor a player owns. The referee's own NPC rolls
+ * used to land in the queue beside them, and the pick-lists offered every figure in the world (reported from
+ * the table 2026-10-21). An actor no player owns reports nothing and is listed nowhere; the manual add offers
+ * the same set. Takes the actor or its id (a relayed row carries the id).
+ */
+export function isTrackedActor(actorOrId) {
+  const actor = typeof actorOrId === "string" ? game.actors?.get(actorOrId) : actorOrId;
+  return !!actor?.hasPlayerOwner;
 }
 
 /**
@@ -595,7 +607,7 @@ export function registerIpHooks() {
     if (!isPrimaryGMSession()) return;
     try {
       switch (data?.type) {
-        case "ipSkillRolled": await _enqueue(data.payload); break;
+        case "ipSkillRolled": if (isTrackedActor(data.payload?.actorId)) await _enqueue(data.payload); break;
         case "ipDismissRow":  await dismissQueueRow(data.payload?.rowId); break;
         case "ipUpdateRow":   await updateQueueRow(data.payload?.rowId, data.payload?.patch); break;
         case "ipPruneRoll":   await pruneQueueRoll(data.payload?.rowId, data.payload?.rollId); break;

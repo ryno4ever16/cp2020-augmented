@@ -30,14 +30,14 @@
  * Stands down with the rest of the combat layer when the host provides combat automation (Tilt's 1.2 has
  * its own `resolveDefense`): wired under `doCombat` in cp2020-augmented.js.
  */
-import { localize, localizeParam, firingActorOf } from "../utils.js";
+import { localize, localizeParam, firingActorOf, resolveActorRef } from "../utils.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { markCardResolved } from "../card-lock.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
 import { martialActions, getMartialActionBonus } from "../lookups.js";
 import {
-  getSkillVal, trainedMartials, getMartialArtSkill, martialBonusesFor,
+  getSkillVal, skillItemFor, trainedMartials, getMartialArtSkill, martialBonusesFor,
   applyOrRelayMartialEffect, CONTESTED_MARTIAL_ACTIONS,
 } from "./martial.js";
 import { applyResolvedMeleeHit } from "../combat/damage-hooks.js";
@@ -146,11 +146,13 @@ export function contestApplies(payload) {
 
 /* ───────────────────────────── helpers ───────────────────────────── */
 
-/** Token-first actor resolution (an unlinked token keeps its own state); the directory actor as fallback. */
-function _resolveActor(tokenId, actorId) {
-  const tokenActor = tokenId ? canvas?.tokens?.get?.(tokenId)?.actor : null;
-  if (tokenActor) return tokenActor;
-  return (actorId ? game.actors.get(actorId) : null) ?? null;
+/** Token-first actor resolution (an unlinked token keeps its own state) through the token's SCENE, not the
+ *  viewed canvas; the directory actor as the last fallback. Reported from the table (2026-10-21): a client
+ *  looking at another scene than the fight found no token on its canvas, fell through to the directory
+ *  actor, and the defense window printed an unlinked figure's PROTOTYPE stats. The card carries the scene
+ *  beside the token id so every client resolves the same document whatever it is looking at. */
+function _resolveActor(tokenId, actorId, sceneId = null) {
+  return resolveActorRef({ tokenId, sceneId, actorId });
 }
 
 /** The label a card prints for the attack: the martial action's name, else the weapon's. */
@@ -176,8 +178,11 @@ const _flagOf = (message) => message?.getFlag?.(SCOPE, CONTEST_FLAG) ?? null;
  * the shot path in place of opening the apply window. A defender who cannot defend, or a fumbled attack,
  * is resolved right away (the card still posts, so the table sees why).
  */
-export async function postMeleeDefenseCard(payload, defender, { defenderTokenId = null, presenterUserId = game.user?.id ?? null } = {}) {
+export async function postMeleeDefenseCard(payload, defender, { defenderTokenId = null, defenderSceneId = null, presenterUserId = game.user?.id ?? null } = {}) {
   if (!defender) return null;
+  // The scene the defending figure stands on (see _resolveActor): the caller's, else the synthetic actor's
+  // own token's, else the viewed scene when a token id was given at all.
+  const sceneId = defenderSceneId ?? defender.token?.parent?.id ?? (defenderTokenId ? canvas?.scene?.id ?? null : null);
   const attacker = firingActorOf(payload) ?? (payload?.attackerId ? game.actors.get(payload.attackerId) : null);
   const action = String(payload?.attackContext?.martialAction ?? "");
   const moveLabel = _moveLabel(payload);
@@ -195,7 +200,7 @@ export async function postMeleeDefenseCard(payload, defender, { defenderTokenId 
   const flag = {
     payload, action, moveLabel, attackTotal, cannotDefend, fumble,
     attackerActorId: attacker?.id ?? payload?.attackerId ?? null, attackerName: attacker?.name ?? "",
-    defenderActorId: defender.id, defenderTokenId: defenderTokenId ?? null,
+    defenderActorId: defender.id, defenderTokenId: defenderTokenId ?? null, defenderSceneId: sceneId,
     presenterUserId, resolved: false,
   };
   const message = await ChatMessage.create({
@@ -217,7 +222,7 @@ export async function openDefenseWindow(messageId, { defenderOverride = null } =
   const message = game.messages.get(messageId);
   const f = _flagOf(message);
   if (!f) return false;
-  const defender = defenderOverride ?? _resolveActor(f.defenderTokenId, f.defenderActorId);
+  const defender = defenderOverride ?? _resolveActor(f.defenderTokenId, f.defenderActorId, f.defenderSceneId);
   if (!canChooseDefense(game.user, defender)) { ui.notifications?.warn(localize("MeleeDefenseNotAllowed")); return false; }
   if (f.resolved) { ui.notifications?.warn(localize("MeleeDefenseAlreadyResolved")); return false; }
   const options = defenseOptionsFor(defender);
@@ -268,7 +273,19 @@ async function _rollDefense(message, defender, option, extra) {
     skillLabel: option.kind === "art" ? `${option.label} (${option.maneuverLabel})` : option.label,
   };
   const verdict = meleeVerdict({ attackTotal: f.attackTotal, defenseTotal: roll.total, fumble: f.fumble, cannotDefend: f.cannotDefend });
+  _reportDefenseSkill(defender, option, roll.total);
   await _postResult(message, { verdict, defense, roll, defender });
+}
+
+/** The defense is a skill use too (p.111: REF + skill + 1D10) — reported to the IP tracker through the seam a
+ *  plain skill roll raises (`cyberpunkSkillRolled`), by the skill ITEM the chosen option named. Reported from
+ *  the table (2026-10-21): a night of blocks and dodges was invisible there. */
+function _reportDefenseSkill(defender, option, total) {
+  try {
+    const skill = option?.kind === "art" ? getMartialArtSkill(defender, option.skillKey) : skillItemFor(defender, option?.skillKey);
+    if (!skill || !Number.isFinite(Number(total))) return;
+    Hooks.callAll("cyberpunkSkillRolled", { actorId: defender.id, skillId: skill.id, actorName: defender.name, skillName: skill.name, total: Number(total) });
+  } catch (e) { console.warn(`${SCOPE} | defense skill report failed`, e); }
 }
 
 /**
@@ -278,7 +295,7 @@ async function _rollDefense(message, defender, option, extra) {
 async function _postResult(contestMessage, { verdict, defense = null, roll = null, forced = false, auto = false, defender = null }) {
   const f = _flagOf(contestMessage);
   if (!f) return null;
-  const def = defender ?? _resolveActor(f.defenderTokenId, f.defenderActorId);
+  const def = defender ?? _resolveActor(f.defenderTokenId, f.defenderActorId, f.defenderSceneId);
   const names = { attacker: f.attackerName, target: def?.name ?? "", move: f.moveLabel, attack: f.attackTotal ?? "?" };
   let breakdown = "";
   if (defense) {
@@ -321,13 +338,22 @@ async function _runConsequence(result) {
   if (!f || f.consequenceDone) return;
   try { await contest.setFlag(SCOPE, CONTEST_FLAG, { ...f, resolved: true, consequenceDone: true }); } catch (_e) { /* not mine to update */ }
   if (result.verdict !== "hit") return;
-  const defender = _resolveActor(f.defenderTokenId, f.defenderActorId);
+  const defender = _resolveActor(f.defenderTokenId, f.defenderActorId, f.defenderSceneId);
   if (!defender) return;
-  const attacker = f.attackerActorId ? game.actors.get(f.attackerActorId) : null;
   const payload = foundry.utils.deepClone(f.payload ?? {});
+  // The figure that swung, token-first like the defender: an unlinked escapee's marks live on its own token.
+  const attacker = resolveActorRef({ tokenId: payload.attackerTokenId ?? null, sceneId: f.defenderSceneId ?? null, actorId: f.attackerActorId ?? null });
 
   // The status manoeuvres land on the win (hold / grapple / choke / throw / sweep); a disarm is the GM's hands.
   if (f.action && CONTESTED_MARTIAL_ACTIONS.has(f.action)) await applyOrRelayMartialEffect(f.action, defender, attacker);
+  // Escape (p.100: the held figure's own opposed roll to break free) frees the one who SWUNG. Reported from
+  // the table (2026-10-21): the sheet used to apply it the moment the roll landed, before any verdict, and
+  // to the TARGET — it cleared the holder's marks and named the holder as the one freed. Now it is this
+  // win's consequence, on the escapee, who is the effect's target and the card's subject.
+  if (f.action === martialActions.escape) {
+    if (attacker) await applyOrRelayMartialEffect(f.action, attacker, defender);
+    return;
+  }
   if (f.action === martialActions.disarm) {
     await postSavePromptCard({ body: localizeParam("MeleeDisarmNote", { attacker: f.attackerName, target: defender.name }), speaker: ChatMessage.getSpeaker({ actor: defender }) });
   }

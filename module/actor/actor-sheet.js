@@ -2299,25 +2299,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         await this._cpFireThroughDamageGuard(item, () => item.__weaponRoll(attackMods, targetTokens));
         // Every melee attack is now OPPOSED through the contest card the shot path posts
         // (martial/melee-contest.js): a hold / grapple / choke / throw / sweep lands its status on the hit
-        // verdict there, so nothing is offered or applied from here. ⏪ The separate defense-OFFER card
-        // this used to post for those five made two contests for one swing. Escape stays immediate — it
-        // is the actor freeing themselves, not an attack on the target (self-gated on
-        // specialMeleeEffectsEnabled inside the effect).
-        if (action === martialActions.escape && targetTokens.length === 1) {
-          const targetActor = canvas?.tokens?.get(targetTokens[0].id)?.actor ?? null;
-          if (targetActor) await this._cpApplyOrRelayMartialEffect(action, targetActor);
-        }
+        // verdict there, and an Escape frees the ESCAPEE on its own win there, so nothing is offered or
+        // applied from here. ⏪ The separate defense-OFFER card this used to post for those five made two
+        // contests for one swing; and the Escape used to be applied HERE, the moment the roll landed and
+        // before any verdict, to the TARGET — it cleared the holder's marks and named the holder as the one
+        // freed (reported from the table 2026-10-21).
       },
     });
     dialog.render(true);
-  }
-
-  /** Apply a special martial hit-effect to the target — directly if this client can write the target,
-   *  else relayed to the active GM. Delegates to the single home in martial.js (the offer card's
-   *  buttons use the same helper), so the two paths can never drift. (A6) */
-  async _cpApplyOrRelayMartialEffect(action, targetActor) {
-    const { applyOrRelayMartialEffect } = await import("../martial/martial.js");
-    await applyOrRelayMartialEffect(action, targetActor, this.actor);
   }
 
   /** The actor's best fighting skill for the style picker: the highest of Brawling and every trained art, an
