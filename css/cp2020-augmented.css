@@ -2197,6 +2197,16 @@ body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
 /* ACPA pilot has declared more actions than ½ REF allows (MM p.54) — advisory highlight, not a block. */
 .cp-action-count-badge.cp-over-cap { background: rgba(209, 80, 47, 0.85); color: #fff; }
 
+/* The tracker row keeps its initiative control on the row whatever the strip holds (measured on the rig
+   2026-10-21: the acting row with the ×3 (−6) badge, ➕, ⛨, 🛡, ⏸, 🎯 and core's three controls runs 215 px in
+   a column that was 188 px wide; the column grew to its content and pushed .token-initiative 19 px past the
+   row's edge). The name column may now shrink to the space it is given, and an overfull control strip wraps
+   onto a second line instead of widening the column. Scoped by the tracker's own class, which the docked
+   tab (#combat) and the popped-out window (#combat-popout) both carry — scoped by the docked id alone, the
+   popout never got the rule and the table still saw the control 21 px off the row (2026-10-22). */
+.combat-sidebar .combatant .token-name { min-width: 0; }
+.combat-sidebar .combatant .token-name .combatant-controls { flex-wrap: wrap; }
+
 /* Movement allowance on the token ruler label (combat/movement-allowance.js): the running total reads
    "used / Run" and takes the status colour of its state; the path itself is tinted by the ruler. */
 .waypoint-label.cp-run-at .total-measurement { color: #c0791a; }

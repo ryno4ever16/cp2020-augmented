@@ -1880,8 +1880,10 @@ function _hookDodgeParry() {
       dodgeBtn.dataset.combatantId = combatant.id;
       dodgeBtn.dataset.actorId = actor.id;
       dodgeBtn.title = isDodging ? localize("DodgeTitleActive") : localize("DodgeTitle");
+      // The glyph alone; the declared state is the highlight (user ruling 2026-10-21 — the "✓" wrapped under
+      // the glyph in the tracker's narrow control). Dodge green, parry blue (css .cp-active).
       if (isDodging) dodgeBtn.classList.add("cp-active");
-      dodgeBtn.innerHTML = isDodging ? "🛡✓" : "🛡";
+      dodgeBtn.textContent = "🛡";
       controls.prepend(dodgeBtn);
 
       const parryBtn = document.createElement("a");
@@ -1890,7 +1892,7 @@ function _hookDodgeParry() {
       parryBtn.dataset.actorId = actor.id;
       parryBtn.title = isParrying ? localize("ParryTitleActive") : localize("ParryTitle");
       if (isParrying) parryBtn.classList.add("cp-active");
-      parryBtn.innerHTML = isParrying ? "⛨✓" : "⛨";
+      parryBtn.textContent = "⛨";
       controls.prepend(parryBtn);
     }
   });
