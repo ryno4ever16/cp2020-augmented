@@ -2353,10 +2353,16 @@ async function _placeGasCloud(payload) {
     const scene = canvas?.scene;
     if (!scene) return;
 
-    // Determine cloud center: target token position, or attacker position if none
+    // Cloud centre: the spot the shooter designated, else the aimed-at figure, else the thrower.
+    // ⭐ THE SAME CHAIN THE BLAST WALKS (2026-10-21). This read `targetTokenId` alone — the routing field
+    // the seam leaves null on a single-shot card by design — so a gas round fired at a figure without the
+    // sheet's aim gesture formed its cloud on the thrower, and one fired WITH it ignored the aimed spot.
     let cloudX = null, cloudY = null;
-    if (payload.targetTokenId) {
-      const tok = canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId);
+    const aimedAt = payload?.aimPoint;
+    if (Number.isFinite(Number(aimedAt?.x)) && Number.isFinite(Number(aimedAt?.y))) { cloudX = Number(aimedAt.x); cloudY = Number(aimedAt.y); }
+    const aimedTokenId = payload.targetTokenId || payload.fxTargetTokenId || null;
+    if (cloudX === null && aimedTokenId) {
+      const tok = canvas?.tokens?.placeables?.find(t => t.id === aimedTokenId);
       if (tok) { cloudX = tok.center?.x ?? tok.x; cloudY = tok.center?.y ?? tok.y; }
     }
     if (cloudX === null) {
@@ -2368,6 +2374,29 @@ async function _placeGasCloud(payload) {
       if (atk) { cloudX = atk.center?.x ?? atk.x; cloudY = atk.center?.y ?? atk.y; }
     }
     if (cloudX === null) return; // can't place without a position
+
+    // ⭐ A MISSED GAS ROUND LANDS WHERE THE GRENADE TABLE PUTS IT (2026-10-21) — the same faces the seam
+    // rolled for the blast (`blastScatter`), turned into a point by the one site both rails read
+    // (scatter-table.js scatterLandedPoint), so a lob drawn to the landed point and the cloud that forms
+    // agree. The cloud used to form on the aimed figure whatever the attack roll said — a missed tear-gas
+    // round gassed its target exactly as a hit did (earmark gas-scatter-cloud-center). Recorded beside
+    // the geometry the way the blast records it, for the card and the keepers.
+    const aimedX = cloudX, aimedY = cloudY;
+    let scatter = null;
+    if (areaDeliveryOf(payload) && deliveryShotMissed(payload)) {
+      const gridSizePx = scene.grid?.size ?? canvas?.grid?.size ?? 100;
+      const gridDistM = Number(scene.grid?.distance) || 1;
+      const carried = payload?.blastScatter ?? null;
+      const dirRoll = Number.isFinite(Number(carried?.dirFace)) ? { total: Number(carried.dirFace) } : await new Roll("1d10").evaluate();
+      const distRoll = Number.isFinite(Number(carried?.distFace)) ? { total: Number(carried.distFace) } : await new Roll("1d10").evaluate();
+      const landed = scatterLandedPoint({
+        aimedX, aimedY, pixelsPerMeter: gridSizePx / gridDistM,
+        dirFace: dirRoll.total, distFace: distRoll.total,
+        sceneRect: { x: 0, y: 0, width: scene.width, height: scene.height },
+      });
+      scatter = { driftM: landed.driftM, dirName: landed.dirName, dirFace: landed.dirFace, clamped: landed.clamped };
+      cloudX = landed.x; cloudY = landed.y;
+    }
 
     const radius      = Number(payload.blastRadius) || 3;
     const duration    = Number(payload.dotTurns)    || 3;
@@ -2381,9 +2410,22 @@ async function _placeGasCloud(payload) {
     // legacy `isGasCloud`/turnsLeft/… flags here. On v13 the area is a MeasuredTemplate, which cannot carry a
     // behavior; it keeps the full legacy flag set the tick's back-compat path reads. Region visibility is
     // fixed to GAMEMASTER inside buildAreaData (the GM-only-default ruling).
+    // What the grenade table decided, recorded beside the geometry the way the blast records it
+    // (`_placeExplosion`): the area outlives the payload, and the card or a keeper has no other way to
+    // tell a cloud the thrower placed from one the table drifted. On v14 the Region carries these beside
+    // its behaviour (the legacy marker flags stay OFF it — the tick's back-compat path keys on them);
+    // on v13 the template's own flag set grows the same fields.
+    const scatterFlags = {
+      originX: cloudX, originY: cloudY, aimedX, aimedY,
+      scattered: !!scatter,
+      scatterDirFace: scatter ? scatter.dirFace : 0,
+      scatterDriftM: scatter ? scatter.driftM : 0,
+      scatterDirName: scatter ? scatter.dirName : "",
+    };
     const descriptor = {
       kind: "circle", x: cloudX, y: cloudY, radiusM: radius,
       color: "#88ff44", borderColor: "#44aa22",
+      flags: scatterFlags,
     };
     if (usesRegions()) {
       descriptor.behaviors = [{
@@ -2393,6 +2435,7 @@ async function _placeGasCloud(payload) {
       }];
     } else {
       descriptor.flags = {
+        ...scatterFlags,
         isGasCloud: true, turnsLeft: duration, stunSaveMod,
         createdRound: game.combat?.round ?? 0, weaponName,
       };
@@ -2905,8 +2948,16 @@ async function _placeExplosion(payload) {
     if (Number.isFinite(Number(aimed?.x)) && Number.isFinite(Number(aimed?.y))) {
       cx = Number(aimed.x); cy = Number(aimed.y);
     }
-    if (cx === null && payload.targetTokenId) {
-      const tok = canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId);
+    // ⭐ THE AIMED-AT FIGURE, EITHER WAY IT RIDES (2026-10-21). `targetTokenId` is the damage-flow ROUTING
+    // field and the seam leaves it null on every single-shot card by design (PATH B); the figure the
+    // shooter had targeted still rides as `fxTargetTokenId`. A launcher fired without the sheet's aim
+    // gesture — a macro, a weapon card, a keeper — carried neither an aim point nor a routing target, fell
+    // through to the thrower's own figure and detonated ON THE SHOOTER (every hit in the launcher matrix
+    // landed 10 m short, on the firer). The aimed figure is the centre p.108 names; the attacker stays the
+    // last resort for a throw with nobody targeted at all.
+    const aimedTokenId = payload.targetTokenId || payload.fxTargetTokenId || null;
+    if (cx === null && aimedTokenId) {
+      const tok = canvas?.tokens?.placeables?.find(t => t.id === aimedTokenId);
       if (tok) { cx = tok.center?.x ?? tok.x; cy = tok.center?.y ?? tok.y; }
     }
     if (cx === null) {

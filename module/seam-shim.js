@@ -22,7 +22,7 @@ import { scatterDriftM } from "./combat/scatter-table.js";
 // The scatter DECISION comes from the verdict's own home (2026-08-26), the drift TABLE from the file
 // above; they were one import until the predicate had to start reading the base's ruling.
 import { payloadScattersOnMiss } from "./combat/spread-geometry.js";
-import { areaDeliveryKind, deliveryShotMissed } from "./combat/area-delivery.js";
+import { areaDeliveryKind, deliveryShotMissed, grenadeFamilyOf } from "./combat/area-delivery.js";
 import { getWeaponLongRange } from "./combat/rangefinding.js";
 // ⭐ WHICH ROW OF THE BASE'S FUMBLE TABLE WAS RULED. This file is the ONE caller of the derivation —
 // see the "one derivation, one caller" note in combat/fumble-outcome.js. Its answer rides the payload
@@ -411,6 +411,12 @@ function installWeaponFiredShim(ItemProto) {
         // `_getWeaponSystem()` accessor the base's fire methods use, so a cyberware weapon reports the
         // type of its Weapon work-block rather than the shell's. Null where the item cannot answer.
         attackType: (this._getWeaponSystem?.() ?? this.system)?.attackType ?? null,
+        // ⭐ A TUBE CHAMBERED FOR A LAUNCHED-GRENADE FAMILY IS A DELIVERY WEAPON WHATEVER ITS ATTACK CLASS
+        // (2026-10-21). The Cowboy U-55 is typed SemiAuto, the M-32 / MicroMortar / 30mm borg GL are typed
+        // Auto — the base's fire-mode classes — so `attackType` alone read them as guns: a word round or an
+        // impact round through them detonated nowhere, and an empty one fired its standard round as a
+        // bullet. Read off the item here (combat/area-delivery.js grenadeFamilyOf) for the payload readers.
+        launchedGrenade: !!grenadeFamilyOf(this),
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
       // ⭐ A MARTIAL ACTION WITH NO DAMAGE RENDERS THE DEFAULT CARD, NOT multi-hit.hbs (base item.js
@@ -628,7 +634,7 @@ function installRenderEmit() {
         // combat/area-delivery.js. The base's boolean is passed in the shape the payload carries it in,
         // so this site and the plant are asking the identical question of the identical facts.
         let blastScatter = null;
-        if (areaDeliveryKind(_fireCtx.attackType)) {
+        if (areaDeliveryKind(_fireCtx.attackType) || _fireCtx.launchedGrenade === true) {
           const missed = deliveryShotMissed({
             baseHit: typeof data?.hit === "boolean" ? data.hit : null,
             areaDamages: data?.areaDamages,
@@ -661,6 +667,9 @@ function installRenderEmit() {
           // WHAT KIND OF ATTACK THIS WEAPON MAKES — carried for the readers that never see the item
           // (the GM's client, resolving a relayed payload). See the note where it is captured.
           attackType: _fireCtx.attackType ?? null,
+          // The tube is chambered for a launched-grenade family — a grenade delivery whatever its attack
+          // class (see the capture). Read by combat/area-delivery.js's payload predicates.
+          launchedGrenade: _fireCtx.launchedGrenade === true,
           areaDamages: data?.areaDamages ?? {},
           // Rounds spent and rounds that landed for THIS card. areaDamages counts only the rounds
           // that hit, so a listener that needs the full round count (the per-shot fx fan-out) cannot

@@ -72,7 +72,7 @@
  * item or on the loaded round is answered with THEIR number, which is the action-as-consent rule this
  * project applies everywhere (memory `feedback-action-as-consent-rules`).
  */
-import { caliberMatches, normalizeCaliber } from "../lookups.js";
+import { caliberMatches, normalizeCaliber, isGrenadeRoundCaliber } from "../lookups.js";
 
 /** Area of effect in metres, by delivery kind — CP2020 p.99 AREA EFFECT TABLE (see the header). */
 export const AREA_DELIVERY_RADIUS_M = Object.freeze({
@@ -121,7 +121,9 @@ export function areaDeliveryKind(attackType) {
  * firing client and on a payload relayed to the GM as JSON.
  */
 export function areaDeliveryOf(payload) {
-  const kind = areaDeliveryKind(payload?.attackType);
+  // A tube chambered for a launched-grenade family delivers a grenade whatever its attack class (the
+  // seam carries `launchedGrenade` for the SemiAuto / Auto launchers, 2026-10-21).
+  const kind = areaDeliveryKind(payload?.attackType) ?? (payload?.launchedGrenade === true ? "grenade" : null);
   if (!kind) return null;
   const own = Number(payload?.blastRadius);
   const radiusM = (Number.isFinite(own) && own > 0) ? own : (AREA_DELIVERY_RADIUS_M[kind] ?? 0);
@@ -143,7 +145,7 @@ export function payloadDetonates(payload) {
   const t = payload?.effectTypes;
   const types = Array.isArray(t) ? t : (typeof t === "string" && t ? [t] : []);
   if (types.includes("Explosive")) return true;
-  return !!areaDeliveryKind(payload?.attackType);
+  return !!areaDeliveryKind(payload?.attackType) || payload?.launchedGrenade === true;
 }
 
 /**
@@ -170,6 +172,7 @@ export function payloadDetonates(payload) {
  */
 export function weaponDetonates(weapon) {
   if (areaDeliveryKind(weapon?._getWeaponSystem?.()?.attackType ?? weapon?.system?.attackType)) return true;
+  if (grenadeFamilyOf(weapon)) return true;   // a launched-grenade tube, whatever its attack class
   const t = loadedRoundOf(weapon)?.system?.effectTypes;
   const types = Array.isArray(t) ? t : (typeof t === "string" && t ? [t] : []);
   return types.includes("Explosive");
@@ -293,9 +296,37 @@ export const ROUND_DEFERRAL_WORD = "Varies";
  *  is never written out — it is derived from the module's own pack registration (`standardRoundPack`). */
 const MODULE_ID = "cp2020-augmented";
 const STANDARD_ROUND_PACK = "supplement-heavy";
-const STANDARD_ROUND_ID = "2smdtLN5J0FvhvoS";
+/**
+ * ⭐ ONE STANDARD ROUND PER LAUNCHED-GRENADE FAMILY (2026-10-21). The ladder was scoped to the Core tube
+ * alone on 2026-08-27, when the Core grenades were the only rounds; the typed families shipped on 10-12
+ * (lookups.js GRENADE_CALIBERS) and an EMPTY 25mm / 40mm / high-pressure / rifle-grenade tube was still
+ * refused with the "its damage reads Varies (25mm)" message — the exact behaviour the ruling retired.
+ * Found on the rig driving the Susano-O. Same basis as the Core's: the family's plain-damage
+ * Fragmentation round (the rifle family prints no fragmentation round; its HE is the plain-damage one).
+ * Pinned by pack id, the way the Core's always was — ids ride the src/packs filenames; the name rung
+ * below still answers for a hand-made or re-created copy.
+ */
+const STANDARD_ROUND_IDS = Object.freeze({
+  "Grenade":         "2smdtLN5J0FvhvoS",   // Fragmentation Grenade Round (CP2020 p.64 Fragmentation 7D6)
+  "25mm grenade":    "nidj3tQJ13pRv2Qh",   // 25mm Fragmentation Grenade (Home of the Brave p.86)
+  "25mm HP grenade": "NZbtSqbGRh598thC",   // Tsunami 25mm HP Fragmentation Grenade (Solo of Fortune 2 p.13)
+  "40mm grenade":    "yFRclZ0xict5nSPr",   // 40mm Fragmentation Grenade (Home of the Brave p.86)
+  "rifle grenade":   "rHir5INZbNnFHM08"    // Rifle Grenade, HE (Home of the Brave p.87)
+});
 /** The name rung 2 falls back to when a copy carries no source pointer (a hand-made or re-created one). */
-const STANDARD_ROUND_NAME = "Fragmentation Grenade Round";
+const STANDARD_ROUND_NAMES = Object.freeze({
+  "Grenade":         "Fragmentation Grenade Round",
+  "25mm grenade":    "25mm Fragmentation Grenade",
+  "25mm HP grenade": "Tsunami 25mm HP Fragmentation Grenade",
+  "40mm grenade":    "40mm Fragmentation Grenade",
+  "rifle grenade":   "Rifle Grenade, HE"
+});
+/** The launched-grenade family a tube is chambered for, or "" when it is not a grenade tube at all. */
+export function grenadeFamilyOf(weapon) {
+  const sys = weapon?._getWeaponSystem?.() ?? weapon?.system ?? {};
+  const fam = normalizeCaliber(String(sys.ammoType ?? "").trim());
+  return isGrenadeRoundCaliber(fam) ? fam : "";
+}
 
 /**
  * DOES THIS WEAPON DEFER ITS DAMAGE TO A GRENADE ROUND — the scope of the whole ladder, and the reason
@@ -327,9 +358,13 @@ const STANDARD_ROUND_NAME = "Fragmentation Grenade Round";
  * the same way, and nothing else.
  */
 export function defersDamageToGrenadeRound(weapon) {
+  // ⭐ ANY launched-grenade family since 2026-10-21 (the typed tubes print "Varies (25mm)", "Varies (40mm)",
+  // "Varies (25mm HP)", "Varies (25mm/10ga)" — the deferral word with the family after it), not the Core
+  // caliber alone. Both conditions stand: a thrown grenade still prints its own effect, never "Varies".
   const sys = weapon?._getWeaponSystem?.() ?? weapon?.system ?? {};
-  if (normalizeCaliber(String(sys.ammoType ?? "").trim()) !== GRENADE_ROUND_CALIBER) return false;
-  return String(sys.damage ?? "").trim().toLowerCase() === ROUND_DEFERRAL_WORD.toLowerCase();
+  if (!grenadeFamilyOf(weapon)) return false;
+  const printed = String(sys.damage ?? "").trim().toLowerCase();
+  return printed === ROUND_DEFERRAL_WORD.toLowerCase() || printed.startsWith(ROUND_DEFERRAL_WORD.toLowerCase() + " ");
 }
 
 /** The module's own supplement-heavy compendium, found through the RUNTIME pack registration rather
@@ -342,9 +377,10 @@ function standardRoundPack() {
 /** The pinned catalog UUID of the standard round, or "" when the pack is not registered. The same
  *  pointer Foundry stamps into `_stats.compendiumSource` on a copy dragged out of that pack, which is
  *  what makes rung 2's first match name-blind. */
-export function standardGrenadeRoundUuid() {
+export function standardGrenadeRoundUuid(family = GRENADE_ROUND_CALIBER) {
   const pack = standardRoundPack();
-  return pack ? `Compendium.${pack.collection}.Item.${STANDARD_ROUND_ID}` : "";
+  const id = STANDARD_ROUND_IDS[family];
+  return pack && id ? `Compendium.${pack.collection}.Item.${id}` : "";
 }
 
 /**
@@ -388,9 +424,10 @@ function ownedStandardRoundDamage(weapon) {
   const exact = usable.filter(a => normalizeCaliber(String(a.system?.caliber ?? "").trim()) === stated);
   const ordered = [...exact, ...usable.filter(a => !exact.includes(a))];
 
-  const uuid = standardGrenadeRoundUuid();
+  const uuid = standardGrenadeRoundUuid(stated);
   const bySource = uuid ? ordered.find(a => a?._stats?.compendiumSource === uuid) : null;
-  const byName = ordered.find(a => String(a.name ?? "").trim().toLowerCase() === STANDARD_ROUND_NAME.toLowerCase());
+  const stdName = String(STANDARD_ROUND_NAMES[stated] ?? "").toLowerCase();
+  const byName = stdName ? ordered.find(a => String(a.name ?? "").trim().toLowerCase() === stdName) : null;
   return roundDamageOf((bySource ?? byName ?? ordered[0]).system);
 }
 
@@ -402,11 +439,12 @@ function ownedStandardRoundDamage(weapon) {
  * world whose compiled pack predates the round (anything before the release re-seed) finds nothing
  * here and falls to the message, which is the honest answer for that build.
  */
-async function packStandardRoundDamage() {
+async function packStandardRoundDamage(family = GRENADE_ROUND_CALIBER) {
   const pack = standardRoundPack();
-  if (!pack) return "";
+  const id = STANDARD_ROUND_IDS[family];
+  if (!pack || !id) return "";
   try {
-    const doc = await pack.getDocument(STANDARD_ROUND_ID);
+    const doc = await pack.getDocument(id);
     return doc ? roundDamageOf(doc.system) : "";
   } catch (err) {
     console.warn("cp2020-augmented | the standard grenade round could not be read from its pack", err);
@@ -448,7 +486,7 @@ export async function warheadDamageFor(weapon) {
   const loaded = loadedRoundOf(weapon);
   if (loaded) return roundDamageOf(loaded.system);
   if (!defersDamageToGrenadeRound(weapon)) return "";
-  return ownedStandardRoundDamage(weapon) || await packStandardRoundDamage();
+  return ownedStandardRoundDamage(weapon) || await packStandardRoundDamage(grenadeFamilyOf(weapon));
 }
 
 /**
@@ -679,7 +717,8 @@ export function deliveryShotMissed(payload) {
  * shoulder tube with its warhead priced into the weapon, so it answers here by its type.
  */
 export function areaDeliveryIsLaunched(weapon) {
-  const kind = areaDeliveryKind(weapon?._getWeaponSystem?.()?.attackType ?? weapon?.system?.attackType);
+  const kind = areaDeliveryKind(weapon?._getWeaponSystem?.()?.attackType ?? weapon?.system?.attackType)
+    ?? (grenadeFamilyOf(weapon) ? "grenade" : null);
   if (!kind) return false;
   if (kind !== "grenade") return true;
   return !!loadedRoundOf(weapon);
