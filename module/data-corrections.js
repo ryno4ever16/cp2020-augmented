@@ -291,7 +291,12 @@ export const DATA_CORRECTIONS = {
     "5d4juFywt9NMCYTw": { name: "Avante P-1135 Needlegun", patch: { accuracy: 0 } },
   },
   "cyberpunk2020.melee": {
-    CfQQEwck7VZNQzC6: { patch: { accuracy: 1 } },  // Kendachi Monoknife Naginata (blank; Tanto form is WA 1)
+    // Mono-edged blades (CP2020 p.112: ⅓ SP against soft armour, ⅔ against hard, the edge breaks on a
+    // fumble). The pack ships them with the Mono box off, so the rule never engaged (reported from the
+    // table 2026-10-21). A copy already in a world keeps its own box — tick it on the item's Settings.
+    ivXNaxljSs1Ik4eM: { patch: { mono: true } },  // Kendachi MonoKatana
+    uiZdq4z1HksHbNkr: { patch: { mono: true } },  // Kendachi Monoknife Tanto
+    CfQQEwck7VZNQzC6: { patch: { accuracy: 1, mono: true } },  // Kendachi Monoknife Naginata (blank; Tanto form is WA 1)
     // Unarmed strikes rolled with the Brawling skill; the pack shipped the RU skill name.
     TF0nBrjofPX2RiuG: weaponAttackSkill("Драка"),  // Kick
     TZoiQuE8fUzJ8Jta: weaponAttackSkill("Драка"),  // Strike

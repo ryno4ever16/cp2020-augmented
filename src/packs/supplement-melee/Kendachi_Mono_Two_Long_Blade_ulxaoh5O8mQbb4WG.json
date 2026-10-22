@@ -29,6 +29,7 @@
       "extreme": ""
     },
     "ap": false,
+    "mono": true,
     "isEdged": true,
     "shotsLeft": 0,
     "shots": 0,
