@@ -130,6 +130,16 @@ const S = await gm.evaluate(async () => {
   G.resetFigures = async () => { for (const a of T) { await a.update({ "system.damage": 0 }); for (const f of ["wordConditionState", "fireDotState", "dotState"]) await a.unsetFlag(SCOPE, f).catch(() => {}); for (const s of ["unconscious", "blind", "deaf", "prone"]) if (a.statuses?.has(s)) await a.toggleStatusEffect(s, { active: false }).catch(() => {}); } };
   G.clearCards = async () => { for (const m of game.messages.contents.filter(m => /__PW__GL|cp-confirm-explosion|cp-stun-save-roll/.test(m.content ?? ""))) await m.delete().catch(() => {}); };
   G.lastPayload = null; Hooks.on("cyberpunk2020.weaponFired", (p) => { G.lastPayload = p; });
+  // Errors WITH THEIR STACKS, as the page raises them: the keeper's console tap only ever saw core's notification
+  // mirror (Notifications#fetch) for the "reading '_id'" error of runs 4-7, which names the mirror and not the
+  // thrower, and a targeted re-fire of the accused launcher (every round, the empty tube, a burst) raised nothing.
+  // Captured here per launcher so the next sighting names its site.
+  G.caught = [];
+  const capErr = (kind, loc, err) => G.caught.push({ kind, loc: String(loc ?? ""), msg: String(err?.message ?? err ?? "").slice(0, 200), stack: String(err?.stack ?? "").split("\n").slice(0, 7).join(" | ").slice(0, 900) });
+  Hooks.on("error", (loc, err) => capErr("hook:error", loc, err));
+  const origNotifyErr = ui.notifications.error.bind(ui.notifications);
+  ui.notifications.error = (m, o) => { capErr("notifications.error", "", m); return origNotifyErr(m, o); };
+  window.addEventListener("unhandledrejection", (ev) => capErr("unhandledrejection", "", ev.reason));
   G.tapWarn = () => { const seen = []; const ow = ui.notifications.warn.bind(ui.notifications); ui.notifications.warn = (m, ...a) => { seen.push(String(m)); return ow(m, ...a); }; return { seen, off: () => { ui.notifications.warn = ow; } }; };
   G.target = async () => { for (const t of [...game.user.targets]) t.setTarget(false, { releaseOthers: false }); canvas.tokens.get(G.t1.id).setTarget(true, { releaseOthers: true }); await sleep(100); };
   G.fire = async (weapon, { extraMod = 40, fireMode = G.FM.semiAuto } = {}) => {
@@ -214,18 +224,20 @@ const runLauncher = async (name) => gm.evaluate(async (name) => {
   rows.push({ launcher: Ldoc.name, round: "(empty tube)", attackType: launcher.system.attackType, empty: { refused: e.warns.length > 0 || !!e.threw, warns: e.warns.map(w => w.slice(0, 100)), timedOut: e.timedOut, placed: !!e.area, base: f ? Number(f.baseDamage) : null, radius: f ? Number(f.blastRadius) : null } });
   await G.clearAreas(); await G.clearCards();
   await launcher.delete().catch(() => {});
-  return rows;
+  return { rows, caught: G.caught.splice(0) };
 }, name);
 
 const allRows = [];
 let diceRows = 0, wordRows = 0;
 for (const name of S.census.launchers) {
-  let rows;
+  let rows, caught;
   const errsBefore = errors.length;
-  try { rows = await runLauncher(name); }
+  try { ({ rows, caught } = await runLauncher(name)); }
   catch (e) { add(`§2 ${name}: the launcher's rows ran`, false, String(e?.message ?? e).slice(0, 300)); continue; }
-  // A page/console error is attributed to the launcher whose rows were running when it was raised.
+  // A page/console error is attributed to the launcher whose rows were running when it was raised — and the
+  // page-side capture prints the thrower's own stack beside it.
   if (errors.length > errsBefore) console.log(`  console/page errors during ${name}: ${errors.slice(errsBefore).join(" | ").slice(0, 400)}`);
+  if (caught?.length) console.log(`  caught during ${name}: ${JSON.stringify(caught).slice(0, 1500)}`);
   allRows.push(...rows);
   for (const x of rows) {
     if (x.empty) { add(`§3 ${x.launcher}: an EMPTY tube fires a standard round of its family (08-27 ruling), not a refusal`, !x.empty.refused && !x.empty.timedOut && x.empty.placed && x.empty.base > 0, x.empty); continue; }
