@@ -15,7 +15,7 @@
     "accuracy": -1,
     "concealability": "ConcealNoHide",
     "availability": "Rare",
-    "ammoType": "Grenade",
+    "ammoType": "rifle grenade",
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},

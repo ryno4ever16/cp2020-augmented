@@ -41,7 +41,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "5D10AP HEAT + 3D6 frag (5m)",
+    "damage": "5d10",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -59,7 +59,11 @@
     "burstCapable": false,
     "reliability": "Standard",
     "range": 25,
-    "attackType": "",
+    "attackType": "Grenade",
+    "blastRadius": 0.5,
+    "armorMultSoft": 0.5,
+    "armorMultHard": 0.5,
+    "penDamageMult": 1,
     "attackSkill": "Heavy Weapons"
   },
   "_stats": {},

@@ -34,6 +34,12 @@ const WEAPON_AUGMENT_FIELDS = {
   rofSemi: (f) => new f.NumberField({ initial: 0, integer: true, min: 0, nullable: false }),
   edged:  (f) => new f.BooleanField({ initial: false }),
   mono:   (f) => new f.BooleanField({ initial: false }),
+  // A thrown shaped charge's own armour statement (Home of the Brave p.78 Anti-Tank grenade; p.83's HEAT rule:
+  // half SP, and damage past SP at full value) — the three figures a ROUND carries, so a weapon that IS its
+  // warhead can state them without a round. 1 = no statement (the AP flag's own profile applies).
+  armorMultSoft: (f) => new f.NumberField({ initial: 1 }),
+  armorMultHard: (f) => new f.NumberField({ initial: 1 }),
+  penDamageMult: (f) => new f.NumberField({ initial: 1 }),
   broken: (f) => new f.BooleanField({ initial: false }),
   // ── The gas-payload family (2026-08-28) ──────────────────────────────────────────────────────
   // A THROWN grenade is its own warhead: it has no loaded round to carry effect fields, so the

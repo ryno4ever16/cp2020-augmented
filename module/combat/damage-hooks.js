@@ -41,7 +41,9 @@ import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLoca
 import { makeSeverityBatch, closeSeverityBatch, severityBatchOwnsMortal, severityBatchHandledMortal, isSeverityBatch, recordSeverityStun } from "./severity-batch.js";
 import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
-import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus, applyWordConditionFromPayload, WORD_CONDITIONS } from "./save-rolls.js";
+import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus, applyWordConditionFromPayload, WORD_CONDITIONS, postStatCheckPrompt } from "./save-rolls.js";
+// The worn gear's gas rating — what spares a figure the Stench Bomb's check (mech/protection.js).
+import { hazardProtectionFor } from "../mech/protection.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 // combatFxEnabled is read (with the presentation rail's patternFlowOwns) at the pattern's apply, so one
 // round is not sounded twice — once on arrival by the rail and again when the corridor is confirmed.
@@ -3269,8 +3271,10 @@ function _wordWarheadSummary(word, src = {}) {
     return mod < 0 ? localizeParam("WordWarheadStunSummary", { mod }) : localize("WordWarheadStunPlainSummary");
   }
   const turns = Math.max(0, Math.floor(Number(src.dotTurns) || 0));
-  if (word === "Blind") return localizeParam("WordWarheadBlindSummary", { turns });
-  if (word === "Deaf")  return localizeParam("WordWarheadDeafSummary",  { turns });
+  if (word === "Blind")  return localizeParam("WordWarheadBlindSummary", { turns });
+  if (word === "Deaf")   return localizeParam("WordWarheadDeafSummary",  { turns });
+  if (word === "EMP")    return localizeParam("WordWarheadEmpSummary",   { turns });
+  if (word === "Stench") return localize("WordWarheadStenchSummary");
   return "";
 }
 
@@ -3310,6 +3314,24 @@ async function _applyWordWarhead(word, f, targets) {
 
     if (word === "Stun") {
       await postStunSavePrompt(actor, entry.tok, { saveMod: Number(f.stunSaveMod ?? 0) });
+      caught.push(entry.tok);
+    } else if (word === "EMP") {
+      // Chromebook 1 p.47 (and the collated listing's reading of it): everyone in the pulse has orientation
+      // loss — a Stun Save at −1 — and unshielded cyberware is disabled, internal cyberware back in four
+      // minutes (the item's `dotTurns`, 24), cyberlimbs in ten, chips wiped. The mark goes on a figure that
+      // carries equipped cyberware; the save is asked of all.
+      await postStunSavePrompt(actor, entry.tok, { saveMod: Math.min(0, Number(f.stunSaveMod ?? -1) || -1) });
+      const chromed = (actor.items ?? []).some?.(i => i.type === "cyberware" && i.system?.equipped === true);
+      if (chromed) await applyWordConditionFromPayload(actor, word, { dotTurns: f.dotTurns, weaponName });
+      caught.push(entry.tok);
+    } else if (word === "Stench") {
+      // Chromebook 2 p.49: "all those in area of effect not in protective gear (gas mask, nasal filters, etc.)
+      // must make a Very Difficult COOL or BOD check or leave the area." Protection is the module's own gas
+      // rating on worn gear (mech/protection.js); a protected figure is not asked. The check is the figure's
+      // own to roll; a failure marks them (executeStatCheck), untimed — the book ends it by leaving.
+      const prot = hazardProtectionFor(actor.items ?? [], "gas");
+      if (prot?.immune || (Number(prot?.percent) || 0) > 0) continue;
+      await postStatCheckPrompt(actor, entry.tok, { stats: ["cool", "bt"], dc: 25, statusId: WORD_CONDITIONS.Stench, titleKey: "StenchCheckTitle", bodyKey: "StenchCheckBody", failKey: "StenchFailConsequence" });
       caught.push(entry.tok);
     } else if (WORD_CONDITIONS[word]) {
       const marked = await applyWordConditionFromPayload(actor, word, { dotTurns: f.dotTurns, weaponName });

@@ -42,7 +42,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "1D6+3 (3m)",
+    "damage": "1d6+2",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -60,7 +60,8 @@
     "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 50,
-    "attackType": "",
+    "attackType": "Grenade",
+    "blastRadius": 1.5,
     "attackSkill": "Heavy Weapons"
   },
   "_stats": {},

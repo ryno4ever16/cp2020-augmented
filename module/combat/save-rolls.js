@@ -329,7 +329,64 @@ export async function applyFireDotState(target, location, turnsLeft, formula, fl
 export const WORD_CONDITIONS = Object.freeze({
   Blind: "blind",
   Deaf:  "deaf",
+  // The module's own two (registerModuleStatusEffects): the EMP grenade's disabled cyberware — a TIMED marker,
+  // internal cyberware back in 4 minutes (Chromebook 1 p.47 / the collated listing) — and the Stench Bomb's
+  // "must leave the area", which the book ends only by leaving, so it is raised UNTIMED on a failed check
+  // (executeStatCheck) and the referee clears it when the figure is out of the cloud.
+  EMP:    "cp-emp",
+  Stench: "cp-stench",
 });
+
+/** The statuses this module adds to core's list — a figure carrying one shows a real ActiveEffect, as the
+ *  blind/deaf words do on core's own. Registered at init; idempotent. */
+export const MODULE_STATUS_EFFECTS = Object.freeze([
+  { id: "cp-emp",    name: "CYBERPUNK.StatusEmp",    img: "icons/svg/lightning.svg" },
+  { id: "cp-stench", name: "CYBERPUNK.StatusStench", img: "icons/svg/poison.svg" },
+]);
+export function registerModuleStatusEffects() {
+  for (const s of MODULE_STATUS_EFFECTS) {
+    if (!CONFIG.statusEffects.some(e => e.id === s.id)) CONFIG.statusEffects.push({ ...s });
+  }
+}
+
+/** The sheet's long stat labels, by stat key (the keys the item sheet's check editor already uses). */
+const STAT_LABEL_KEYS = Object.freeze({ int: "IntFull", ref: "RefFull", tech: "TechFull", cool: "CoolFull", attr: "AttrFull", luck: "LuckFull", ma: "MaFull", bt: "BtFull", emp: "EmpFull" });
+
+/**
+ * A STAT CHECK PROMPT — "make a Very Difficult COOL or BOD check" (Chromebook 2 p.49, the Stench Bomb): one
+ * card, one button per stat the book allows, the figure's own value printed on each; the press rolls 1d10 +
+ * stat against the difficulty (executeStatCheck) and a failure raises `statusId` on the body. The same card
+ * idiom as the stun prompt: the context rides the button, the resolver re-reads nothing it was not asked.
+ */
+export async function postStatCheckPrompt(actor, token = null, { stats = ["cool"], dc = 20, statusId = "", titleKey = "StatCheckTitle", bodyKey = "StatCheckBody", failKey = "" } = {}) {
+  if (!actor) return null;
+  const tokenId = token?.id ?? getTokenId(actor);
+  const sceneId = token?.document?.parent?.id ?? token?.parent?.id ?? canvas?.scene?.id ?? "";
+  const content = await renderChatCard("stat-check-prompt.hbs", {
+    title: localizeParam(titleKey, { name: actor.name }),
+    body: localizeParam(bodyKey, { dc }),
+    actorId: actor.id, tokenId, sceneId, dc, statusId, failKey,
+    options: stats.map(s => ({ stat: s, label: localize(STAT_LABEL_KEYS[s] ?? s), value: Number(actor.system?.stats?.[s]?.total) || 0 })),
+  });
+  return ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
+}
+
+/** Resolve one stat check: 1d10 + the stat's total against the difficulty; a failure raises the status. */
+export async function executeStatCheck({ actorId, tokenId, sceneId, stat, dc, statusId = "", failKey = "" }) {
+  const actor = resolveActorRef({ tokenId, sceneId, actorId });
+  if (!actor) return;
+  if (!_assertCanResolveSave(actor)) return;
+  const val = Number(actor.system?.stats?.[stat]?.total) || 0;
+  const roll = await new Roll("1d10").evaluate();
+  const die = roll.total, total = val + die, need = Number(dc) || 0, success = total >= need;
+  const statLabel = localize(STAT_LABEL_KEYS[stat] ?? stat);
+  const content = await renderChatCard("stat-check-result.hbs", {
+    actorName: actor.name, statLabel, val, die, total, dc: need, success,
+    consequence: (!success && failKey) ? localize(failKey) : "",
+  });
+  await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: localizeParam("StatCheckFlavor", { stat: statLabel, dc: need }), content });
+  if (!success && statusId) await mirrorDotStatus(actor, statusId, true);
+}
 
 /**
  * Raise a timed sense condition on one body.
@@ -853,6 +910,17 @@ export function registerSaveRollHandlers() {
       });
       // One-shot: the save rolled — stamp the prompt so it cannot be re-fired (card-lock.js).
       await markCardResolved(stunBtn.closest("[data-message-id]")?.dataset?.messageId, "stunSave");
+    }
+
+    const statBtn = ev.target.closest(".cp-stat-check-roll");
+    if (statBtn && !statBtn.disabled) {
+      ev.preventDefault();
+      await executeStatCheck({
+        actorId: statBtn.dataset.actorId, tokenId: statBtn.dataset.tokenId, sceneId: statBtn.dataset.sceneId,
+        stat: statBtn.dataset.stat, dc: Number(statBtn.dataset.dc),
+        statusId: statBtn.dataset.status || "", failKey: statBtn.dataset.failKey || "",
+      });
+      await markCardResolved(statBtn.closest("[data-message-id]")?.dataset?.messageId, "statCheck");
     }
 
     if (deathBtn && !deathBtn.disabled) {

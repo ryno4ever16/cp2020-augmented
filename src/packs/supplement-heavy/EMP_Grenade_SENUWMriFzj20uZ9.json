@@ -41,7 +41,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "EMP (electronics)",
+    "damage": "EMP",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -59,7 +59,11 @@
     "burstCapable": false,
     "reliability": "Unreliable",
     "range": 50,
-    "attackType": "",
+    "attackType": "Grenade",
+    "blastRadius": 5,
+    "effectTypes": ["EMP"],
+    "stunSaveMod": -1,
+    "dotTurns": 24,
     "attackSkill": "Heavy Weapons"
   },
   "_stats": {},

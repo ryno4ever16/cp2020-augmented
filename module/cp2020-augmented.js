@@ -18,6 +18,7 @@ import { registerSpreadZoneLook } from "./combat/spread-zone-look.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerMovementAllowance } from "./combat/movement-allowance.js";
 import { registerMeleeContest } from "./martial/melee-contest.js";
+import { registerSaveRollHandlers, registerModuleStatusEffects } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
 import { registerDamageReceipt } from "./combat/damage-receipt.js";
@@ -199,6 +200,8 @@ const AUGMENTED_TEMPLATES = [
 
 Hooks.once("init", function () {
   console.log(`${SCOPE} | Initializing Cyberpunk 2020: Augmented Edition`);
+  // The module's own statuses (the EMP mark, the Stench mark) join core's list before any token HUD draws.
+  registerModuleStatusEffects();
 
   // ⭐ FIRST, because everything GM-side downstream asks it the same question. The module's relayed and
   // hook-driven writes are performed by ONE client, and until this existed that client was chosen by

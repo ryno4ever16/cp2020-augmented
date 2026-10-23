@@ -42,7 +42,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "Chemical (odor)",
+    "damage": "Stench",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -60,7 +60,9 @@
     "burstCapable": false,
     "reliability": "VeryReliable",
     "range": 50,
-    "attackType": "",
+    "attackType": "Grenade",
+    "blastRadius": 2.5,
+    "effectTypes": ["Stench"],
     "attackSkill": "Heavy Weapons"
   },
   "_stats": {},

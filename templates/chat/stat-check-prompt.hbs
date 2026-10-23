@@ -1,0 +1,18 @@
+{{!--
+  A stat check prompt (combat/save-rolls.js postStatCheckPrompt): one button per stat the book allows, the
+  figure's own value on each; the press rolls 1d10 + stat against the difficulty and a failure raises the
+  status the button names. The context rides the button, as on the stun prompt.
+--}}
+<div class="cyberpunk save-prompt stat-check-prompt">
+  <h3>{{title}}</h3>
+  <div>{{{body}}}</div>
+  <div class="save-buttons">
+    {{#each options as |o|}}
+    <button type="button" class="cp-stat-check-roll"
+            data-actor-id="{{../actorId}}" data-token-id="{{../tokenId}}" data-scene-id="{{../sceneId}}"
+            data-stat="{{o.stat}}" data-dc="{{../dc}}" data-status="{{../statusId}}" data-fail-key="{{../failKey}}">
+      🎲 {{CPLocal "StatCheckRollBtn" stat=o.label val=o.value dc=../dc}}
+    </button>
+    {{/each}}
+  </div>
+</div>

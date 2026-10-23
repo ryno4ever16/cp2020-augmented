@@ -1,0 +1,8 @@
+{{!-- The stat check's result card (combat/save-rolls.js executeStatCheck): the arithmetic and the verdict. --}}
+<div class="cyberpunk save-result stat-check-result">
+  <h3>{{CPLocal "StatCheckResultTitle" name=actorName stat=statLabel}}</h3>
+  <div class="result-line">
+    {{#if success}}{{{CPLocal "StatCheckResultWin" name=actorName stat=statLabel val=val die=die total=total dc=dc}}}{{else}}{{{CPLocal "StatCheckResultLose" name=actorName stat=statLabel val=val die=die total=total dc=dc}}}{{/if}}
+  </div>
+  {{#if consequence}}<div class="result-note">{{consequence}}</div>{{/if}}
+</div>

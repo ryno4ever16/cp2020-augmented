@@ -540,7 +540,7 @@ export async function warheadDamageFor(weapon) {
  * no consequence behind it is a silent nothing, which is what the refusal exists to prevent. The
  * shipped catalogue's refused set is now empty; the door stays shut for everything outside it.
  */
-export const WORD_WARHEADS = Object.freeze(["Gas", "Stun", "Blind", "Deaf"]);
+export const WORD_WARHEADS = Object.freeze(["Gas", "Stun", "Blind", "Deaf", "EMP", "Stench"]);
 
 /** ⏪ The single-word constant this list grew out of, kept as the name the gas hook's own reasoning
  *  is written against so a reader of `_hookGasCloud` still finds it spelled the same way. */
@@ -581,7 +581,11 @@ export const WORD_WARHEAD_GAS = "Gas";
  *
  * ⏪ REVERT: put "Gas" back in this array and the duplicate placement returns.
  */
-export const BLAST_RIDING_WORDS = Object.freeze(["Stun", "Blind", "Deaf"]);
+// "EMP" and "Stench" joined 2026-10-22 (user ruling: model the book's throwables) — the EMP grenade's pulse
+// (Chromebook 1 p.47) and the Stench Bomb's odour (Chromebook 2 p.49) are blast-riding consequences too:
+// a stun save and a cyberware mark for the one, a COOL-or-Body check for the other (damage-hooks.js
+// _applyWordWarhead).
+export const BLAST_RIDING_WORDS = Object.freeze(["Stun", "Blind", "Deaf", "EMP", "Stench"]);
 
 /**
  * DOES THIS WORD'S CONSEQUENCE RIDE THE BLAST ENUMERATION — the predicate the placement rail asks,
