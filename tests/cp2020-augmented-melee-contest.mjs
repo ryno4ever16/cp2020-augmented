@@ -118,6 +118,12 @@ const r = await gm.evaluate(async () => {
     { name: defender.name, actorId: defender.id, actorLink: true, x: scene.dimensions.sceneX + 5 * gs, y: scene.dimensions.sceneY + 4 * gs },
   ]);
   const atkTok = toks.find(t => t.actorId === attacker.id), defTok = toks.find(t => t.actorId === defender.id);
+  // THIS fixture's newest unresolved contest card — never "any unresolved card in the log": a probe or a killed
+  // run leaves unresolved cards behind, and the oldest of those answered every later leg's lookup in one run
+  // (2026-10-22, twelve reds from one stale card whose defender no longer existed).
+  // `resolvedToo`: a card that resolved ITSELF (a defender who cannot defend, a fumble) is stamped resolved the
+  // moment it posts, so the leg that reads it may not filter on unresolved.
+  const freshContest = (where = () => true, { resolvedToo = false } = {}) => flagged("meleeContest").filter(m => { const f = m.getFlag(SCOPE, "meleeContest"); return f?.defenderTokenId === defTok.id && (resolvedToo || !f?.resolved) && where(f); }).pop() ?? null;
   await sleep(500);
   const combat = await Combat.create({ scene: scene.id, active: true });
   await combat.createEmbeddedDocuments("Combatant", [
@@ -174,7 +180,7 @@ const r = await gm.evaluate(async () => {
   // ── §2 live flow: swing → contest card, not a window ───────────────────────────────────────────
   await closeWindows();
   const w0 = windows().length;
-  await swing(blade, { extraMod: 40 }, [defTok]);
+  const firstSwingFrom = await swing(blade, { extraMod: 40 }, [defTok]);
   let card = await waitFor(() => flagged("meleeContest").find(m => m.getFlag(SCOPE, "meleeContest")?.defenderTokenId === defTok.id && !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
   out.notes.firstSwing = shots[0] ?? null;
   add("§2 harness: the swing raised one shot event — melee method, one target, gate open", shots.length === 1 && shots[0].method === "__meleeBonk" && shots[0].targets === 1 && shots[0].applies === true && shots[0].fired === true, JSON.stringify(shots));
@@ -182,7 +188,9 @@ const r = await gm.evaluate(async () => {
   add("§2 flow: no apply window opens before the contest", windows().length === w0, windows().length);
   const cflag = card?.getFlag(SCOPE, "meleeContest") ?? {};
   add("§2 flow: the card carries the attack total and the shot's damage", Number.isFinite(cflag.attackTotal) && cflag.payload?.areaDamages && Object.keys(cflag.payload.areaDamages).length === 1, JSON.stringify({ t: cflag.attackTotal, keys: Object.keys(cflag.payload?.areaDamages ?? {}) }));
-  add("§2 flow: the shot card itself carries no apply button payload", !game.messages.contents.slice(-3).some(m => m.getFlag(SCOPE, "damagePayload")));
+  // THIS swing's own cards, not the log's last three: a card another keeper left behind (an apply-button card
+  // from the token-thread keeper) sat in that window and turned the leg red in a chained run (2026-10-22).
+  add("§2 flow: the shot card itself carries no apply button payload", !game.messages.contents.slice(firstSwingFrom).some(m => m.getFlag(SCOPE, "damagePayload")), game.messages.contents.slice(firstSwingFrom).map(m => Object.keys(m.flags?.[SCOPE] ?? {}).join("+")).join(" | "));
   {
     const rr = card ? await rollWindowDefault(card) : { opened: false };
     add("§2 window: opens from the card with the option list and the best default selected", rr.opened && rr.options >= 5 && rr.defaultChoice && /Karate/.test(rr.defaultChoice), JSON.stringify({ o: rr.opened, n: rr.options, d: rr.defaultChoice }));
@@ -198,7 +206,7 @@ const r = await gm.evaluate(async () => {
   {
     const w1 = windows().length;
     await swing(blade, { extraMod: 0 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     const rr = card ? await rollWindowDefault(card, { extra: 40 }) : { opened: false, noCard: true, shots: shots.length };
     add("§2 verdict: the defender's +40 beats the attack → miss", rr.result?.verdict === "miss", JSON.stringify({ v: rr.result?.verdict, o: rr.opened, stale: rr.stale, err: rr.openErr, closed: rr.closed, noCard: rr.noCard, lastShot: shots.at(-1) }));
     await sleep(1200);
@@ -209,7 +217,7 @@ const r = await gm.evaluate(async () => {
   {
     await defender.setFlag(SCOPE, "dodging", true);
     await swing(blade, { extraMod: 0 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     const rr = card ? await rollWindowDefault(card) : { opened: false };
     const d = rr.result?.defense ?? {};
     add("§2 dodge: the defense total is REF + skill + key + extra + die with NO declaration bonus", rr.result && d.total === d.ref + d.level + (d.key || 0) + (d.extra || 0) + d.die && !("stance" in d), JSON.stringify(d));
@@ -221,7 +229,7 @@ const r = await gm.evaluate(async () => {
     const w2 = windows().length;
     await defender.toggleStatusEffect("unconscious", { active: true }); await sleep(300);
     await swing(blade, { extraMod: 0 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => m.getFlag(SCOPE, "meleeContest")?.cannotDefend === true), 6000);
+    card = await waitFor(() => freshContest(f => f.cannotDefend === true, { resolvedToo: true }), 6000);
     add("§2 stunned: the contest card states the defender cannot defend (p.104)", !!card);
     const opened = await waitFor(() => windows().length > w2, 8000);
     add("§2 stunned: the apply window opens without any defense roll", !!opened, windows().length);
@@ -233,7 +241,7 @@ const r = await gm.evaluate(async () => {
     const offersBefore = game.messages.contents.filter(m => /martial-defense-offer/.test(m.content)).length;
     const contestsBefore = flagged("meleeContest").length;
     await swing(fists, { action: "Hold", martialArt: "Brawling", extraMod: 40 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     add("§2 manoeuvre: exactly one contest card and no legacy offer card", flagged("meleeContest").length === contestsBefore + 1 && game.messages.contents.filter(m => /martial-defense-offer/.test(m.content)).length === offersBefore, JSON.stringify({ c: flagged("meleeContest").length - contestsBefore }));
     add("§2 manoeuvre: the card names the action", card?.getFlag(SCOPE, "meleeContest")?.action === "Hold", card?.getFlag(SCOPE, "meleeContest")?.action);
     const rr = card ? await rollWindowDefault(card) : { opened: false };
@@ -255,13 +263,13 @@ const r = await gm.evaluate(async () => {
       return { opened: true, prompt: !!btn, saveMod: btn?.dataset?.saveMod ?? null };
     };
     await swing(fists, { action: "Throw", martialArt: "Brawling", extraMod: 40 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     const rt = card ? await rollWindowDefault(card) : { opened: false };
     const thrown = rt.result?.verdict === "hit" ? await applyAndRead() : { opened: false, noHit: true };
     add("§2 throw: the apply's stun prompt carries the Throw's −2 on its control", thrown.prompt && String(thrown.saveMod) === "-2", JSON.stringify({ v: rt.result?.verdict, ...thrown }));
     await closeWindows(); await sleep(300);
     await swing(blade, { extraMod: 40 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     const rp = card ? await rollWindowDefault(card) : { opened: false };
     const plain = rp.result?.verdict === "hit" ? await applyAndRead() : { opened: false, noHit: true };
     add("§2 throw (negative): a plain hit's stun prompt carries no penalty", plain.prompt && String(plain.saveMod) === "0", JSON.stringify({ v: rp.result?.verdict, ...plain }));
@@ -277,7 +285,7 @@ const r = await gm.evaluate(async () => {
     await attacker.setFlag(SCOPE, "heldBy", defender.id);
     const eBefore = freedCards().length;
     await swing(fists, { action: "Escape", martialArt: "Brawling", extraMod: 40 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     add("§2 escape: the swing posts a contest card and applies nothing before the verdict", !!card && card.getFlag(SCOPE, "meleeContest")?.action === "Escape" && attacker.getFlag(SCOPE, "heldBy") === defender.id && freedCards().length === eBefore, JSON.stringify({ a: card?.getFlag(SCOPE, "meleeContest")?.action, held: attacker.getFlag(SCOPE, "heldBy"), cards: freedCards().length - eBefore }));
     const re = card ? await rollWindowDefault(card) : { opened: false };
     const freed = await waitFor(() => !attacker.getFlag(SCOPE, "heldBy"), 6000);
@@ -288,7 +296,7 @@ const r = await gm.evaluate(async () => {
     await attacker.setFlag(SCOPE, "heldBy", defender.id);
     const eBefore2 = freedCards().length;
     await swing(fists, { action: "Escape", martialArt: "Brawling", extraMod: 0 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     const rl = card ? await rollWindowDefault(card, { extra: 40 }) : { opened: false };
     await sleep(1000);
     add("§2 escape (negative): a loss leaves the escapee held and posts no freed card", rl.result?.verdict === "miss" && attacker.getFlag(SCOPE, "heldBy") === defender.id && freedCards().length === eBefore2, JSON.stringify({ v: rl.result?.verdict, held: attacker.getFlag(SCOPE, "heldBy"), cards: freedCards().length - eBefore2 }));
@@ -299,7 +307,7 @@ const r = await gm.evaluate(async () => {
   {
     await defender.setFlag(SCOPE, "parrying", { object: "lArm" });
     await swing(blade, { extraMod: 40 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     const rr = card ? await rollWindowDefault(card) : { opened: false };
     const win = await waitFor(() => windows()[0], 8000);
     add("§2 parry (arm): the apply window opens on the parrying arm", rr.result?.verdict === "hit" && win && Object.keys(win.payload?.areaDamages ?? {}).join() === "lArm", JSON.stringify(Object.keys(win?.payload?.areaDamages ?? {})));
@@ -308,7 +316,7 @@ const r = await gm.evaluate(async () => {
     await defender.setFlag(SCOPE, "parrying", { object: "weapon", itemId: sword.id, bladed: true });
     const wB = windows().length, breaksBefore = flagged("parryBreakSave").length;
     await swing(blade, { extraMod: 40 }, [defTok]);
-    card = await waitFor(() => flagged("meleeContest").find(m => !m.getFlag(SCOPE, "meleeContest")?.resolved), 6000);
+    card = await waitFor(() => freshContest(), 6000);
     const rb = card ? await rollWindowDefault(card) : { opened: false };
     const breakCard = await waitFor(() => flagged("parryBreakSave").length > breaksBefore, 6000);
     await sleep(800);
@@ -339,6 +347,28 @@ const r = await gm.evaluate(async () => {
     add("§2 skill report: a ranged shot reports the weapon's attack skill (Handgun)", by(attacker.name, /Handgun/).length >= 1, JSON.stringify(by(attacker.name, /Handgun/).slice(0, 2)));
     add("§2 skill report: a defense roll reports the chosen skill (the defender's Karate)", by(defender.name, /Karate/).length >= 1, JSON.stringify(by(defender.name, /Karate/).slice(0, 2)));
     add("§2 skill report: every report carries the roll's total and the skill item's id", skillUses.length > 0 && skillUses.every(u => Number.isFinite(Number(u.total)) && typeof u.skillId === "string" && u.skillId.length > 0), JSON.stringify(skillUses.filter(u => !Number.isFinite(Number(u.total)) || !u.skillId).slice(0, 3)));
+  }
+
+  // a swing at NOBODY (user ruling 2026-10-22): the roll card carries the "Contest vs…" control and no Apply
+  // control; naming the defender from it posts the contest exactly as a targeted swing's would have
+  {
+    await untarget(); await closeWindows();
+    const contests = flagged("meleeContest").length;
+    const before = game.messages.size;
+    await fists.__weaponRoll({ action: "Hold", martialArt: "Brawling", extraMod: 40, targetArea: "", cyberTerminus: "NoCyberlimb" }, []);
+    await sleep(1200);
+    const cardMsg = game.messages.contents.slice(before).find(m => m.getFlag(SCOPE, "damagePayload"));
+    const btn = await waitFor(() => cardMsg && document.querySelector(`[data-message-id="${cardMsg.id}"] .cp-contest-vs-btn`), 5000);
+    const applyBtn = cardMsg ? document.querySelector(`[data-message-id="${cardMsg.id}"] .cp2020-apply-damage-btn`) : null;
+    add("§2 untargeted: the roll card carries the Contest vs… control, no Apply control, and no contest posted yet", !!cardMsg && !!btn && !applyBtn && flagged("meleeContest").length === contests, JSON.stringify({ card: !!cardMsg, btn: !!btn, apply: !!applyBtn, contests: flagged("meleeContest").length - contests }));
+    const posted = cardMsg ? await D.contestFromCard(cardMsg, cardMsg.getFlag(SCOPE, "damagePayload"), defender) : null;
+    const f = posted?.getFlag(SCOPE, "meleeContest") ?? null;
+    add("§2 untargeted: naming the defender posts the contest for them with this client presenting, and stamps the card", !!f && f.defenderTokenId === defTok.id && f.action === "Hold" && f.presenterUserId === game.user.id && cardMsg?.getFlag(SCOPE, "cardResolved")?.resolved === true, JSON.stringify({ f: f && { d: f.defenderTokenId, a: f.action, p: f.presenterUserId }, stamped: cardMsg?.getFlag(SCOPE, "cardResolved") }));
+    // Not deleted on the spot: core's chat notification re-queries the card after its ~100 ms animation with no
+    // null guard (the documented race), so a delete inside that window throws on the referee's page.
+    await sleep(800);
+    await posted?.delete?.().catch(() => {});
+    await sleep(300);
   }
 
   // ── §3 declarations ────────────────────────────────────────────────────────────────────────────
@@ -413,10 +443,13 @@ try {
     const dummy = await Actor.create({ name: "__PW__MC Dummy", type: "npc" });
     await rusty.update({ "system.stats.ref.base": 6 });
     const scene = canvas.scene;
-    const [rTok, dTok] = await scene.createEmbeddedDocuments("Token", [
+    // ⚠ createEmbeddedDocuments returns in ITS order, not the input's (rig-keeper gotcha, and the cause of this
+    // leg's intermittent reds): resolve the two tokens by actor, never by position.
+    const madeToks = await scene.createEmbeddedDocuments("Token", [
       { name: rusty.name, actorId: rusty.id, actorLink: true, x: scene.dimensions.sceneX + 8 * scene.grid.size, y: scene.dimensions.sceneY + 4 * scene.grid.size },
       { name: dummy.name, actorId: dummy.id, actorLink: true, x: scene.dimensions.sceneX + 9 * scene.grid.size, y: scene.dimensions.sceneY + 4 * scene.grid.size },
     ]);
+    const rTok = madeToks.find(t => t.actorId === rusty.id), dTok = madeToks.find(t => t.actorId === dummy.id);
     const combat = game.combat;
     for (const [tok, actor] of [[rTok, rusty], [dTok, dummy]]) if (!combat.combatants.some(c => c.actorId === actor.id)) await combat.createEmbeddedDocuments("Combatant", [{ tokenId: tok.id, actorId: actor.id, sceneId: scene.id, initiative: 5 }]);
     const [club] = await dummy.createEmbeddedDocuments("Item", [{ name: "__PW__MC Club", type: "weapon", system: { weaponType: "Melee", attackType: "Melee", damage: "1d6" } }]);
@@ -441,25 +474,36 @@ try {
       const ownPc = M.canChooseDefense(game.user, rusty), npc = M.canChooseDefense(game.user, dummy);
       const card = await waitFor(() => game.messages.get(cardId), 8000);
       const btn = await waitFor(() => document.querySelector(`[data-message-id="${cardId}"] .cp-melee-defense-choose`), 8000);
+      // Diagnostics for a window that fails to open: the flag's state and the two early returns' answers
+      // (a refusal is a warning, not a throw — so the tap sits over the first open as well).
+      const f0 = card?.getFlag(SCOPE, "meleeContest") ?? null;
+      const U = await import("/modules/cp2020-augmented/module/utils.js");
+      const def0 = f0 ? U.resolveActorRef({ tokenId: f0.defenderTokenId, sceneId: f0.defenderSceneId, actorId: f0.defenderActorId }) : null;
+      const diag = { flagResolved: f0?.resolved ?? null, defender: def0?.name ?? null, canChoose: def0 ? M.canChooseDefense(game.user, def0) : null, firstWarns: [] };
+      const warns = []; const ow = ui.notifications.warn.bind(ui.notifications); ui.notifications.warn = (m, ...a) => { warns.push(String(m)); return ow(m, ...a); };
       let openErr = "";
       M.openDefenseWindow(cardId).catch(e => { openErr = String(e?.message ?? e); });   // not awaited: it settles on the button press below
       const dlg = await waitFor(() => [...foundry.applications.instances.values()].find(a => (a.options?.classes ?? []).includes("cp-melee-defense-dialog") && a.rendered), 6000);
       if (!dlg) await sleep(500);
+      diag.firstWarns = warns.splice(0);
       const instances = [...foundry.applications.instances.values()].map(a => a.constructor.name).slice(0, 8);
       let rolled = null;
       if (dlg) { await sleep(400); dlg.element.querySelector('button[data-action="roll"]')?.click(); rolled = await waitFor(() => game.messages.contents.find(m => m.getFlag(SCOPE, "meleeResult")?.contestMessageId === cardId), 8000); }
       // the NPC's defense is not this player's to choose
-      const warns = []; const ow = ui.notifications.warn.bind(ui.notifications); ui.notifications.warn = (m, ...a) => { warns.push(String(m)); return ow(m, ...a); };
       let refused = null;
       try { refused = await M.openDefenseWindow(cardId, { defenderOverride: dummy }); } catch (_e) { refused = "threw"; } finally { ui.notifications.warn = ow; }
-      return { ownPc, npc, sawCard: !!card, sawButton: !!btn, windowOpened: !!dlg, openErr, instances, rolled: !!rolled, verdict: rolled?.getFlag(SCOPE, "meleeResult")?.verdict ?? null, refusedWarn: warns.length };
+      return { ownPc, npc, sawCard: !!card, sawButton: !!btn, windowOpened: !!dlg, openErr, diag, instances, rolled: !!rolled, verdict: rolled?.getFlag(SCOPE, "meleeResult")?.verdict ?? null, refusedWarn: warns.length };
     }, prep);
     two.checks.push({ name: "§4 permission: the player may choose the defense of their own PC", ok: plr.ownPc === true, detail: JSON.stringify(plr) });
     two.checks.push({ name: "§4 permission: the player may not choose an NPC's defense", ok: plr.npc === false && plr.refusedWarn >= 1, detail: JSON.stringify(plr) });
     two.checks.push({ name: "§4 relay: the player's client sees the card and its choose control", ok: plr.sawCard && plr.sawButton, detail: JSON.stringify(plr) });
     two.checks.push({ name: "§4 relay: the player's roll posts the result card", ok: plr.windowOpened && plr.rolled && plr.verdict === "hit", detail: JSON.stringify(plr) });
-    const opened = await gm.evaluate(async (wBefore) => { const sleep = (ms) => new Promise(res => setTimeout(res, ms)); for (let i = 0; i < 50; i++) { const n = [...foundry.applications.instances.values()].filter(a => a.constructor.name === "DamageDialog").length; if (n > wBefore) return n; await sleep(200); } return -1; }, wBefore);
-    two.checks.push({ name: "§4 relay: the apply window opens on the presenting (referee) client after the player's roll", ok: opened > wBefore, detail: String(opened) });
+    // The verdict's apply window opens at the TARGET'S SEAT (user ruling 2026-10-22, combat/damage-receipt.js):
+    // Rusty is the player's figure, so the window lands on the player's client and the referee's stays as it was.
+    const openedPl = await pl.evaluate(async () => { const sleep = (ms) => new Promise(res => setTimeout(res, ms)); for (let i = 0; i < 50; i++) { const n = [...foundry.applications.instances.values()].filter(a => a.constructor.name === "DamageDialog" && a.rendered).length; if (n > 0) return n; await sleep(200); } return 0; });
+    const openedGm = await gm.evaluate(() => [...foundry.applications.instances.values()].filter(a => a.constructor.name === "DamageDialog").length);
+    two.checks.push({ name: "§4 seat: after the player's roll the apply window opens on the PLAYER's client (the figure's controller), not the referee's", ok: openedPl > 0 && openedGm === wBefore, detail: `player=${openedPl} referee=${openedGm} (was ${wBefore})` });
+    await pl.evaluate(async () => { for (const a of [...foundry.applications.instances.values()].filter(a => a.constructor.name === "DamageDialog")) await a.close({ animate: false }).catch(() => {}); });
     await gm.evaluate(async ({ dummyId, rustyId, rTokId, dTokId }) => {
       for (const a of [...foundry.applications.instances.values()].filter(a => a.constructor.name === "DamageDialog")) await a.close({ animate: false }).catch(() => {});
       await canvas.scene.deleteEmbeddedDocuments("Token", [rTokId, dTokId]).catch(() => {});

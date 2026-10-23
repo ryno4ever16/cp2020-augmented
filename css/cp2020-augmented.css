@@ -2244,14 +2244,10 @@ body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
 .chat-message .cyberpunk.radiation-longterm .cp-rad-lt-list { margin: 4px 0 4px 1.1em; padding: 0; }
 .chat-message .cyberpunk.radiation-longterm .cp-rad-lt-offspring { margin-top: 6px; }
 
-/* Reputation + Facedown panel */
+/* Facedown + Recognition strip. The Reputation VALUE itself moved up into the combat-rolls field list
+   (templates/actor/parts/combat.hbs, user ruling 2026-10-22) and takes that list's own row styling, so the
+   number sits in the same column as the Initiative and Stun/Death modifiers. */
 .combat-tab .reputation-section { grid-area: rep; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 2px; border-top: 1px solid rgba(255,255,255,0.12); }
-
-.combat-tab .reputation-field { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
-
-.combat-tab .reputation-field input[type="number"] { flex: 0 0 4.5em; width: 4.5em; min-width: 4.5em; text-align: center; }
-
-.combat-tab .reputation-field .flex-pad { background-color: transparent; padding: 0; }
 
 .combat-tab .reputation-actions { display: flex; gap: 6px; margin-left: auto; }
 
@@ -2263,6 +2259,7 @@ body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
 .chat-message .cp-damage-receipt .cp-receipt-math { flex: 1 1 auto; }
 .chat-message .cp-damage-receipt .cp-receipt-net { flex: 0 0 auto; font-weight: 600; }
 .chat-message .cp-damage-receipt.cp-receipt-undone .cp-receipt-rows { opacity: 0.6; text-decoration: line-through; }
+
 .cyberpunk .combat-tab .reputation-actions button { width: auto; flex: 0 0 auto; padding: 1px 8px; }
 
 /* ── Chat-card readability (live-1.0.0 fix) ─────────────────────────────────────────

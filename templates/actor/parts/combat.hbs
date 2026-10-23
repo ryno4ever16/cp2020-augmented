@@ -14,6 +14,14 @@
         <input class="roll-stun-death-modificator number" type="number" value="{{StunDeathMod}}" placeholder="0">
     </div>
 
+    {{!-- Reputation (CP2020 p.54) sits with the other combat numbers, its value aligned with Initiative's
+         (user ruling 2026-10-22); the Facedown / Recognition controls keep their own strip below. --}}
+    <div class="field cp-reputation-row" title="{{CPLocal 'ReputationHint'}}">
+        <label>{{CPLocal "Reputation"}}</label>
+        <span class="flex-pad"></span>
+        <input type="number" name="flags.cp2020-augmented.reputation" value="{{reputation}}" data-dtype="Number" class="number" placeholder="0">
+    </div>
+
     {{!-- Heat-signature gate for the heat-sense detection mode (Q1c): explicit flag wins, else
          the actor-type default (character/npc = living). Unticked = invisible to thermograph/IR. --}}
     <div class="field" title="{{CPLocal 'LivingFlagHint'}}">
@@ -25,13 +33,8 @@
 </div>
     </section>
 
-    {{!-- Reputation + Facedown (CP2020 p.54). Passive sheet panel; tables that skip Rep just ignore it. --}}
+    {{!-- Facedown + Recognition (CP2020 p.54). Passive sheet panel; tables that skip Rep just ignore it. --}}
     <section class="reputation-section">
-        <div class="field reputation-field">
-            <label title="{{CPLocal 'ReputationHint'}}">{{CPLocal "Reputation"}}</label>
-            <span class="flex-pad"></span>
-            <input type="number" name="flags.cp2020-augmented.reputation" value="{{reputation}}" data-dtype="Number" class="number" placeholder="0" title="{{CPLocal 'ReputationHint'}}">
-        </div>
         <div class="reputation-actions">
             <button type="button" class="facedown-roll" title="{{CPLocal 'FacedownHint'}}">⚔ {{CPLocal "Facedown"}}</button>
             <button type="button" class="recognition-roll" title="{{CPLocal 'RecognitionHint'}}">👁 {{CPLocal "Recognition"}}</button>

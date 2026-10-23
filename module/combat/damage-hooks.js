@@ -57,7 +57,7 @@ import { dispatchAttack }                                     from "../vehicle/v
 // The opposed melee roll (p.111): PATH A hands a melee card aimed at one figure to the contest instead of the
 // window; the verdict comes back through applyResolvedMeleeHit below. (A module cycle: both sides use the
 // other only inside functions, never at load.)
-import { contestApplies, postMeleeDefenseCard }               from "../martial/melee-contest.js";
+import { contestApplies, postMeleeDefenseCard, MELEE_FIRE_METHODS } from "../martial/melee-contest.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, areaDeleteHook, usesRegions, moveArea } from "./area-shapes.js";
 // The area↔cover split and the chew it books (user ruling 2026-08-25). `areaCoverVerdict` is the ONE
 // predicate that tells a valued barrier (soaks + chews) from a naked wall (exempt, unchanged); the
@@ -387,6 +387,20 @@ function _semiAutoView(item, sys, fireMethod) {
   const printedSemi = item ? _rofSemiOf(item, sys) : 0;
   if (printedSemi > 0) return { rof: printedSemi, autoClass: false, printedSemi, burstFire };
   return { rof: sys?.rof, autoClass, printedSemi: 0, burstFire };
+}
+/** ONE notice per encounter, per client, when an attack is rolled inside an encounter that has not BEGUN
+ *  (round 0). Every per-round mechanism keys on `combat.started` — the action counter and its penalty, the
+ *  tracker badge, the dialog's pre-filled line, the Dodge/Parry declarations, the round-end clears — so a
+ *  table that rolls initiative and never presses Begin Combat sees none of it and reads that as "the
+ *  penalties don't apply" (reported from the table 2026-10-22). Said once, on the client that rolled, so the
+ *  one press that fixes it is named at the moment it matters; silent for a figure outside the encounter. */
+const _encounterNoticeShown = new Set();
+function _noteEncounterNotBegun(actor) {
+  const combat = game?.combat;
+  if (!combat || combat.started || _encounterNoticeShown.has(combat.id)) return;
+  if (!combat.combatants.some(c => c.actor?.id === actor?.id)) return;
+  _encounterNoticeShown.add(combat.id);
+  ui.notifications?.info(localize("EncounterNotBegunNote"));
 }
 /** The weapon-fire increment path: runs the rule against the open attack action and advances the counter
  *  only when the roll opened a new action. Same per-actor chain as the declared actions, same guard. */
@@ -983,6 +997,17 @@ function _hookWeaponFired() {
       }
     }
 
+    // ⭐ A MELEE SWING AT NOBODY (user ruling 2026-10-22): a melee or martial action rolled with no figure
+    // targeted has no defender to contest, so nothing happened — the roll card sat there, damage or no
+    // damage. The card now carries the payload and offers "Contest vs…" (_injectContestControl): the
+    // attacker's owner or the referee names the defender — the figure they hold targeted, else a pick from
+    // the scene — and the contest card posts for it exactly as a targeted swing's would have.
+    if (_isUntargetedMelee(payload)) {
+      payload.handled = "cp2020-augmented";
+      _queuePendingPayload(payload);
+      return;
+    }
+
     if (!hasAreaDamages) return;
 
     // PATH A: we know what this shot was aimed at — auto-apply, or open the (deferred) dialog.
@@ -1139,12 +1164,59 @@ function _hookDamageDialogDismissed() {
  * @param {ChatMessage} message
  * @param {HTMLElement} html
  */
+/** A melee or martial swing that named no figure: no routing target, no aim, no dialog target. */
+function _isUntargetedMelee(payload) {
+  return MELEE_FIRE_METHODS.has(payload?.fireMethod) && !payload?.targetTokenId && !payload?.fxTargetTokenId && !payload?.targetActorId;
+}
+
+/**
+ * Post the contest for a swing that was rolled at nobody, against the figure named now. The payload is the
+ * card's own with the defender written in; the contest's presenter is this client (the one that named the
+ * defender), so its verdict's consequence — the status manoeuvre, the apply window at the target's seat —
+ * runs here. The card is stamped so the control is offered once.
+ */
+export async function contestFromCard(message, payload, defender) {
+  if (!message || !payload || !defender) return null;
+  if (defender.type === "cp2020-augmented.vehicle") { ui.notifications?.warn(localize("ContestVsNoVehicle")); return null; }
+  const tok = defender.token ?? canvas.tokens?.placeables?.find(t => t.actor === defender)?.document ?? null;
+  const p = { ...payload, targetTokenId: null, fxTargetTokenId: tok?.id ?? null, targetActorId: defender.id, targetCount: 1 };
+  await markCardResolved(message.id, "contestPosted").catch(() => {});
+  _cardIdByPayload.set(p, message.id);
+  return postMeleeDefenseCard(p, defender, {
+    defenderTokenId: tok?.id ?? null,
+    defenderSceneId: tok?.parent?.id ?? canvas?.scene?.id ?? null,
+    presenterUserId: game.user?.id ?? null,
+  });
+}
+
+/** The render pass for an untargeted melee card: the "Contest vs…" control (attacker's owner or the referee). */
+function _injectContestControl(message, html) {
+  const payload = message.getFlag?.("cp2020-augmented", "damagePayload");
+  if (!payload || !_isUntargetedMelee(payload)) return;
   if (isCardResolved(message)) return;
+  const attackerActorId = payload.attackerId ?? payload.actorId ?? null;
+  const attackerActor = attackerActorId ? game.actors.get(attackerActorId) : null;
+  if (!(game.user.isGM || (attackerActor?.isOwner ?? false))) return;
+  if (html.querySelector(".cp-contest-vs-btn")) return;
+  const btn = document.createElement("button");
+  btn.classList.add("cp-contest-vs-btn");
+  btn.textContent = localize("ContestVsBtn");
+  btn.addEventListener("click", async () => {
+    // The figure held targeted when the control is pressed, else the scene's own picker.
+    const defender = game.user.targets.first()?.actor ?? await _pickTargetDialog();
+    if (!defender) return;
+    await contestFromCard(message, payload, defender);
+  });
+  (html.querySelector(".cyberpunk-card") ?? html).appendChild(btn);
+}
+
 function _injectApplyDamageControl(message, html) {
   const payload = message.getFlag?.("cp2020-augmented", "damagePayload");
   if (!payload?.areaDamages || Object.keys(payload.areaDamages).length === 0) return;
   // An applied shot's card is stamped by the first apply (the card lock); it offers no second Apply.
   if (isCardResolved(message)) return;
+  // A melee swing at nobody contests first — its card carries the "Contest vs…" control instead.
+  if (_isUntargetedMelee(payload)) return;
 
   // Show button to GM always; show to players only if they own the attacker actor.
   // Avoids any dependency on message.userId / message.author which can be undefined in v14+.
@@ -1236,6 +1308,8 @@ function _hookRenderChatMessage() {
   // in, so a plain registration would miss every card already in the log — the reason a reload used
   // to strip the Apply control off existing cards. See module/chat-render-compat.js.
   onChatCardRender(_injectApplyDamageControl);
+  // The "Contest vs…" control on a melee swing rolled at nobody (user ruling 2026-10-22) — same road.
+  onChatCardRender(_injectContestControl);
   // The attack total's hover (combat/attack-breakdown.js) - same registration road, same reason.
   registerAttackBreakdownRender();
 }
@@ -4913,6 +4987,7 @@ function _hookMultiActionPenalty() {
     // never earned, and the ➕ control (fixed for the same reason) wrote somewhere else again.
     const actor = firingActorOf(payload);
     if (!actor) return;
+    _noteEncounterNotBegun(actor);
     _recordWeaponFire(actor, payload).catch(() => {});
   });
 

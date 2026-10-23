@@ -16,7 +16,12 @@ const out = await page.evaluate(async () => {
   const r = { before: {}, swept: {} };
   r.before.fumble = game.settings.get("cyberpunk2020", "fumbleTableEnabled");
   if (r.before.fumble !== true) await game.settings.set("cyberpunk2020", "fumbleTableEnabled", true);
-  r.after = { fumble: game.settings.get("cyberpunk2020", "fumbleTableEnabled") };
+  // The presentation rail too: a killed launcher/receipt keeper leaves it OFF, and every later keeper that
+  // toggles it records "off" as the state to restore — the grenade keeper's throw then reports no arrival
+  // and its §3 reads as a product fault (2026-10-22).
+  r.before.fx = game.settings.get("cp2020-augmented", "combatFxEnabled");
+  if (r.before.fx !== true) await game.settings.set("cp2020-augmented", "combatFxEnabled", true);
+  r.after = { fumble: game.settings.get("cyberpunk2020", "fumbleTableEnabled"), fx: game.settings.get("cp2020-augmented", "combatFxEnabled") };
   const stray = /^(__PW__|__PROBE__|__GYM__|__PWX__)/;
   const combats = game.combats.filter(c => c.combatants.some(x => stray.test(x.name ?? "")));
   for (const c of combats) await c.delete().catch(() => {});
@@ -28,7 +33,11 @@ const out = await page.evaluate(async () => {
   for (const i of items) await i.delete().catch(() => {});
   const scenes = game.scenes.filter(sc => stray.test(sc.name ?? ""));
   for (const sc of scenes) await sc.delete().catch(() => {});
-  r.swept = { combats: combats.length, tokens, actors: actors.length, items: items.length, scenes: scenes.length };
+  // Chat debris too: a probe's or a killed run's cards (an unresolved contest card among them answered a
+  // later keeper's "any unresolved card" lookup and turned twelve legs red, 2026-10-22).
+  const msgs = game.messages.contents.filter(m => stray.test(m.speaker?.alias ?? "") || /__PW__|__PROBE__|__GYM__/.test(m.content ?? "")).map(m => m.id);
+  if (msgs.length) await ChatMessage.deleteDocuments(msgs).catch(() => {});
+  r.swept = { combats: combats.length, tokens, actors: actors.length, items: items.length, scenes: scenes.length, messages: msgs.length };
   r.activeScene = game.scenes.active?.name ?? null;
   return r;
 });
