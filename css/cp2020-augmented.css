@@ -2255,6 +2255,14 @@ body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
 
 .combat-tab .reputation-actions { display: flex; gap: 6px; margin-left: auto; }
 
+/* The apply receipt card (combat/damage-receipt.js): one line per location — the arithmetic, then the net —
+   the wound line, the two controls. An undone receipt keeps its rows, struck through. */
+.chat-message .cp-damage-receipt .cp-receipt-rows { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; font-variant-numeric: tabular-nums; }
+.chat-message .cp-damage-receipt .cp-receipt-row { display: flex; gap: 8px; align-items: baseline; }
+.chat-message .cp-damage-receipt .cp-receipt-loc { flex: 0 0 5em; }
+.chat-message .cp-damage-receipt .cp-receipt-math { flex: 1 1 auto; }
+.chat-message .cp-damage-receipt .cp-receipt-net { flex: 0 0 auto; font-weight: 600; }
+.chat-message .cp-damage-receipt.cp-receipt-undone .cp-receipt-rows { opacity: 0.6; text-decoration: line-through; }
 .cyberpunk .combat-tab .reputation-actions button { width: auto; flex: 0 0 auto; padding: 1px 8px; }
 
 /* ── Chat-card readability (live-1.0.0 fix) ─────────────────────────────────────────

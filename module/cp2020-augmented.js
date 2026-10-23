@@ -18,9 +18,9 @@ import { registerSpreadZoneLook } from "./combat/spread-zone-look.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerMovementAllowance } from "./combat/movement-allowance.js";
 import { registerMeleeContest } from "./martial/melee-contest.js";
-import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
+import { registerDamageReceipt } from "./combat/damage-receipt.js";
 import { registerCombatFx } from "./fx/effects.js";
 // ⛔ `registerStatusFx` (./fx/status-fx.js) IS DELIBERATELY NOT IMPORTED — user ruling 2026-08-27, the
 // pre-ship walk: the persistent condition overlays are half-baked for 1.2.0 and are stripped from the
@@ -869,6 +869,8 @@ Hooks.once("ready", function () {
     wire("damage hooks", registerDamageHooks);
     // The opposed melee roll (p.111): the contest card, its window and the verdict's consequence.
     wire("melee contest", registerMeleeContest);
+    // The apply window's seat hand-over, the receipt card's controls and the GM's Undo (user ruling 2026-10-22).
+    wire("damage receipt", registerDamageReceipt);
     wire("movement gate", registerMovementGate);
     // The distance half of p.99: the ruler reads "used / Run" for the turn and a player's drop past it is advised.
     wire("movement allowance", registerMovementAllowance);

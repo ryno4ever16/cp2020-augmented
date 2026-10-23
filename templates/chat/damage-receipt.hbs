@@ -1,0 +1,25 @@
+{{!--
+  The apply's receipt (combat/damage-receipt.js): the rows as applied, the wound state before and after, who
+  applied it. View reopens the apply window read-only on these numbers; Undo (GM only — the control is removed
+  on a player's client at render) restores the snapshot the receipt carries. Labels via CPLocal; the computed
+  lines are assembled in JS.
+--}}
+<div class="cyberpunk save-prompt cp-damage-receipt{{#if undone}} cp-receipt-undone{{/if}}">
+  <h3>{{title}}</h3>
+  <div class="cp-receipt-rows">
+    {{#each rows as |r|}}
+    <div class="cp-receipt-row">
+      <span class="cp-receipt-loc">{{r.location}}</span>
+      <span class="cp-receipt-math">{{r.math}}{{#if r.overridden}} ✎{{/if}}</span>
+      <span class="cp-receipt-net">{{r.net}}</span>
+    </div>
+    {{/each}}
+  </div>
+  <div class="save-note">{{woundLine}}</div>
+  <div class="save-note">{{byLine}}</div>
+  {{#if undone}}<div class="save-note cp-receipt-undone-line">{{undoneLine}}</div>{{/if}}
+  <div class="save-buttons">
+    <button type="button" class="cp-receipt-view">{{CPLocal "DamageReceiptView"}}</button>
+    {{#unless undone}}<button type="button" class="cp-receipt-undo">{{CPLocal "DamageReceiptUndo"}}</button>{{/unless}}
+  </div>
+</div>

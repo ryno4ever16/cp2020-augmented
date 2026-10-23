@@ -30,6 +30,11 @@
     {{/if}}
   </div>
 
+  {{#if readOnly}}
+  {{!-- The receipt's view (combat/damage-receipt.js): the rows below are the ones that were written. --}}
+  <div class="field cp-receipt-view-note"><span>{{receiptLine}}</span></div>
+  {{/if}}
+
   {{#if blockedByWall}}
   {{!-- The shot met a move-blocking wall nobody gave cover values to, so the rounds never reached the
         body and every row below is seeded at 0. It is stated here rather than left to be inferred from
@@ -62,6 +67,9 @@
       <span class="inactive" style="min-width:36px; text-align:right;"
         title="{{#if hit.penetrates}}{{CPLocal 'DamageDlgPenetrated'}}{{else}}{{CPLocal 'DamageDlgStopped'}}{{/if}}">{{hit.spUsed}}</span>
       <span class="inactive" style="width:14px; text-align:center;">=</span>
+      {{#if ../readOnly}}
+      <span class="nogrow" style="min-width:52px; text-align:right;">{{hit.afterSP}}</span>
+      {{else}}
       <input
         type="number"
         class="after-sp-override number nogrow"
@@ -70,6 +78,7 @@
         min="0"
         style="width:52px; text-align:right;"
         title="{{#if hit.sdp}}{{CPLocal 'DamageDlgAfterSpSdpTip'}}{{else}}{{CPLocal 'DamageDlgAfterSpTip' btm=hit.btm}}{{/if}}">
+      {{/if}}
       {{#unless hit.penetrates}}<span class="inactive" style="font-size:0.75em;" title="{{CPLocal 'DamageDlgStopped'}}">✗</span>{{/unless}}
       {{#if hit.overridden}}<span class="inactive" style="font-size:0.75em; color:var(--color-text-hyperlink);" title="{{CPLocal 'DamageDlgOverridden'}}">✎</span>{{/if}}
     </div>
@@ -109,6 +118,11 @@
   </div>
   {{/if}}
 
+  {{#if readOnly}}
+  <div class="flexrow dialog-buttons" style="margin-top:8px; gap:4px;">
+    <button type="button" data-action="cancelDialog">{{CPLocal "DamageDlgClose"}}</button>
+  </div>
+  {{else}}
   <hr>
 
   {{!-- Options --}}
@@ -184,5 +198,6 @@
     {{/if}}
     <button type="button" data-action="applyDamage"  class="action">{{CPLocal "DamageDlgApplyBtn"}}</button>
   </div>
+  {{/if}}
 
 </div>

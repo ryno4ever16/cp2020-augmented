@@ -27,6 +27,10 @@ import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
 import { railSoundedImpacts } from "../fx/effects.js";
 import { requestCoverChew, aimedCoverVerdict, coverChewSummary, AREA_COVER_EXEMPT } from "./cover.js";
 import { localize, localizeParam } from "../utils.js";
+// The apply's receipt and the snapshot Undo restores from (user ruling 2026-10-22); the card lock is what
+// keeps a shot from being applied twice from two seats.
+import { snapshotTarget, postDamageReceipt, actorRefOf } from "./damage-receipt.js";
+import { isCardResolved, markCardResolved } from "../card-lock.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -43,15 +47,22 @@ export const DAMAGE_DIALOG_DISMISSED_HOOK = "cp2020-augmented.damageDialogDismis
 
 export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
-  constructor(payload, target, options = {}) {
+  constructor(payload, target, { cardMessageId = null, receipt = null, ...options } = {}) {
     super(options);
     this.payload    = payload;
     this.target     = target;
+    // The shot's own chat card, when the opener knows it: the lock that refuses a second apply of the
+    // same shot (two seats can hold a window for it — the target's controller and the card's Apply).
+    this.cardMessageId = cardMessageId;
+    // A receipt makes this a READ-ONLY view: the rows come from the receipt, nothing is computed and
+    // nothing is written (combat/damage-receipt.js — the card's View control).
+    this.receipt = receipt;
     // Applied-close vs dismissed-close. Apply is the ONE close that resolves the shot, and it sets this
     // immediately before asking the window to close; every other route out (X, Cancel, Escape, a close
     // the framework performs) leaves it false and is therefore a dismissal. Read once, in _preClose,
-    // which is the single teardown all of those routes pass through.
-    this._damageApplied      = false;
+    // which is the single teardown all of those routes pass through. A read-only view is never a
+    // dismissal of anything.
+    this._damageApplied      = !!receipt;
     this._dismissalAnnounced = false;
     this._overrides = {};   // { flatIndex: after-SP override }
     this._armorMode = null;
@@ -100,6 +111,33 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     main: { template: "modules/cp2020-augmented/templates/dialog/damage-dialog.hbs" },
   };
 
+  /** A read-only view names itself as the receipt's. */
+  get title() {
+    return this.receipt ? localize("DamageDlgReceiptTitle") : super.title;
+  }
+
+  /**
+   * The read-only context: the receipt's rows as they were applied, verbatim — no armour read, no cover
+   * seed, no wall verdict, no override box. What the referee asked for ("go back into the same window, if
+   * only to see it"): the same window, on the numbers that were written, after the fact.
+   */
+  _receiptContext() {
+    const r = this.receipt;
+    const resolvedHits = (r.rows ?? []).map(x => ({
+      location: x.location, rawDamage: x.raw, spUsed: x.sp, afterSP: x.afterSP, penetrates: !!x.penetrates,
+      sdp: !!x.sdp, overridden: !!x.overridden, btm: Number(r.btm) || 0, breakdownRows: null,
+    }));
+    return {
+      readOnly: true,
+      receiptLine: localizeParam("DamageDlgReadOnlyLine", { user: r.appliedByName ?? "" }),
+      weaponName: r.weaponName ?? "", targetName: r.targetName ?? "",
+      resolvedHits, totalNet: Number(r.totalApplied) || 0, totalSdp: 0, hasSdpRows: resolvedHits.some(h => h.sdp),
+      btm: Number(r.btm) || 0, armorMode: r.armorMode ?? "full", ablate: !!r.ablate, armorModes: Object.values(ARMOR_MODES),
+      damageType: "", ap: false, coverSP: Number(r.coverSP) || 0, coverRowLabel: "", blockedByWall: false,
+      canChewCoverOnly: false, coverOnlyCharged: false, coverOnlyDamage: 0,
+    };
+  }
+
   /** The target's token document (payload token first, else the actor's active token). */
   _targetTokenDoc() {
     const tid = this.payload?.targetTokenId;
@@ -147,6 +185,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   _seededPenetrates(hit) { return this._wallBlocked() ? false : hit.penetrates; }
 
   async _prepareContext(_options) {
+    if (this.receipt) return this._receiptContext();
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
     // ⏪ `damageAblation` RETIRED 2026-08-29 (settings-trim) — MERGED into `damageArmorMode`: the "full"
     // mode now MEANS SP-with-wear-on-penetration, so the mode alone supplies the DEFAULT. This window's
@@ -352,7 +391,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _updateTotalDisplay() {
     const root = this.element;
-    if (!root) return;
+    if (!root || this.receipt) return;
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
     // ⏪ `damageAblation` MERGED into `damageArmorMode` 2026-08-29 (settings-trim): "full" MEANS wear.
     const ablate    = this._ablate    ?? (game.settings.get("cp2020-augmented", "damageArmorMode") === "full");
@@ -422,6 +461,17 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static async _onApply(event, target) {
     event.preventDefault();
+    if (this.receipt) return;   // a read-only view writes nothing
+    // ⛔ ONE APPLY PER SHOT. The window can be held on two seats at once — the target's controller and
+    // whoever presses the card's Apply — so the shot's card is stamped on the first apply (the card lock)
+    // and a second window for the same shot refuses here rather than writing the rows again.
+    const card = this.cardMessageId ? game.messages?.get(this.cardMessageId) : null;
+    if (card && isCardResolved(card)) {
+      ui.notifications?.warn(localize("DamageDlgAlreadyApplied"));
+      this._damageApplied = true;
+      this.close();
+      return;
+    }
 
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
     const coverSP   = this._coverSP;
@@ -464,6 +514,24 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       return { location: hit.location, afterSP, penetrates, btmResult, netDamage };
     });
     const totalApplied = resolvedHits.reduce((s, h) => s + h.netDamage, 0);
+
+    // THE RECEIPT'S OWN ROWS — the arithmetic exactly as this apply is about to write it, per location
+    // (combat/damage-receipt.js). Built here for both branches: the direct apply posts it with the
+    // snapshot it took; the relay carries it and the GM session, which writes the target, takes the
+    // snapshot there and posts.
+    const receiptBase = {
+      v: 1, targetName: this.target.name, weaponName: String(this.payload.weaponName || ""),
+      appliedBy: game.user.id, appliedByName: game.user.name, at: Date.now(),
+      armorMode, ablate, coverSP, btm,
+      rows: rawHits.map((h, i) => ({
+        location: h.location, raw: Number(h.rawDamage) || 0, sp: Number(h.spUsed) || 0,
+        afterSP: resolvedHits[i].afterSP, penetrates: !!resolvedHits[i].penetrates, net: resolvedHits[i].netDamage,
+        sdp: !!h.sdp, overridden: this._overrides[i] !== undefined,
+      })),
+      totalApplied, woundBefore: Number(this.target.woundState?.() ?? 0) || 0,
+    };
+    // The first apply of this shot locks its card (relayed when this client cannot write the card).
+    if (this.cardMessageId) markCardResolved(this.cardMessageId, "damageApplied").catch(() => {});
 
     // ⭐ RESOLVED ONCE, HERE, FOR BOTH BRANCHES — and resolved on THIS client rather than on the GM's,
     // because it is a property of the SHOT (did the rail sound this payload's arrivals?) and this is the
@@ -510,12 +578,17 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         firstHitDamage:   Number(rawHits[0]?.rawDamage) || 0,
         weaponName:       String(this.payload.weaponName      || ""),
         firstHitLocation: rawHits[0]?.location ?? null,
+        // The receipt's rows; the GM session that writes the target takes the snapshot and posts the card.
+        receiptBase,
       });
       this._chewCoverForBurst(rawHits);
       this._damageApplied = true;   // an applied close — see the flag's note in the constructor
       this.close();
       return;
     }
+
+    // The direct apply: the figure as it stands, before any row is written — what Undo restores.
+    const snapshot = snapshotTarget(this.target);
 
     // GM direct path — route each hit through the shared seam (cyberlimb zones absorb into their SDP,
     // flesh advances the wound track + runs the limb/head severity check). `applied` counts only the
@@ -567,6 +640,12 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       // (updateTaserState above), and carrying it on the card as well would charge it twice.
       await _postSavePrompts(this.target, token, severity, { saveMod: this.payload.stunSaveOnHit ? 0 : (Number(this.payload.stunSaveMod) || 0) });
     }
+
+    // The receipt: the rows as written, the wound state after, and the snapshot Undo restores.
+    await postDamageReceipt({
+      ...receiptBase, totalApplied: applied, woundAfter: Number(this.target.woundState?.() ?? 0) || 0,
+      targetRef: actorRefOf(this.target, this.payload), snapshot,
+    }).catch(e => console.warn("cp2020-augmented | damage receipt failed", e));
 
     this._damageApplied = true;   // an applied close — see the flag's note in the constructor
     this.close();
@@ -639,7 +718,9 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this._dismissalAnnounced) return;
     this._dismissalAnnounced = true;
     if (this._damageApplied) return;
-    Hooks.callAll(DAMAGE_DIALOG_DISMISSED_HOOK, this.payload, this.target);
+    // The card id rides along for a window that was handed to this seat over the socket: its payload is a
+    // copy the hooks layer never saw, so the card can only be found by the id the opener sent.
+    Hooks.callAll(DAMAGE_DIALOG_DISMISSED_HOOK, this.payload, this.target, this.cardMessageId);
   }
 
   /** Satisfy the V2 form contract — real work is in the applyDamage action. */

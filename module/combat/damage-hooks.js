@@ -48,6 +48,9 @@ import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { mechRoundTickEnabled, combatFxEnabled, specialMeleeEffectsEnabled } from "../settings.js";
 import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, firingActorOf, localize, localizeParam, tryLocalize, cappedWoundDamage } from "../utils.js";
 import { renderChatCard, getHtmlElement }                     from "../compat.js";
+// The apply window's seat (the target's controller), the receipt every apply posts and the snapshot Undo
+// restores — user ruling 2026-10-22 (combat/damage-receipt.js).
+import { openDamageWindowAtSeat, snapshotTarget, postDamageReceipt } from "./damage-receipt.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 // The opposed melee roll (p.111): PATH A hands a melee card aimed at one figure to the contest instead of the
 // window; the verdict comes back through applyResolvedMeleeHit below. (A module cycle: both sides use the
@@ -1046,7 +1049,10 @@ function _hookWeaponFired() {
       // presentationSettled owns all three routes (the signal, the arithmetic when no fan-out ran,
       // and the hard cap that stops anything parking the window), so this reads as one await.
       await presentationSettled(payload);
-      new DamageDialog(payload, target).render(true);
+      // ⭐ AT THE TARGET'S SEAT (user ruling 2026-10-22): the figure's own player when one is connected, else
+      // the referee's session — not the client that fired. The shot's card id goes with it, for the lock
+      // and for the dismissal path on whichever client ends up holding the window.
+      await openDamageWindowAtSeat(payload, target, { cardMessageId: _cardIdByPayload.get(payload) ?? null });
       return;
     }
 
@@ -1106,10 +1112,12 @@ function _hookCreateChatMessage() {
  * left alone, so a PATH-B window dismissed a second time cannot stack anything.
  */
 function _hookDamageDialogDismissed() {
-  Hooks.on(DAMAGE_DIALOG_DISMISSED_HOOK, async (payload) => {
+  Hooks.on(DAMAGE_DIALOG_DISMISSED_HOOK, async (payload, _target, cardMessageId = null) => {
     // No memory for this payload = nothing to restore. That is the normal answer for a PATH-B window
     // (its payload came OFF a card, which already carries the flag) and for a shot whose card never came.
-    const messageId = payload ? _cardIdByPayload.get(payload) : null;
+    // A window handed to this seat over the socket holds a COPY of the payload the map never saw, so the
+    // id the opener sent with it is the fallback.
+    const messageId = (payload ? _cardIdByPayload.get(payload) : null) ?? cardMessageId ?? null;
     if (!messageId) return;
     const message = game.messages?.get(messageId);
     if (!message) return;
@@ -1129,9 +1137,12 @@ function _hookDamageDialogDismissed() {
  * @param {ChatMessage} message
  * @param {HTMLElement} html
  */
+  if (isCardResolved(message)) return;
 function _injectApplyDamageControl(message, html) {
   const payload = message.getFlag?.("cp2020-augmented", "damagePayload");
   if (!payload?.areaDamages || Object.keys(payload.areaDamages).length === 0) return;
+  // An applied shot's card is stamped by the first apply (the card lock); it offers no second Apply.
+  if (isCardResolved(message)) return;
 
   // Show button to GM always; show to players only if they own the attacker actor.
   // Avoids any dependency on message.userId / message.author which can be undefined in v14+.
@@ -1168,8 +1179,9 @@ function _injectApplyDamageControl(message, html) {
     if (await dispatchAttack(payload, target)) return;
 
     // The reader pressed the button on the card, so the window opens now — no wait for a presentation
-    // that finished long ago, and no world setting deciding on their behalf whether they get one.
-    new DamageDialog(payload, target).render(true);
+    // that finished long ago, and no world setting deciding on their behalf whether they get one. The
+    // card's own id rides along: it is the lock a second apply of this shot refuses against.
+    new DamageDialog(payload, target, { cardMessageId: message.id }).render(true);
   });
 
   const container = html.querySelector(".cyberpunk-card") ?? html;
@@ -1581,7 +1593,9 @@ export function fallbackTargetFor(payload, currentTargets = game.user?.targets) 
 export async function applyResolvedMeleeHit(payload, target) {
   payload.areaDamages = await rerollGoneLimbAreaDamages(target, payload.areaDamages);
   if (await dispatchAttack(payload, target)) return;
-  new DamageDialog(payload, target).render(true);
+  // The same seat rule as a ranged shot's (user ruling 2026-10-22): the window opens where the target is
+  // controlled. The verdict's payload is the contest card's copy, so no shot card is known here.
+  await openDamageWindowAtSeat(payload, target, { cardMessageId: null });
 }
 
 function _resolveTarget(payload) {
@@ -5106,6 +5120,9 @@ function _hookSocketRelay() {
         // stun/death prompt stays honest).
         const liveToken = data.targetTokenId ? (canvas?.tokens?.get(data.targetTokenId) ?? null)
                         : (canvas?.tokens?.placeables?.find(t => t.actor === target) ?? null);
+        // The figure before any row is written — what the receipt's Undo restores (this session writes
+        // the target, so this session takes the snapshot).
+        const snapshot = snapshotTarget(target);
         // The relayed window's rows are ONE application, exactly as the window's own Apply loop is.
         const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
         for (const hit of data.resolvedHits) {
@@ -5150,6 +5167,15 @@ function _hookSocketRelay() {
             // `stunSaveMod` the threshold already reads through the taser state.
             await postStunSavePrompt(target, liveToken, { saveMod: data.stunSaveOnHit ? 0 : (Number(data.stunSaveMod) || 0) });
           }
+        }
+
+        // The receipt, posted by the session that wrote the rows (combat/damage-receipt.js).
+        if (data.receiptBase) {
+          await postDamageReceipt({
+            ...data.receiptBase, totalApplied, woundAfter: Number(target.woundState?.() ?? 0) || 0,
+            targetRef: { actorId: target.id, actorUuid: target.uuid ?? null, tokenId: data.targetTokenId ?? null, sceneId: data.targetSceneId ?? null },
+            snapshot,
+          }).catch(e => console.warn("cp2020-augmented | relayed damage receipt failed", e));
         }
       }
 
