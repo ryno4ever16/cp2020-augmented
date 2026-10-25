@@ -3478,6 +3478,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   async _onDropItem(event, data) {
     event.preventDefault();
 
+    // ⭐ ALT + DROP = GIVE (user ruling 2026-10-23): core's plain drop stays a COPY; with Alt held the item MOVES
+    // from the sheet it is on to this one (item/item-give.js — refused with a notice when the dragger does not own
+    // that sheet, relayed to the referee when they cannot write this one). A drop that is not a give at all falls
+    // through to everything below exactly as before.
+    if (event.altKey) {
+      const { giveDroppedItem } = await import("../item/item-give.js");
+      if (await giveDroppedItem(data, this.actor)) return false;
+    }
+
     const dropTarget = event.target.closest("[data-drop-target]");
     const sameActorDrop = this._cpIsSameActorItemDrop(data);
 

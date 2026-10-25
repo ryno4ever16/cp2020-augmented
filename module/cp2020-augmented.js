@@ -22,6 +22,7 @@ import { registerSaveRollHandlers, registerModuleStatusEffects } from "./combat/
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
 import { registerDamageReceipt } from "./combat/damage-receipt.js";
+import { registerItemGive } from "./item/item-give.js";
 import { registerCombatFx } from "./fx/effects.js";
 // ⛔ `registerStatusFx` (./fx/status-fx.js) IS DELIBERATELY NOT IMPORTED — user ruling 2026-08-27, the
 // pre-ship walk: the persistent condition overlays are half-baked for 1.2.0 and are stripped from the
@@ -886,6 +887,10 @@ Hooks.once("ready", function () {
     wire("missile flight hooks", registerMissileFlightHooks);
     wire("ACPA combat hooks", registerAcpaCombatHooks);
   }
+
+  // Alt + drop = give (item/item-give.js): the token-drop hook and the referee's relay end. Unconditional — it
+  // is inventory, not combat, and it does nothing until Alt is held over a drop.
+  wire("item give", registerItemGive);
 
   // IP (Improvement Points) tracker — independent of the combat layer; the auto-queue self-gates on
   // ipRawTracking (RAW mode only), the in-sheet UI on ipEnabled (= !ipHideUI).
