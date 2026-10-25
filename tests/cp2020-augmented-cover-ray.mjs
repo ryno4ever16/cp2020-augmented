@@ -340,49 +340,55 @@ const phase3 = await page.evaluate(async ({ SCOPE, ids }) => {
 }, { SCOPE, ids: res.ids });
 for (const c of phase3.checks) check(c.n, c.p, c.d);
 
-/* The window a referee actually sees for that shot: it SAYS the round was stopped, every row reads 0,
-   and the referee can still overrule it — outcome, never presence. */
+/* The window a referee actually sees for that shot (user ruling 2026-10-23): it SAYS a wall with no cover value
+   was crossed, the rows stay AS ROLLED, and the wall is offered as cover — the book's table beside Cover SP; a
+   pick prices it and the rows fold it in. ⏪ It used to seed every row at 0 and ask for a typed value. */
 await openDialog();
 const blockedWin = await page.evaluate(() => {
   const root = document.querySelector("form.damage-dialog");
   return {
     notice: root?.querySelector(".cp-blocked-wall-note")?.textContent?.trim() ?? "",
-    rows: [...root.querySelectorAll("input.after-sp-override")].map(i => i.value),
-    total: root?.querySelector(".damage-total-value")?.textContent?.trim() ?? "",
+    rows: [...root.querySelectorAll("input.after-sp-override")].map(i => Number(i.value)),
+    total: Number(root?.querySelector(".damage-total-value")?.textContent?.trim() ?? "0"),
+    coverSP: Number(root?.querySelector("input[name='coverSP']")?.value ?? "0"),
+    presets: [...(root?.querySelectorAll("select[name='wallPreset'] option") ?? [])].map(o => ({ v: o.value, t: o.textContent.trim() })),
   };
 });
-check("the Apply window states the shot was stopped by a wall", /wall/i.test(blockedWin.notice),
+check("the Apply window states a wall with no cover value was crossed", /wall/i.test(blockedWin.notice),
   blockedWin.notice.slice(0, 120) || "(no notice)");
 check("the notice is prose, not a raw i18n key", !/CYBERPUNK\./.test(blockedWin.notice), blockedWin.notice.slice(0, 60));
-check("every damage row is seeded at 0", blockedWin.rows.length > 0 && blockedWin.rows.every(v => v === "0"),
-  blockedWin.rows.join(","));
-check("and the window's total is 0", blockedWin.total === "0", blockedWin.total);
+check("the rows are NOT zeroed — the shot's damage stands as rolled, and Cover SP starts empty",
+  blockedWin.rows.length > 0 && blockedWin.rows.some(v => v > 0) && blockedWin.total > 0 && blockedWin.coverSP === 0,
+  `rows=${blockedWin.rows.join(",")} total=${blockedWin.total} cover=${blockedWin.coverSP}`);
+check("the wall is offered as cover from the book's table (Brick Wall SP 25 among the picks)",
+  blockedWin.presets.some(p => /Brick Wall/.test(p.t) && Number(p.v) === 25), JSON.stringify(blockedWin.presets.slice(0, 4)));
 
-/* THE FIAT: the referee types a value back in and the total follows — the block is a seed, not a veto. */
-// ⚠ NO RE-RENDER ON THIS CONTROL, deliberately: the after-SP inputs update the total IN PLACE
-// (`_updateTotalDisplay`) so a referee typing several rows is not re-rendered under their own cursor.
-// So the gesture is driven and the readout is polled, rather than waiting for a rebuild that never comes.
+/* THE PICK: choosing a material writes its SP into Cover SP and the rows fold it in. The select re-renders the
+   window, so the readout is polled for the new Cover SP value. */
 await page.evaluate(() => {
-  const el = document.querySelector("form.damage-dialog input.after-sp-override");
-  el.value = "9";
-  el.dispatchEvent(new Event("change", { bubbles: true }));
+  const sel = document.querySelector("form.damage-dialog select[name='wallPreset']");
+  sel.value = "25";
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
 });
 await page.waitForFunction(() =>
-  Number(document.querySelector("form.damage-dialog .damage-total-value")?.textContent ?? "0") > 0,
+  Number(document.querySelector("form.damage-dialog input[name='coverSP']")?.value ?? "0") === 25,
   null, { timeout: 10000 }).catch(() => {});
-const overruled = await page.evaluate(() => {
+const priced = await page.evaluate(() => {
   const root = document.querySelector("form.damage-dialog");
   return {
-    first: root?.querySelector("input.after-sp-override")?.value ?? "",
-    total: root?.querySelector(".damage-total-value")?.textContent?.trim() ?? "",
+    coverSP: Number(root?.querySelector("input[name='coverSP']")?.value ?? "0"),
+    rows: [...root.querySelectorAll("input.after-sp-override")].map(i => Number(i.value)),
+    total: Number(root?.querySelector(".damage-total-value")?.textContent?.trim() ?? "0"),
     stillNoticed: !!root?.querySelector(".cp-blocked-wall-note"),
+    picked: root?.querySelector("select[name='wallPreset']")?.value ?? "",
   };
 });
-check("the referee can overrule the block by typing a row back in", overruled.first === "9", overruled.first);
-check("and the overruled damage reaches the window's total, by value",
-  Number(overruled.total) > 0, `total=${overruled.total}`);
-check("the notice still stands after the override — it states what the geometry found, not what was applied",
-  overruled.stillNoticed === true, String(overruled.stillNoticed));
+check("picking Brick Wall writes SP 25 into Cover SP", priced.coverSP === 25 && priced.picked === "25", `cover=${priced.coverSP} picked=${priced.picked}`);
+check("and the rows fold the wall in — no row reads more than it did unpriced",
+  priced.rows.length === blockedWin.rows.length && priced.rows.every((v, i) => v <= blockedWin.rows[i]) && priced.total <= blockedWin.total,
+  `before=${blockedWin.rows.join(",")} after=${priced.rows.join(",")} total ${blockedWin.total}→${priced.total}`);
+check("the notice still stands after the pick — it states what the geometry found",
+  priced.stillNoticed === true, String(priced.stillNoticed));
 
 /* NEGATIVE CONTROL: the wall gone, the same shot opens with its damage intact. Without this the zeroes
    above could be a window that always reads 0. */

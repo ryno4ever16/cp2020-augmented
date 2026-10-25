@@ -25,7 +25,7 @@ import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
 // The rail owns the answer so the two cannot disagree; see railSoundedImpacts for the regression that
 // left this window sounding a second impact per round, seconds behind the first.
 import { railSoundedImpacts } from "../fx/effects.js";
-import { requestCoverChew, aimedCoverVerdict, coverChewSummary, AREA_COVER_EXEMPT } from "./cover.js";
+import { requestCoverChew, aimedCoverVerdict, coverChewSummary, AREA_COVER_EXEMPT, COVER_PRESETS } from "./cover.js";
 import { localize, localizeParam } from "../utils.js";
 // The apply's receipt and the snapshot Undo restores from (user ruling 2026-10-22); the card lock is what
 // keeps a shot from being applied twice from two seats.
@@ -175,14 +175,15 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
    * THE SEEDED after-SP FOR ONE ROW, and the seeded penetration beside it — ONE definition, read by the
    * preview and by the Apply, so the number a referee looks at is the number that gets written.
    *
-   * ⛔ ZEROED, NOT REFUSED. A blocked shot's rows are seeded at 0 and marked non-penetrating, and they
-   * stay ORDINARY EDITABLE ROWS: the referee who decides the round found a gap, or that the wall is a
-   * curtain the map calls a wall, types a value back in and applies it. That is the same fiat the Cover
-   * SP field has always offered, and it is why the geometry may answer strictly (see the no-trim note in
-   * cover.js `aimedCoverVerdict`) without taking the table's ruling away from it.
+   * ⏪ A NAKED WALL NO LONGER ZEROES THE ROWS (user ruling 2026-10-23: "it blocks you completely and tells
+   * you to manually type in damage… I'd rather it let you allow it to pass through and simply use the wall
+   * as cover"). The rows are seeded as rolled; the wall the shot crossed is STATED on the window and offered
+   * as COVER — the Cover SP field, with the book's "Common Cover SPs" beside it to price the wall from — and
+   * the referee applies as rolled, or with the wall's SP folded in. The geometry still answers strictly
+   * (cover.js `aimedCoverVerdict`); what changed is that its answer is a note and an offer, not a veto.
    */
-  _seededAfterSP(hit) { return this._wallBlocked() ? 0 : hit.damageAfterSP; }
-  _seededPenetrates(hit) { return this._wallBlocked() ? false : hit.penetrates; }
+  _seededAfterSP(hit) { return hit.damageAfterSP; }
+  _seededPenetrates(hit) { return hit.penetrates; }
 
   async _prepareContext(_options) {
     if (this.receipt) return this._receiptContext();
@@ -299,10 +300,11 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       // it is — and, when the row was decided by a roll, of which way that roll went. An EXPOSED row
       // carries no SP at all, so it produces no line in the breakdown; this is where it speaks.
       coverRowLabel: this._coverRow?.displayLabel ?? "",
-      // ⭐ THE SHOT MET A WALL NOBODY VALUED. Stated on the face of the window rather than left to be
-      // inferred from a column of zeroes: the rows read 0 because the round did not reach the body, and
-      // a referee who disagrees types over them (see `_seededAfterSP`).
+      // ⭐ THE SHOT CROSSED A WALL NOBODY VALUED. Stated on the face of the window and offered as cover
+      // (see `_seededAfterSP`): the book's cover table is listed beside the Cover SP field so the wall can
+      // be priced in one pick; the rows stay as rolled until it is.
       blockedByWall: this._wallBlocked(),
+      wallPresets: this._wallBlocked() ? COVER_PRESETS.map(p => ({ key: p.key, label: p.label, sp: p.sp, selected: Number(p.sp) === Number(coverSP) && coverSP > 0 })) : [],
       // ⭐ THE COVER-ONLY CONTROL, offered only when there is an OBJECT to charge. A hand-typed Cover SP
       // folds into the math but names no document, so there would be nothing for the button to debit.
       // ⛔ NOT OFFERED FOR CORE-MODE COVER. The control debits a structure pool; an SP the GM typed
@@ -352,6 +354,15 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelector("input[name='coverSP']")?.addEventListener("change", ev => {
       const v = Number(ev.currentTarget.value);
       this._coverSP   = (Number.isFinite(v) && v >= 0) ? v : 0;
+      this._overrides = {};
+      this.render(false);
+    });
+
+    // The crossed wall priced from the book's cover table: a pick writes the preset's SP into Cover SP.
+    root.querySelector("select[name='wallPreset']")?.addEventListener("change", ev => {
+      const v = Number(ev.currentTarget.value);
+      if (!Number.isFinite(v) || v < 0) return;
+      this._coverSP   = v;
       this._overrides = {};
       this.render(false);
     });

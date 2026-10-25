@@ -36,10 +36,9 @@
   {{/if}}
 
   {{#if blockedByWall}}
-  {{!-- The shot met a move-blocking wall nobody gave cover values to, so the rounds never reached the
-        body and every row below is seeded at 0. It is stated here rather than left to be inferred from
-        a column of zeroes — and the rows stay editable, so a referee who rules the round found a gap
-        types a value back in and applies it. --}}
+  {{!-- The shot crossed a move-blocking wall nobody gave cover values to. Stated here and offered as cover:
+        the rows below stay as rolled; the wall is priced through the Cover SP field, or from the book's
+        cover table in the Options block (user ruling 2026-10-23 — a note and an offer, not a veto). --}}
   <div class="field cp-blocked-wall-note"><span>{{CPLocal "DamageDlgBlockedByWall"}}</span></div>
   {{/if}}
 
@@ -139,6 +138,19 @@
         style="width:52px; text-align:right;"
         title="{{CPLocal 'DamageDlgCoverSpExamples'}}">
     </div>
+    {{#if blockedByWall}}
+    {{!-- The crossed wall, priced from the Core "Common Cover SPs" table: a pick writes its SP into Cover SP. --}}
+    <div class="field cp-wall-preset-row">
+      <label title="{{CPLocal 'DamageDlgWallPresetTip'}}">{{CPLocal "DamageDlgWallPresetLabel"}}</label>
+      <span class="flex-pad"></span>
+      <select name="wallPreset" class="nogrow">
+        <option value="">{{CPLocal "DamageDlgWallPresetNone"}}</option>
+        {{#each wallPresets as |p|}}
+        <option value="{{p.sp}}" {{#if p.selected}}selected{{/if}}>{{p.label}} — SP {{p.sp}}</option>
+        {{/each}}
+      </select>
+    </div>
+    {{/if}}
     {{#if coverRowLabel}}
     {{!-- The picked cover row's own name — what the shot was found to be behind. When the row was
           decided by a roll (an open-topped vehicle covers its riders only part of the time) the name

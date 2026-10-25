@@ -97,8 +97,12 @@ export function resolveHitMath({ currentSP, rawDamage, ap, armorMode, coverSP = 
     ? Math.floor(spFull / 2)
     : spFull;
 
-  let damageAfterSP = rawDamage - spUsed;
-  const penetrates  = damageAfterSP > 0;
+  // Floored at 0 once penetration is decided: a stopped round reads "0, stopped" in the window's own
+  // after-SP box, not a negative remainder (a Brick Wall priced at SP 25 over a 12-point roll showed −13 —
+  // seen 2026-10-23 while the wall-as-cover pick was being proved). The breakdown line keeps the raw
+  // difference (hitBreakdown `afterSPRaw`) for the reader who wants the arithmetic.
+  const penetrates  = (rawDamage - spUsed) > 0;
+  let damageAfterSP = Math.max(0, rawDamage - spUsed);
 
   // Penetrating-damage multiplier applies only to the portion that got through armor.
   // penetrated→min handled later by applyBTM (min 1 when penetrated), so floor at 0 here.
