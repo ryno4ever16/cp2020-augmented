@@ -3021,9 +3021,35 @@ function _hookExplosion() {
 }
 
 /** Place the explosion blast area + post its Confirm card. Runs on the active GM (direct or relay). */
-async function _placeExplosion(payload) {
+async function _placeExplosion(payload, { settled = false } = {}) {
     const scene = canvas?.scene;
     if (!scene) return;
+
+    // ⭐ A BURST FROM A TUBE IS ONE DETONATION PER ROUND (user ruling 2026-10-22). CP2020 p.108 is written per
+    // warhead: each round that LANDED detonates on the aim point with its own rolled damage, and each round that
+    // MISSED goes to the grenade table on its own. The card used to sum three rounds into one blast at the aim
+    // point — which overstated the centre and ignored the rounds that drifted. The presentation is waited out
+    // once, here; each round is then placed by this same function as the single shot it is, with the burst's
+    // position recorded on it for the card. The faces for the missed rounds were rolled at the seam, in order.
+    if (!payload.burstRound && areaDeliveryOf(payload) && (Number(payload.shotsFired) || 0) > 1) {
+      const hits = [];
+      for (const [loc, list] of Object.entries(payload.areaDamages ?? {})) {
+        for (const h of (list ?? [])) hits.push({ loc, damage: Number(h.damage ?? h.dmg) || 0 });
+      }
+      const fired = Number(payload.shotsFired) || 0;
+      const missed = Math.max(0, fired - hits.length);
+      const faces = Array.isArray(payload.blastScatters) ? payload.blastScatters : [];
+      await presentationSettled(payload);
+      const count = hits.length + missed;
+      let index = 0;
+      for (const h of hits) {
+        await _placeExplosion({ ...payload, areaDamages: { [h.loc]: [{ damage: h.damage }] }, baseHit: true, shotsFired: 1, shotsHit: 1, blastScatter: null, burstRound: { index: ++index, count } }, { settled: true });
+      }
+      for (let m = 0; m < missed; m++) {
+        await _placeExplosion({ ...payload, areaDamages: {}, baseHit: false, shotsFired: 1, shotsHit: 0, blastScatter: faces[m] ?? null, burstRound: { index: ++index, count } }, { settled: true });
+      }
+      return;
+    }
 
     const attackerId = payload.attackerId ?? payload.attackerActorId ?? payload.actorId ?? null;
 
@@ -3168,8 +3194,9 @@ async function _placeExplosion(payload) {
     // signal on the client that drew the shot and the honest arithmetic floor on a client that did not
     // (a player's throw relayed here). Nothing can be parked by it: `presentationSettled` races its
     // own cap either way, and a payload the rail refuses to draw falls straight to the arithmetic.
-    // An ordinary explosive ROUND waits out its own (much shorter) presentation the same way.
-    await presentationSettled(payload);
+    // An ordinary explosive ROUND waits out its own (much shorter) presentation the same way. A burst's
+    // rounds arrive here already settled — the burst branch above waited once for all of them.
+    if (!settled) await presentationSettled(payload);
 
     // ⭐⭐ A MISSED THROW SCATTERS HERE, ONCE, AND THE BLAST IS PLACED WHERE IT LANDED (2026-08-28).
     //
@@ -3289,11 +3316,15 @@ async function _placeExplosion(payload) {
     // three: an on-target throw, a miss that drifted, and a miss whose direction face was one of the
     // two that do not drift (rose faces 5 and 10) — which is a miss that landed on the aim point anyway
     // and must not print "0 m".
-    const outcomeLine = scatter
+    const outcomeWord = scatter
       ? (scatter.driftM > 0
           ? localizeParam("ExplosionScatterLine", { dir: tryLocalize(scatter.dirName), dist: scatter.driftM })
           : localize("ExplosionScatterNoDrift"))
       : localize("ExplosionOnTarget");
+    // A burst's round says which of the burst it is, ahead of its own outcome (see the burst branch above).
+    const outcomeLine = payload.burstRound
+      ? `${localizeParam("ExplosionBurstRound", { index: payload.burstRound.index, count: payload.burstRound.count })} ${outcomeWord}`
+      : outcomeWord;
     // ⭐ WHAT THE CARD SAYS THIS WARHEAD DOES. An ordinary blast states its radius and its rolled
     // damage; a word warhead has no damage to state, so it states its EFFECT instead — the same
     // sentence the consequence will actually deliver, priced off the same two payload fields the flags

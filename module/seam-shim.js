@@ -675,6 +675,18 @@ function installRenderEmit() {
             };
           }
         }
+        // ⭐ A BURST FROM A TUBE IS ONE DETONATION PER ROUND (user ruling 2026-10-22; CP2020 p.108 is written per
+        // warhead). Each round that MISSED lands by its own throw of the grenade table, so a pair of faces is
+        // rolled here per missed round — where the single shot's pair is rolled, for the same reason — and the
+        // plant (damage-hooks.js _placeExplosion) reads them in order. Null on every single shot.
+        let blastScatters = null;
+        if ((areaDeliveryKind(_fireCtx.attackType) || _fireCtx.launchedGrenade === true) && (Number(data?.fired) || 0) > 1) {
+          const missedRounds = Math.max(0, (Number(data.fired) || 0) - (Number(data.hits) || 0));
+          blastScatters = [];
+          for (let i = 0; i < missedRounds; i++) {
+            blastScatters.push({ dirFace: (await new Roll("1d10").evaluate()).total, distFace: (await new Roll("1d10").evaluate()).total });
+          }
+        }
         Hooks.callAll(WEAPON_FIRED, {
           attackerId: _fireCtx.attackerId,
           // WHICH FIGURE ON THE MAP FIRED — the attacker's id names the ACTOR, and an actor can have
@@ -747,6 +759,7 @@ function installRenderEmit() {
           // (`_placeExplosion` consumes these instead of rolling its own). Null on every hit and
           // every non-delivery shot.
           blastScatter,
+          blastScatters,
           // ⭐ WHETHER THE SHOT ACTUALLY HIT WHAT IT WAS POINTED AT, as the BASE SYSTEM already ruled it.
           //
           // The base rolls one attack per card — REF + the attack skill + every modifier the window

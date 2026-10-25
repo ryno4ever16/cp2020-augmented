@@ -269,7 +269,9 @@ const tail = await gm.evaluate(async () => {
     await G.resetFigures();
     const bst = await G.fire(launcher, { extraMod: 40, fireMode: G.FM.threeRoundBurst });
     await sleep(1200);
-    out.burst = { launcher: Ldoc.name, round: Rdoc.name, refused: bst.warns.length > 0 || !!bst.threw, warns: bst.warns, timedOut: bst.timedOut, shotsFired: bst.payload?.shotsFired ?? null, shotsHit: bst.payload?.shotsHit ?? null, hits: Object.values(bst.payload?.areaDamages ?? {}).flat().length, areas: G.areas().map(h => ({ base: Number(h.doc.flags?.[SCOPE]?.baseDamage), radius: Number(h.doc.flags?.[SCOPE]?.blastRadius) })), shots: [bst.shotsBefore, bst.shotsAfter] };
+    // A burst places over a few seconds (one area per round, each after the shared presentation wait).
+    await G.waitFor(() => G.areas().length >= (Number(bst.payload?.shotsFired) || 1), 8000); await sleep(600);
+    out.burst = { launcher: Ldoc.name, round: Rdoc.name, refused: bst.warns.length > 0 || !!bst.threw, warns: bst.warns, timedOut: bst.timedOut, shotsFired: bst.payload?.shotsFired ?? null, shotsHit: bst.payload?.shotsHit ?? null, hits: Object.values(bst.payload?.areaDamages ?? {}).flat().length, areas: G.areas().map(h => ({ base: Number(h.doc.flags?.[SCOPE]?.baseDamage), radius: Number(h.doc.flags?.[SCOPE]?.blastRadius), scattered: !!h.doc.flags?.[SCOPE]?.scattered })), shots: [bst.shotsBefore, bst.shotsAfter] };
     await G.clearAreas(); await G.clearCards(); await launcher.delete().catch(() => {}); await round.delete().catch(() => {});
   }
   for (const Tdoc of G.thrown) {
@@ -284,7 +286,9 @@ const tail = await gm.evaluate(async () => {
   if (dcr) { const rifleRound = G.rounds.find(d => /^Rifle Grenade, HE$/.test(d.name)); const coreRound = G.rounds.find(d => /^Fragmentation Grenade Round$/.test(d.name)); out.dcr = { ammoType: dcr.system.ammoType, damage: dcr.system.damage, acceptsRifleHE: G.L.caliberMatches(dcr.system.ammoType, rifleRound?.system?.caliber ?? ""), acceptsCoreFrag: G.L.caliberMatches(dcr.system.ammoType, coreRound?.system?.caliber ?? "") }; }
   return out;
 });
-if (tail.burst) { console.log("  burst detail:", JSON.stringify(tail.burst)); add(`§4 ${tail.burst.launcher}: a three-round burst — one blast per round that landed, each carrying one round's damage`, !tail.burst.refused && !tail.burst.timedOut && tail.burst.hits >= 2 && tail.burst.areas.length === tail.burst.hits && tail.burst.areas.every(a => a.base >= 7 && a.base <= 42), tail.burst); }
+// One detonation per ROUND (user ruling 2026-10-22): a landed round's blast on the aim point with that round's
+// own 7d6, a missed round's blast where its own throw of the grenade table put it.
+if (tail.burst) { console.log("  burst detail:", JSON.stringify(tail.burst)); const B = tail.burst; const landed = B.areas.filter(a => !a.scattered), drifted = B.areas.filter(a => a.scattered); add(`§4 ${B.launcher}: a three-round burst — one blast per round fired: the landed rounds on the aim point with one round's damage each, the missed rounds scattered on their own`, !B.refused && !B.timedOut && B.shotsFired === 3 && B.areas.length === 3 && landed.length === B.hits && drifted.length === 3 - B.hits && B.areas.every(a => a.base >= 7 && a.base <= 42 && a.radius === 5), B); }
 for (const x of tail.thrown) add(`§5 thrown ${x.name} [${x.attackType || "—"}] "${x.damage}": throws and places its warhead`, !x.refused && !x.timedOut && x.placed, x);
 if (tail.dcr) add("§5 DCR Rifle Grenades: chambered for the rifle-grenade family (loads 'Rifle Grenade, HE'), not the Core hand-grenade caliber", tail.dcr.acceptsRifleHE === true, tail.dcr);
 

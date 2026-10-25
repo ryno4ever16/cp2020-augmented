@@ -485,6 +485,7 @@
     "DamageDlgClose": "Close",
     "DamageDlgAlreadyApplied": "This shot's damage was already applied — see its receipt in the chat.",
     "ContestVsBtn": "Contest vs…",
+    "ExplosionBurstRound": "Round {index} of {count}:",
     "StatusEmp": "EMP — cyberware disabled",
     "StatusStench": "Stench — must leave the area",
     "WordWarheadEmpSummary": "Each takes a Stun Save at <b>−1</b> (orientation loss). Unshielded cyberware is disabled — internal cyberware for <b>{turns} turns</b>, cyberlimbs for 10 minutes; chips are wiped.",
