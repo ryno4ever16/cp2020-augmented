@@ -353,7 +353,7 @@ export function grenadeFamilyOf(weapon) {
  * (`ammoType: "Grenade"`, `damage: "Varies"`), which is the weapon the defect was reported against.
  * Two other items print "Varies" and are correctly excluded by condition 1 (Classic Rifle Grenades,
  * `ammoType: "rifle grenade"`; the Sten, `"varies (.22lr to 12mm cl)"`), and the module's own
- * grenade-chambered items (EMP Grenade, Stench Bomb, Anti-Tank Grenade, GPz-7B) are excluded by
+ * grenade-chambered items (EMP Grenade, Stench Bomb, Anti-Tank Grenade, GPz-78) are excluded by
  * condition 2. So the ladder changes the behaviour of one catalogue weapon plus anything a GM authors
  * the same way, and nothing else.
  */
