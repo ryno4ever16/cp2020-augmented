@@ -58,12 +58,20 @@ export function actorRefOf(target, payload = null) {
  * Open the apply window where it belongs. Local when this client holds the seat; otherwise handed over the
  * socket to the seat's client (a named player, or the primary GM session). With no GM connected and no
  * player seat, the window opens here, exactly as it always did — a shot is never left with no window.
+ *
+ * ⚠ A FIGURE WITH NO PLAYER SEAT IS THE REFEREE'S, AND THE REFEREE WHO FIRED IS THE REFEREE. This used to
+ * ask whether this GM session was the PRIMARY one, so a GM presenting a shot from a second session (a
+ * second tab, a co-referee) had the window taken off their screen and opened on the other GM's — the very
+ * regression the "client that pulled the trigger presents its own shot" rule in damage-hooks had closed
+ * (1.2.12 gate, fx-rail's two-GM legs). Any GM session that is presenting the shot keeps the window; the
+ * primary-session election only decides WHICH GM session answers a hand-over from a player, and that is
+ * the socket handler's question (registerDamageReceipt), not this one.
  * @returns {"local"|"player"|"gm"} where it went
  */
 export async function openDamageWindowAtSeat(payload, target, { cardMessageId = null } = {}) {
   const { DamageDialog } = await import("./DamageDialog.js");
   const seat = damageSeatUserId(target);
-  const mine = seat ? seat === game.user?.id : (game.user?.isGM && isPrimaryGMSession());
+  const mine = seat ? seat === game.user?.id : !!game.user?.isGM;
   if (mine || (!seat && !game.users?.activeGM)) {
     new DamageDialog(payload, target, { cardMessageId }).render(true);
     return "local";
