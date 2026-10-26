@@ -2358,11 +2358,21 @@ const res = await page.evaluate(async () => {
   const aimDist = Math.hypot(aimAt.x - shooterAt.x, aimAt.y - shooterAt.y);
   const missReaches = missTracers.map(e => Math.hypot(e.to.x - shooterAt.x, e.to.y - shooterAt.y) / aimDist);
   ok("fan: a missed shell keeps the pellet count", shellMiss.pellets === shellRow.pellets, String(shellMiss.pellets));
-  ok("fan: missed pellets land at mixed depths inside the miss reach band, not at the aim distance",
+  // ⏪ 2026-10-26 (1.2.12 gate): the band bounds the GROUP's landing (missEndpoint), and each pellet is then sent
+  // nearer or further along its own line by the depth jitter — `reachScale = 1 + roll × reachFraction × cone`
+  // (pelletJitterFor), the cone being the one re-solved at the landing distance. A group that came down near
+  // the top of the band put a pellet at 1.16 against a 1.15 edge and this leg read it as a band violation. The
+  // bound is the band widened by that jitter's own margin, at the band's edges where the re-solved cone is
+  // widest (near) and narrowest (far) — derived from the same arithmetic, not a tolerance picked by hand.
+  const shellCone = fx.FX_CLASSES.shotgun.spreadRad;
+  const coneAtReach = (r) => Math.asin(Math.min(1, Math.sin(shellCone) / r));
+  const reachLow  = fx.MISS_REACH_MIN * (1 - fx.PELLET_CHAOS.reachFraction * coneAtReach(fx.MISS_REACH_MIN));
+  const reachHigh = fx.MISS_REACH_MAX * (1 + fx.PELLET_CHAOS.reachFraction * coneAtReach(fx.MISS_REACH_MAX));
+  ok("fan: missed pellets land at mixed depths inside the miss reach band (widened by the pellet depth jitter), not at the aim distance",
     missReaches.length === shellRow.pellets
-    && missReaches.every(r => r >= fx.MISS_REACH_MIN - 0.001 && r <= fx.MISS_REACH_MAX + 0.001)
+    && missReaches.every(r => r >= reachLow - 0.001 && r <= reachHigh + 0.001)
     && new Set(missReaches.map(r => r.toFixed(3))).size > 1,
-    missReaches.map(r => r.toFixed(2)).join(","));
+    `${missReaches.map(r => r.toFixed(2)).join(",")} within [${reachLow.toFixed(3)}, ${reachHigh.toFixed(3)}]`);
 
   /* -- 9d. the muzzle sprite: small, aimed, planted at the token's EDGE ---- */
   // The reported defect: "the plume of smoke and fire is too large". Two separate causes, so two

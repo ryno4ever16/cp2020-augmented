@@ -57,7 +57,8 @@ const res = await page.evaluate(async () => {
   const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  if (!game.scenes.active) await game.scenes.contents[0]?.activate();
+  // The battery's canonical scene by NAME, never `contents[0]` (sorts by name; "Animals Gym" sits first now).
+  if (!game.scenes.active) await (game.scenes.getName("Foundry Virtual Tabletop") ?? game.scenes.contents[0])?.activate();
   const scene = game.scenes.active ?? game.scenes.contents[0];
 
   const presets = await import(`/modules/${SCOPE}/module/presets.js`);
@@ -242,6 +243,7 @@ const res = await page.evaluate(async () => {
     const r6 = await fire({ rArm: rounds(5, 20 + btm) });
     const totals = { progression: count(CARD.progression, from), mortal: count(CARD.mortalPrompt, from),
                      stun: count(CARD.stunPrompt, from),
+                     receipt: [...game.messages].filter(m => !from.has(m.id) && !!m.getFlag(SCOPE, "damageReceipt")).length,
                      all: [...game.messages].filter(m => !from.has(m.id)).length };
     // ⏪ RE-VALUED 2026-08-28 — 100 → 40, and the reason is a RULING, not a regression. Five rounds of
     // 20 + BTM into an arm still resolve to 100 points of flesh damage; what changed is what may be
@@ -261,8 +263,11 @@ const res = await page.evaluate(async () => {
     // stay on the per-damage-event cadence. A five-round burst therefore closes its ledger with the
     // progression card, the ONE mortal prompt and the ONE stun prompt — the pair the cadence now owes.
     // Counted by NAME as well as in total, so "three cards" can never be satisfied by three of anything.
-    ok("§6 three cards in total — the progression card and the mortal/stun prompt PAIR the ledger owes",
-       totals.all === 3 && totals.stun === 1, JSON.stringify(totals));
+    // ⏪ RE-VALUED 2026-10-26 — 3 → 4 cards, the fourth named too: every apply now posts its RECEIPT card
+    // (user ruling 2026-10-22, c774a07, combat/damage-receipt.js — the rows as written, View and Undo),
+    // flagged `damageReceipt`. One apply, one receipt, beside the ledger's own three.
+    ok("§6 four cards in total — the progression card, the mortal/stun prompt PAIR the ledger owes, and the apply's receipt",
+       totals.all === 4 && totals.stun === 1 && totals.receipt === 1, JSON.stringify(totals));
     await wipeSince(from);
     await target.update({ "system.damage": 0 });
     await target.unsetFlag(SCOPE, "fleshLimbStatus").catch(() => {});

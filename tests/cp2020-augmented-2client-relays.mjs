@@ -166,34 +166,36 @@ try {
   }, { fnStr, arg, target });
 
   // ===== A2: damage relay =====
-  // ⭐ REALIGNED to the retirement of the world-wide auto-apply route (user ruling 2026-08-14;
-  // cp2020-augmented.js:457-466, settings.js:254; certified in its own right by
-  // cp2020-augmented-autoapply-retired). What crosses the socket is no longer "apply this damage" —
-  // the relay's only surviving mode is `"resolved"` (damage-hooks.js:3350-3352: the `"auto"` mode
-  // went with the setting that selected it). The shape now is:
+  // ⭐ REALIGNED TWICE. First to the retirement of the world-wide auto-apply route (user ruling 2026-08-14;
+  // certified in its own right by cp2020-augmented-autoapply-retired): what crosses the socket is never
+  // "apply this damage" unattended. Then to THE SEAT RULE (user ruling 2026-10-22, c774a07,
+  // combat/damage-receipt.js openDamageWindowAtSeat): the apply window opens at the TARGET's seat — the
+  // figure's own connected player, else the referee's primary session — not on the client that fired.
   //
-  //   the FIRING client opens the confirmation window (damage-hooks.js:613, on the local
-  //   `weaponFired` hook, after `presentationSettled`) → the player fills it and presses Apply →
-  //   the RESOLVED rows relay to the ACTIVE GM, which is the only client that writes the target
-  //   (damage-hooks.js:3333 active-GM gate, :3357-3365 the apply loop).
+  //   the player fires at a GM-owned NPC → the firing client hands the window over the socket
+  //   (`openDamageWindow`, no player seat on an NPC) → the REFEREE's window opens, writes nothing by
+  //   itself → the referee presses Apply → the referee's client writes the target and posts the receipt.
   //
-  // So the window is on the PLAYER page, not the GM's, and the old leg polled the GM's actor for a
-  // value that nothing was going to write unattended. Both halves are now driven and asserted: the
-  // player's window opens and writes nothing by itself, and the GM ends up holding the exact value.
+  // So the window is on the GM page, not the player's, and both halves are driven and asserted: the
+  // window appears at the seat (and NOT on the firing client), nothing is written before it is answered,
+  // and the GM ends up holding the exact value.
   await fireWeapon({ attackerId: S.pcId, targetActorId: S.npcId, targetTokenId: S.npcTokenId,
                      areaDamages: { Torso: [{ damage: 20 }] }, weaponName: "PW Rifle" });
   {
     const damageOnGM = () => gm.evaluate((id) => Number(game.actors.get(id)?.system?.damage) || 0, S.npcId);
     // Diagnostics that make a red here name its own cause instead of reading as "the relay is broken":
-    // the relayed write is performed by the ACTIVE GM only (damage-hooks.js:3333), so which client
-    // holds that role, and whether the player's window actually emitted, are the two facts needed.
+    // the hand-over is performed by the firing client's socket emit and answered by the PRIMARY GM session,
+    // so what the player emitted, and which client holds that role, are the two facts needed.
     await pl.evaluate(() => {
       const g = globalThis.__relaySpy = { emits: [] };
       const orig = game.socket.emit.bind(game.socket);
-      game.socket.emit = (ch, data, ...rest) => { try { g.emits.push({ ch, type: data?.type, mode: data?.mode, total: data?.totalApplied }); } catch (e) { /* opaque */ } return orig(ch, data, ...rest); };
+      game.socket.emit = (ch, data, ...rest) => { try { g.emits.push({ ch, type: data?.type, mode: data?.mode, forUserId: data?.forUserId ?? null }); } catch (e) { /* opaque */ } return orig(ch, data, ...rest); };
     });
-    // The window waits on the FX rail's settle signal, so give it real room (the rail's own cap is 8 s).
-    const w = await pl.evaluate(async () => {
+    const windowsOn = (page) => page.evaluate(() => [...foundry.applications.instances.values()]
+      .filter(a => /DamageDialog/.test(a?.constructor?.name ?? "")).length);
+    // The firing client waits out the FX rail's settle signal before handing the window over, so give it
+    // real room (the rail's own cap is 8 s).
+    const w = await gm.evaluate(async () => {
       const sleep = (ms) => new Promise(res => setTimeout(res, ms));
       const wins = () => [...foundry.applications.instances.values()]
         .filter(a => /DamageDialog/.test(a?.constructor?.name ?? ""));
@@ -201,8 +203,9 @@ try {
       for (let i = 0; i < 200 && wins().length === 0; i++) { await sleep(100); ms += 100; }
       return { opened: wins().length > 0, ms };
     });
-    const atWindow = await damageOnGM();   // the negative: nothing is written before the window is answered
-    const applied = await pl.evaluate(async () => {
+    const onPlayer = await windowsOn(pl);   // the negative: the firing client holds no window for a figure it does not control
+    const atWindow = await damageOnGM();    // the negative: nothing is written before the window is answered
+    const applied = await gm.evaluate(async () => {
       const sleep = (ms) => new Promise(res => setTimeout(res, ms));
       const wins = () => [...foundry.applications.instances.values()]
         .filter(a => /DamageDialog/.test(a?.constructor?.name ?? ""));
@@ -215,22 +218,22 @@ try {
     });
     let v = await damageOnGM();
     for (let i = 0; i < 40 && v === S.baseline.npcDamage; i++) { await new Promise(r => setTimeout(r, 250)); v = await damageOnGM(); }
-    const spy = await pl.evaluate(() => (globalThis.__relaySpy?.emits ?? []).filter(e => e.type === "applyDamage"));
+    const spy = await pl.evaluate(() => (globalThis.__relaySpy?.emits ?? []).filter(e => e.type === "openDamageWindow" || e.type === "applyDamage"));
     const gmRole = await gm.evaluate(() => ({
       activeGM: game.users.activeGM?.name ?? null, me: game.user.name,
       iAmActive: game.users.activeGM?.id === game.user.id,
       activeUsers: game.users.filter(u => u.active).map(u => u.name),
     }));
-    log.push(`A2 relay: player emitted ${JSON.stringify(spy)}`);
-    log.push(`A2 apply role: ${JSON.stringify(gmRole)}`);
+    log.push(`A2 hand-over: player emitted ${JSON.stringify(spy)}`);
+    log.push(`A2 seat role: ${JSON.stringify(gmRole)}`);
     // Exact delta (a double-apply must fail): Torso hit 20, bare NPC (SP 0) → net = max(1, 20 − BTM).
     const expected = S.baseline.npcDamage + Math.max(1, 20 - S.npcBtm);
-    results.A2_window     = { pass: w.opened === true && applied === true,
-      detail: `the firing client opened its confirmation window in ${w.ms}ms and its Apply control was driven (opened=${w.opened}, applied=${applied})` };
+    results.A2_window     = { pass: w.opened === true && onPlayer === 0 && applied === true,
+      detail: `the window opened at the target's seat — the referee's client — in ${w.ms}ms, none on the firing client (${onPlayer}), and its Apply control was driven (opened=${w.opened}, applied=${applied})` };
     results.A2_noPreWrite = { pass: atWindow === S.baseline.npcDamage,
       detail: `nothing written before the window was answered — GM-side damage still ${atWindow} (baseline ${S.baseline.npcDamage})` };
     results.A2_damage     = { pass: v === expected,
-      detail: `the relayed resolution wrote npc damage ${S.baseline.npcDamage}→${v} (expected ${expected}, BTM ${S.npcBtm})` };
+      detail: `the referee's apply wrote npc damage ${S.baseline.npcDamage}→${v} (expected ${expected}, BTM ${S.npcBtm})` };
   }
 
   // ===== A4a: explosion =====

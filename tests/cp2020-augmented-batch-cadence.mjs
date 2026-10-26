@@ -53,7 +53,10 @@ const res = await page.evaluate(async () => {
   const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  if (!game.scenes.active) await game.scenes.contents[0]?.activate();
+  // The battery's canonical scene by NAME, never `contents[0]`: that index sorts by name and an imported
+  // scene ("Animals Gym", 10-21) now sits first — a 50-px, 0.5 m scene the geometry keepers were never
+  // written for (1.2.12 gate).
+  if (!game.scenes.active) await (game.scenes.getName("Foundry Virtual Tabletop") ?? game.scenes.contents[0])?.activate();
   const scene = game.scenes.active ?? game.scenes.contents[0];
 
   const hooks = await import(`/modules/${SCOPE}/module/combat/damage-hooks.js`);
@@ -218,10 +221,14 @@ const res = await page.evaluate(async () => {
     // so a figure dropped to Mortal through this window was never asked whether it was still conscious.
     // The composition is named rather than counted blind, so a future flood cannot hide inside the
     // total: ONE progression card + ONE death prompt + ONE consciousness check, and nothing else.
-    ok("§2 total cards for the whole application is 3 — the progression card and the Mortal PAIR",
-       [...game.messages].filter(m => !from.has(m.id)).length === 3
-       && totals2.progression === 1 && totals2.mortal === 1 && totals2.stun === 1,
-       `${[...game.messages].filter(m => !from.has(m.id)).length} · ${JSON.stringify(totals2)}`);
+    // ⏪ FOUR SINCE 2026-10-26: every apply posts its RECEIPT card as well (user ruling 2026-10-22, c774a07,
+    // combat/damage-receipt.js — the rows as written, View and Undo), flagged `damageReceipt`; one apply, one
+    // receipt, named here like the other three so the total still cannot be satisfied by four of anything.
+    const receipts2 = [...game.messages].filter(m => !from.has(m.id) && !!m.getFlag(SCOPE, "damageReceipt")).length;
+    ok("§2 total cards for the whole application is 4 — the progression card, the Mortal PAIR, and the apply's receipt",
+       [...game.messages].filter(m => !from.has(m.id)).length === 4
+       && totals2.progression === 1 && totals2.mortal === 1 && totals2.stun === 1 && receipts2 === 1,
+       `${[...game.messages].filter(m => !from.has(m.id)).length} · ${JSON.stringify({ ...totals2, receipt: receipts2 })}`);
     await wipeSince(from);
 
     /* ── §3  the persistent same-zone guard ───────────────────────────────────────────────────── */

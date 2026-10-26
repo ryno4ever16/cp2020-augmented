@@ -112,12 +112,15 @@ const OPEN_DAMAGE = {
   /* The books' own damage entries for weapons whose effect is not a die roll — 47 strings / 68
    * items (PACK-DATA-ROT-SWEEP.md class E2). These are faithful transcriptions, not typos.
    * CLOSES WHEN: a data model for non-dice damage is decided (a `damageNote` field or an effect
-   * tag). Editing the 68 strings is not the fix. */
+   * tag). Editing the 68 strings is not the fix.
+   * ⏪ 2026-10-26: four pruned — "1D6+3 (3m)", "5D10AP HEAT + 3D6 frag (5m)", "Chemical (odor)",
+   * "EMP (electronics)" — their items were modelled from the book in 089ea91 (GPz-78 1d6+2 in a 3 m
+   * blast, Anti-Tank 5d10 HEAT, and the two WORDS in `wordWarheads2026_10` below). */
   descriptive: [
-    "1-2 + drugs (sleep)", "10d10 special", "1D6+3 (3m)", "1d6 + special",
+    "1-2 + drugs (sleep)", "10d10 special", "1d6 + special",
     "1d6+1*", "2d6+3 + Mace", "2d6+3 + Stun (-2)", "2d6+3*",
-    "3d6 + special", "3d6*", "4D6 (00)", "4D6 (micromissile)", "4d6+3 (.454)", "5D10AP HEAT + 3D6 frag (5m)",
-    "Blind", "Chemical", "Chemical (odor)", "Deaf", "Drugs", "EMP (electronics)", "EMP Effect", "Entangle",
+    "3d6 + special", "3d6*", "4D6 (00)", "4D6 (micromissile)", "4d6+3 (.454)",
+    "Blind", "Chemical", "Deaf", "Drugs", "EMP Effect", "Entangle",
     "Gas", "Net", "Special", "Special (1D6 splatballs)",
     "Stun", "Stun (.45 LVD)", "Stun (beanbag)", "Stun -3", "Tangle (15mm)", "Varies",
     "Varies (12mm)", "Varies (13mm)", "Varies (25mm)", "Varies (25mm HP)", "Varies (25mm/10ga)", "Varies (30mm)",
@@ -130,6 +133,13 @@ const OPEN_DAMAGE = {
   bookMined2026_08: [
     "Varies (2D6+1 riot / 4D6 urban / 6D6 full combat)", "4D6+2 (00 Buckshot)", "6D6 (#00)",
   ],
+  /* The word warheads modelled 2026-10-23 (089ea91) — 2 strings / 2 items: the EMP Grenade's "EMP" and the
+   * Stench Bomb's "Stench" are damage WORDS the area pipeline reads (combat/area-delivery.js WORD_WARHEADS —
+   * a stun save at −1 plus a timed EMP mark on chromed figures; a COOL-or-Body check plus a Stench mark),
+   * exactly as "Gas" and "Stun" above are. They replaced the books' annotated transcriptions pruned from
+   * `descriptive`. Not rot: the word IS the model. CLOSES WHEN: the non-dice damage model is decided
+   * (same decision as descriptive — these would become the effect tag). */
+  wordWarheads2026_10: ["EMP", "Stench"],
   /* Surfaced at the 1.2.0 gate (2026-08-28) by the first full-tree compile since 2026-07-17 — the
    * books' own non-dice damage entries on July-era imports, same class as `descriptive` above
    * (faithful transcriptions, not typos). The annotated-FORMULA siblings found beside them
@@ -159,10 +169,8 @@ const OPEN_ENUM = {
   "availability|common": 21,
   /* `DEFAULT_WEAPON.concealability` leaking the same way. base:cyberweapons ×12, base:cyberlimbs ×6. */
   "concealability|P": 18,
-  /* base:smgs-add ×3. Cosmetic only: "standard" IS recognised by reliabilityThreshold (→5), so no
-   * dice change; it is the sheet select that cannot round-trip it. The pack normalization RULE
-   * covers pistols-add/rifles-add only, and smgs-add is deliberately outside it. */
-  "reliability|standard": 3,
+  /* ⏪ "reliability|standard": 3 (base:smgs-add ×3, cosmetic — the sheet select could not round-trip it)
+   * PRUNED 2026-10-26: the lint reported the value no longer present in the data at the 1.2.12 gate. */
 };
 
 /* ── Literal placeholder strings — 1 path / 4 items ────────────────────────────────────────────

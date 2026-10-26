@@ -202,12 +202,24 @@ try {
 
   // ===== SCENARIO 2 (RELAY): player fires at the GM-owned suit =====
   const cardsB0 = await cardCount(S.suitBId);
+  // Relay diagnostics (1.2.12 gate, 2026-10-26: "pilot overflow DID NOT land" in a battery, green before): the
+  // election as the referee's page sees it, and what the player's page actually emitted — so a red names "not the
+  // primary session" / "nothing emitted" / "emitted, not applied" instead of "the relay is broken".
+  const electionBefore = await gm.evaluate(async () =>
+    (await import("/modules/cp2020-augmented/module/gm-session-primary.js")).gmSessionPrimaryState());
+  await pl.evaluate(() => {
+    const g = globalThis.__relaySpy = { emits: [] };
+    const orig = game.socket.emit.bind(game.socket);
+    game.socket.emit = (ch, data, ...rest) => { try { g.emits.push({ ch, type: data?.type ?? null, target: data?.targetActorId ?? null }); } catch (e) { /* opaque */ } return orig(ch, data, ...rest); };
+  });
   await fire(S.suitBId, S.suitBTokenId);
   const relay = await pollPilot(S.pilotBId, S.pilotB0);
   const frameB = await pollFrameChange(S.suitBId, S.frameB0);
   const cardsBAfter = await cardCount(S.suitBId);
   const relayFrameChanged = frameB.changed;
+  const emitted = await pl.evaluate(() => (globalThis.__relaySpy?.emits ?? []).filter((e) => e.type === "vehicleDamage"));
   log.push(`RELAY: pilotB ${S.pilotB0}→${relay.v} in ${relay.ms}ms; suitB frame ${JSON.stringify(S.frameB0)}→${JSON.stringify(frameB.frame)} (changed=${relayFrameChanged} @${frameB.ms}ms); suitB cards ${cardsB0}→${cardsBAfter}`);
+  log.push(`relay diagnostics: player emitted ${JSON.stringify(emitted)}; referee election ${JSON.stringify(electionBefore)}`);
   results.relay_pilot_overflow = {
     pass: relay.v > S.pilotB0,
     detail: `player→GM vehicleDamage relay: applyVehicleDamageMM runs GM-side, pilot overflow ${relay.v > S.pilotB0 ? `LANDED (${S.pilotB0}→${relay.v})` : `DID NOT land (stayed ${relay.v})`}`,

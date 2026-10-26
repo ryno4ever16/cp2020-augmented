@@ -38,6 +38,14 @@ const out = await page.evaluate(async () => {
   const msgs = game.messages.contents.filter(m => stray.test(m.speaker?.alias ?? "") || /__PW__|__PROBE__|__GYM__/.test(m.content ?? "")).map(m => m.id);
   if (msgs.length) await ChatMessage.deleteDocuments(msgs).catch(() => {});
   r.swept = { combats: combats.length, tokens, actors: actors.length, items: items.length, scenes: scenes.length, messages: msgs.length };
+  // THE BATTERY'S CANONICAL SCENE, by name. A keeper that deletes its own activated fixture scene leaves the world with
+  // no active scene, and the next keeper's `contents[0]` fallback then picks whatever sorts first — "Animals Gym"
+  // (imported 10-21: 50-px squares, 0.5 m, a 1920×1080 playable rect) sat active under most of the 1.2.12 gate, and two
+  // geometry keepers written for the 100-px bench scene read it as product faults. Activation is this tool's job, never
+  // a keeper's (rig-keeper skill): put it back here, and verify from a second session if it matters.
+  r.activeSceneBefore = game.scenes.active?.name ?? null;
+  const canon = game.scenes.getName("Foundry Virtual Tabletop");
+  if (canon && !canon.active) { await canon.activate().catch(() => {}); await new Promise(res => setTimeout(res, 3000)); }
   r.activeScene = game.scenes.active?.name ?? null;
   return r;
 });

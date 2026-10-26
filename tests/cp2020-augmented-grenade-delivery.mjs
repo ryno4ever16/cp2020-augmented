@@ -1609,7 +1609,15 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
           try { if (catcher.statuses?.has?.(s)) await catcher.toggleStatusEffect(s, { active: false }); } catch (_e) {}
         }
       };
-      const dropArea = async (area) => { try { await area.delete(); } catch (_e) {} };
+      // Delete the LIVE document, looked up fresh by id — a delete issued against a handle whose server
+      // copy is already gone is answered "does not exist in the EmbeddedCollection" and surfaces as a
+      // console error through core's notification mirror (seen once at the 1.2.12 gate, during §13(f)),
+      // whichever side removed it first. Nothing to delete is nothing to do.
+      const dropArea = async (area) => {
+        const live = area?.id ? allAreas().find(d => d.id === area.id) : null;
+        if (!live) { out.notes.push(`drop: area ${area?.id ?? "?"} already gone`); return; }
+        try { await live.delete(); } catch (_e) {}
+      };
 
       /* ── (a) THE RECORD: every rider field on the area, beside the armour statements ────────────── */
       const recArea = await placeBlast({ ...RIDERS, ...ARMOUR });
@@ -1771,11 +1779,19 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       }
       await game.settings.set(SCOPE, "explosivesDetailed", false);
     } finally {
-      if (combat13) await combat13.delete().catch(() => {});
+      // ⏪ ORDER (2026-10-26, 1.2.12 gate): the encounter used to go first and the figure's token right after it,
+      // and twice in three runs the server answered the token's deletion with "undefined id [token] does not exist
+      // in the EmbeddedCollection collection" (+ a crash in its backend) — a write still pending against the token
+      // id once the token was gone, surfaced to the client as a console error. The token goes FIRST, while its
+      // encounter is live (core's own combatant cascade runs against an existing Combat), the areas and the
+      // encounter follow after a settle, the actor last.
+      if (catchTok) await catchTok.delete().catch(() => {});
+      await sleep(600);
       for (const d of (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])])) {
         if (F(d).isExplosion) await d.delete().catch(() => {});
       }
-      if (catchTok) await catchTok.delete().catch(() => {});
+      if (combat13) await combat13.delete().catch(() => {});
+      await sleep(600);
       if (catcher) await catcher.delete().catch(() => {});
       for (const [k, v] of Object.entries(prev13)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
     }
@@ -1860,7 +1876,15 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
           try { if (body.statuses?.has?.(s)) await body.toggleStatusEffect(s, { active: false }); } catch (_e) {}
         }
       };
-      const dropArea = async (area) => { try { await area.delete(); } catch (_e) {} };
+      // Delete the LIVE document, looked up fresh by id — a delete issued against a handle whose server
+      // copy is already gone is answered "does not exist in the EmbeddedCollection" and surfaces as a
+      // console error through core's notification mirror (seen once at the 1.2.12 gate, during §13(f)),
+      // whichever side removed it first. Nothing to delete is nothing to do.
+      const dropArea = async (area) => {
+        const live = area?.id ? allAreas().find(d => d.id === area.id) : null;
+        if (!live) { out.notes.push(`drop: area ${area?.id ?? "?"} already gone`); return; }
+        try { await live.delete(); } catch (_e) {}
+      };
       // The concussion application's own receipt, scoped to THIS body: the p.105 card names the figure
       // and says "concussion". Its presence is the branch the routing chose, stated by the code itself.
       // ⚠ THE BLAST'S OWN RESOLUTION CARD IS EXCLUDED BY NAME (2026-08-28). Since the detonation grew a
@@ -2030,7 +2054,11 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       };
       const cardFor = (areaId) => [...game.messages].reverse()
         .find(m => (m.content ?? "").includes(`data-template-id="${areaId}"`)) ?? null;
-      const dropArea15 = async (a) => { try { await a.delete(); } catch (_e) { /* gone */ } };
+      const dropArea15 = async (a) => {   // the live document by id, or nothing (see dropArea above)
+        const live = a?.id ? allAreas().find(d => d.id === a.id) : null;
+        if (!live) { out.notes.push(`§15 drop: area ${a?.id ?? "?"} already gone`); return; }
+        try { await live.delete(); } catch (_e) { /* gone */ }
+      };
 
       /* ── a. a MISS resolves its own landing, and the blast is created THERE ─────────────────── */
       const aimAtMiss = aimPoint();

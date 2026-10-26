@@ -31,7 +31,8 @@ const r = await p.evaluate(async () => {
   const out = { err: null };
   const sleep = (ms) => new Promise(res => setTimeout(res, ms));
   try {
-    if (!canvas?.scene) { const sc = game.scenes.contents[0]; if (sc) { await sc.activate(); await sleep(1500); } }
+    // the battery's canonical scene by NAME, never `contents[0]` (sorts by name; "Animals Gym" sits first now — 1.2.12 gate)
+    if (!canvas?.scene) { const sc = game.scenes.getName("Foundry Virtual Tabletop") ?? game.scenes.contents[0]; if (sc) { await sc.activate(); await sleep(1500); } }
 
     const L = await import("/modules/cp2020-augmented/module/lookups.js");
 

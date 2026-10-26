@@ -62,9 +62,11 @@ try {
       const flag = (a, k) => a.getFlag(SCOPE, k);
 
       // source-shape: the wiring is in the served code. The relay emit lives in its single home
-      // (martial.js applyOrRelayMartialEffect — the sheet and the offer-card buttons both delegate).
-      const asheet = await (await fetch(`${M}/actor/actor-sheet.js`, { cache: "no-store" })).text();
-      ok("A6 onConfirm calls the effect helper", /_cpApplyOrRelayMartialEffect\(action, targetActor\)/.test(asheet), true);
+      // (martial.js applyOrRelayMartialEffect). Since every melee attack is opposed (ac74791 / 6320db0),
+      // the effect is applied from the contest VERDICT (melee-contest.js), not from the sheet's onConfirm
+      // — the sheet's own call went with the pre-verdict apply that was reported from the table.
+      const contest = await (await fetch(`${M}/martial/melee-contest.js`, { cache: "no-store" })).text();
+      ok("A6 the contest verdict calls the effect helper", /applyOrRelayMartialEffect\(f\.action, defender, attacker\)/.test(contest), true);
       const msrc = await (await fetch(`${M}/martial/martial.js`, { cache: "no-store" })).text();
       ok("A6 helper emits martialEffect relay", /type: "martialEffect"/.test(msrc), true);
       const dhooks = await (await fetch(`${M}/combat/damage-hooks.js`, { cache: "no-store" })).text();

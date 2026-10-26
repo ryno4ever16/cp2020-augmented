@@ -90,8 +90,13 @@ try {
       await game.settings.set(SCOPE, "ipRawTracking", true);
       await game.settings.set(SCOPE, "ipQueue", []);
 
-      for (const x of game.actors.filter(x => x.name === "RIG F8 IP")) await x.delete().catch(() => {});   // pre-sweep prior run
-      actor = await Actor.create({ name: "RIG F8 IP", type: "character" });
+      for (const x of game.actors.filter(x => x.name === "RIG F8 IP" || x.name === "RIG F8 IP (no player)")) await x.delete().catch(() => {});   // pre-sweep prior run
+      // ⏪ 2026-10-26: the tracker follows PLAYER characters only (ip.js isTrackedActor = hasPlayerOwner, user
+      // ruling 2026-10-22, ac74791) — a figure no player owns reports nothing. The fixture is player-owned, and
+      // the GM-only figure beside it is the negative.
+      const player = game.users.find(u => !u.isGM);
+      ok("harness: a non-GM user exists to own the fixture", !!player, player?.name);
+      actor = await Actor.create({ name: "RIG F8 IP", type: "character", ownership: { default: 0, [player.id]: 3 } });
       const skill = actor.items.find(i => i.type === "skill");
       ok("character has a rollable skill", !!skill, skill?.name);
 
@@ -107,6 +112,18 @@ try {
       ok("roll card produced a numeric total", typeof cardTotal === "number", cardTotal);
       ok("queue row total equals the roll card total (real total flowed)", !!row && row.total === cardTotal, `row=${row?.total} card=${cardTotal}`);
       ok("queue row total is NOT 0 (the F8 bug)", !!row && row.total !== 0, row?.total);
+
+      // the negative: a figure no player owns rolls the same way and records nothing
+      const npc = await Actor.create({ name: "RIG F8 IP (no player)", type: "character" });
+      try {
+        const nskill = npc.items.find(i => i.type === "skill");
+        const before = (game.settings.get(SCOPE, "ipQueue") || []).length;
+        await npc.rollSkill(nskill.id);
+        await new Promise(r => setTimeout(r, 1500));
+        const after = (game.settings.get(SCOPE, "ipQueue") || []);
+        ok("a roll by a figure no player owns records no queue row (player characters only)",
+           after.length === before && !after.some(r => r.actorId === npc.id), `queue ${before}→${after.length}`);
+      } finally { await npc.delete().catch(() => {}); }
     } catch (e) { out.error = e?.stack || e?.message || String(e); }
     finally {
       try { if (capHook) Hooks.off("createChatMessage", capHook); } catch {}

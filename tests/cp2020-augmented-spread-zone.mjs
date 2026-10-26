@@ -714,11 +714,16 @@ const res = await page.evaluate(async () => {
   // a near miss — a plant that ignored the declaration would point east instead. A second figure is put
   // down that line so the shot has somebody to resolve against, and the aim is taken at ITS centre,
   // which is also what exercises the overshoot rule by value.
-  const shooterC = { x: shooterTok.x + 50, y: shooterTok.y + 50 };
+  // ⏪ 2026-10-26 (1.2.12 gate): this read `x + 50`, half of a 100-px square typed by hand — and the active scene the
+  // battery runs on carries a 50-px grid, so the "centre" sat a quarter-square off the figure's real centre and every
+  // corridor measured from it came out 0.25 m long on both axes (3 m asked → 3.26 m confirmed, nine legs). The
+  // centre is the placeable's own, and the half-square comes from the scene's grid.
+  const shooterC = (() => { const c = canvas.tokens.get(shooterTok.id)?.center; return { x: c?.x ?? shooterTok.x, y: c?.y ?? shooterTok.y }; })();
+  const halfSquarePx = (Number(scene.grid?.size) || 100) / 2;
   const aimReachPx = 300;
   const [downrange] = await scene.createEmbeddedDocuments("Token", [{
     name: "__PWK__SPREAD Downrange", actorId: (await Actor.create({ name: "__PWK__SPREAD Downrange Actor", type: "character" })).id,
-    x: shooterC.x - 50, y: shooterC.y + aimReachPx - 50, width: 1, height: 1,
+    x: shooterC.x - halfSquarePx, y: shooterC.y + aimReachPx - halfSquarePx, width: 1, height: 1,
   }]);
   await sleep(300);
   const aimWorld = { x: shooterC.x, y: shooterC.y + aimReachPx };

@@ -142,8 +142,13 @@ try {
     }]);
 
     const gs = scene.grid?.size ?? 100;
-    // Shooter near a known world point; victim placed NORTH of the future east-running lane (outside it).
-    const sx = 1500, sy = 1500;
+    // Shooter at the MIDDLE OF THE SCENE'S OWN RECT, not at a typed world point: the placement's preConfirm
+    // refuses a square whose anchor is off the map (the padding is off the map), silently to a keeper that
+    // reads no toasts — on a smaller active scene (1.2.12 gate: "Animals Gym", playable rect from (500,300))
+    // a shooter typed at (1500,1500) stood in the padding and the player's confirm never landed, four runs
+    // running. Victim placed NORTH of the future east-running lane (outside it).
+    const rect = scene.dimensions?.sceneRect ?? { x: 0, y: 0, width: scene.width, height: scene.height };
+    const sx = Math.round(rect.x + rect.width / 2), sy = Math.round(rect.y + rect.height / 2);
     const [shooterTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__XCShooter", actorId: shooter.id, actorLink: true, x: sx - gs / 2, y: sy - gs / 2, width: 1, height: 1, disposition: 1 }]);
     const [victimTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__XCVictim", actorId: victim.id, actorLink: true, x: sx - gs / 2, y: sy - 400 - gs / 2, width: 1, height: 1, disposition: -1 }]);
     for (let i = 0; i < 25 && !(canvas?.tokens?.get(shooterTok.id) && canvas?.tokens?.get(victimTok.id)); i++) await sleep(120);
@@ -255,8 +260,37 @@ try {
   log.push(`player click hit-test at (${Math.round(aim.x)},${Math.round(aim.y)}): ${JSON.stringify(hit)}`);
   check("(c) PLAYER page: the aim point hit-tests to the board canvas (the canvas-event gate's premise)",
     hit.isView === true || hit.id === "board", JSON.stringify(hit));
+  // Relay diagnostics (1.2.12 gate, 2026-10-26: "region never planted" in a battery, green alone): the election as
+  // the referee's page sees it, and what the player's page actually emitted — so a red names "not the primary
+  // session" / "nothing emitted" / "emitted, not planted" instead of "the relay is broken".
+  const electionBefore = await gm.evaluate(async () =>
+    (await import("/modules/cp2020-augmented/module/gm-session-primary.js")).gmSessionPrimaryState());
+  await pl.evaluate(() => {
+    const g = globalThis.__relaySpy = { emits: [] };
+    const orig = game.socket.emit.bind(game.socket);
+    game.socket.emit = (ch, data, ...rest) => { try { g.emits.push({ ch, type: data?.type ?? null }); } catch (e) { /* opaque */ } return orig(ch, data, ...rest); };
+  });
+  const readoutBeforeClick = await pl.evaluate(() => !!document.querySelector(".cp-supp-preview-readout"));
+  // What the window actually receives from the real click — registered in the capture phase AFTER the preview's
+  // own listener, so it also sees whether that listener stopped the event. Null = no pointerdown reached the
+  // window at all (the harness's event), a record = it arrived, with its target and button.
+  await pl.evaluate(() => {
+    globalThis.__clickProbe = null;
+    window.addEventListener("pointerdown", (e) => {
+      globalThis.__clickProbe = { type: e.type, button: e.button, targetId: e.target?.id ?? null, targetTag: e.target?.tagName ?? null,
+        isView: e.target === canvas?.app?.view, x: e.clientX, y: e.clientY, defaultPrevented: e.defaultPrevented };
+    }, true);
+  });
   await pl.mouse.down();                              // onDown(button 0) → confirm() → relay to GM
   await pl.mouse.up();
+  await sleep(400);
+  const clickProbe = await pl.evaluate(() => globalThis.__clickProbe);
+  log.push(`window pointerdown probe: ${JSON.stringify(clickProbe)}`);
+  // Is the preview still armed after the click? Readout still there = the click never reached onDown (the
+  // listener, or the canvas-event gate); readout gone = teardown ran (confirm, or a cancel from a canvas
+  // teardown / Escape / a re-arm). Named so a red says which.
+  const readoutAfterClick = await pl.evaluate(() => !!document.querySelector(".cp-supp-preview-readout"));
+  log.push(`preview readout before click=${readoutBeforeClick} after click=${readoutAfterClick}`);
 
   const planted = await pollEval(gm, (arg) => {
     const scene = game.scenes.get(arg.sceneId);
@@ -272,6 +306,8 @@ try {
     };
   }, { sceneId: S.sceneId, before: regionsBefore }, { timeout: 12_000 });
   log.push(`GM plant: ${JSON.stringify(planted)}`);
+  const emitted = await pl.evaluate(() => (globalThis.__relaySpy?.emits ?? []).filter((e) => /suppressive/i.test(e.type ?? "")));
+  log.push(`relay diagnostics: player emitted ${JSON.stringify(emitted)}; referee election ${JSON.stringify(electionBefore)}`);
   check("(c) GM page: a Region carrying the suppressiveFire behavior was planted", !!planted?.id, JSON.stringify(planted));
   check("(c) GM page: behavior saveDC=3, attackerId=shooter, weaponName carried", planted && planted.saveDC === 3 && planted.attackerId === S.shooterId && planted.weaponName === S.weaponName, JSON.stringify(planted));
   check("(c) GM page: region visibility is ALWAYS", planted && planted.visibility === planted.alwaysConst, JSON.stringify(planted));
