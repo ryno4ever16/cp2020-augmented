@@ -4144,7 +4144,7 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
   // token's OWN facing, which every drawn token carries — so this never falls back to a shape.
   const aimRad = (aim && Number.isFinite(aim.x) && Number.isFinite(aim.y))
     ? Math.atan2(aim.y - origin.y, aim.x - origin.x)
-    : facingRad(placeable.document?.rotation);
+    : facingRad(storedRotationDeg(placeable.document));
 
   // Already flashing → restart the envelope in place and re-point it. One source set per token.
   // The SOURCES are not rebuilt here, so a restart keeps the colour the first round of the burst
@@ -4916,7 +4916,19 @@ export function aimPointOf(shooterToken, targetToken, gridSizePx = 100) {
   if (!from) return null;
   const doc = shooterToken?.document ?? shooterToken;
   const px = (Number(gridSizePx) > 0 ? Number(gridSizePx) : 100) * FACING_AIM_SQUARES;
-  return facingAimPoint(from, doc?.rotation, px);
+  return facingAimPoint(from, storedRotationDeg(doc), px);
+}
+
+/**
+ * The rotation a token is STORED at, in degrees — read from `_source`, never from the prepared document.
+ * The core sweeps the prepared `rotation` toward a new angle over about half a second (the vehicle rail
+ * measured 29.988 while 37 was stored — vehicle-canvas.js tokenHeadingOf), so a facing read right after a
+ * turn is a frame of the way there: a west-facing shooter's untargeted pattern was thrown north-west at
+ * the 1.2.12 gate. Every facing on this rail and the plant's fallback read through this.
+ */
+export function storedRotationDeg(doc) {
+  const stored = doc?._source?.rotation;
+  return Number(Number.isFinite(stored) ? stored : doc?.rotation) || 0;
 }
 
 /**

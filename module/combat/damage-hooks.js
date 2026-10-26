@@ -4018,7 +4018,13 @@ export async function _placeSpreadZone(payload) {
       // presentation rail answers the same question the same way (fx/effects.js facingRad). The band
       // stays Medium because an untargeted shot names no distance to measure.
       lengthM = 10;
-      angleDeg = Math.round(((Number(atk.document?.rotation ?? atk.rotation) || 0) + 90) % 360);
+      // ⚠ THE STORED ROTATION, not the prepared one: the core sweeps `doc.rotation` toward a new angle over
+      // about half a second (vehicle-canvas.js tokenHeadingOf, rig-measured), so a shooter who turned and
+      // fired at once got a corridor on a mid-turn heading (spread-zone §7, 1.2.12 gate: a west-facing
+      // figure's pattern thrown north-west). The angle the shooter chose is the one in `_source`.
+      const atkDoc = atk.document ?? atk;
+      const storedRot = atkDoc?._source?.rotation;
+      angleDeg = Math.round(((Number(Number.isFinite(storedRot) ? storedRot : atkDoc?.rotation) || 0) + 90) % 360);
       let distM = null;
       const tgt = payload.targetTokenId ? canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId) : null;
       if (tgt) {

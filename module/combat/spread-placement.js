@@ -180,7 +180,11 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
   // screen before the first mouse move rather than appearing only once the cursor twitches. The same
   // reading the plant falls back to for an untargeted shot (a token's rotation is the only statement of
   // "which way" it is looking), so the two agree on the one frame before the shooter takes over.
-  const facingDeg = ((Number(shooterToken.document?.rotation ?? shooterToken.rotation) || 0) + 90) % 360;
+  // The STORED rotation (`_source`), not the prepared one — the core sweeps `doc.rotation` toward a new angle
+  // over about half a second (vehicle-canvas.js tokenHeadingOf), and the plant reads the same stored value.
+  const shooterDoc = shooterToken.document ?? shooterToken;
+  const storedFacing = shooterDoc?._source?.rotation;
+  const facingDeg = ((Number(Number.isFinite(storedFacing) ? storedFacing : shooterDoc?.rotation) || 0) + 90) % 360;
   const state = {
     angleDeg: facingDeg,
     reachPx: metersToPixels(scene, 10),
