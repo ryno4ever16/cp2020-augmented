@@ -2052,10 +2052,17 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
         // ⭐ THE GEOMETRY, MEASURED: the placed centre is the aim point plus exactly the recorded drift.
         const placed = { x: Number(f.originX), y: Number(f.originY) };
         const measuredM = Math.hypot(placed.x - Number(f.aimedX), placed.y - Number(f.aimedY)) / ppm;
-        out.notes.push(`§15 miss landed ${Number(f.scatterDriftM)}m ${f.scatterDirName} (measured ${measuredM.toFixed(2)}m)`);
+        out.notes.push(`§15 miss landed ${Number(f.scatterDriftM)}m ${f.scatterDirName} (measured ${measuredM.toFixed(2)}m; rolled ${f.scatterRolledDriftM}m, clamped=${f.scatterClamped})`);
+        // ⏪ 2026-10-26 (1.2.12 gate): a 10 m roll due south off a figure near the bottom of the map was held at
+        // the edge by the placement clamp and the record still said 10 m. The record now states the distance
+        // the centre ACTUALLY moved and keeps the roll beside it (scatter-table.js scatterLandedPoint), so this
+        // leg holds at the edge too — and the edge case is named, not hidden.
         ok("§15 ⭐ DETERMINISM — the distance the area RECORDS is the distance it actually moved",
           Math.abs(measuredM - Number(f.scatterDriftM)) < 0.05,
           `recorded ${f.scatterDriftM}m vs measured ${measuredM.toFixed(3)}m`);
+        ok("§15 the roll is kept beside the record: equal to it off the edge, never less than it at the edge",
+          Number(f.scatterRolledDriftM) >= Number(f.scatterDriftM) && (f.scatterClamped === true || Number(f.scatterRolledDriftM) === Number(f.scatterDriftM)),
+          `rolled ${f.scatterRolledDriftM}m recorded ${f.scatterDriftM}m clamped=${f.scatterClamped}`);
         if (Number(f.scatterDriftM) > 0) {
           ok("§15 a drifted blast is NOT centred on the aim point (negative)",
             !(Math.abs(placed.x - Number(f.aimedX)) < 0.5 && Math.abs(placed.y - Number(f.aimedY)) < 0.5),

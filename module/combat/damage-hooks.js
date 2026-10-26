@@ -2490,7 +2490,7 @@ async function _placeGasCloud(payload) {
         dirFace: dirRoll.total, distFace: distRoll.total,
         sceneRect: { x: 0, y: 0, width: scene.width, height: scene.height },
       });
-      scatter = { driftM: landed.driftM, dirName: landed.dirName, dirFace: landed.dirFace, clamped: landed.clamped };
+      scatter = { driftM: landed.driftM, rolledDriftM: landed.rolledDriftM, dirName: landed.dirName, dirFace: landed.dirFace, clamped: landed.clamped };
       cloudX = landed.x; cloudY = landed.y;
     }
 
@@ -2515,7 +2515,10 @@ async function _placeGasCloud(payload) {
       originX: cloudX, originY: cloudY, aimedX, aimedY,
       scattered: !!scatter,
       scatterDirFace: scatter ? scatter.dirFace : 0,
+      // the distance it ACTUALLY moved (the map's edge may have held it short of the roll, which is kept beside it)
       scatterDriftM: scatter ? scatter.driftM : 0,
+      scatterRolledDriftM: scatter ? scatter.rolledDriftM : 0,
+      scatterClamped: !!scatter?.clamped,
       scatterDirName: scatter ? scatter.dirName : "",
     };
     const descriptor = {
@@ -3241,7 +3244,7 @@ async function _placeExplosion(payload, { settled = false } = {}) {
         // scene is a blast nobody can read, and no figure can be standing there to catch it.
         sceneRect: { x: 0, y: 0, width: scene.width, height: scene.height },
       });
-      scatter = { driftM: landed.driftM, dirName: landed.dirName, dirFace: landed.dirFace, clamped: landed.clamped };
+      scatter = { driftM: landed.driftM, rolledDriftM: landed.rolledDriftM, dirName: landed.dirName, dirFace: landed.dirFace, clamped: landed.clamped };
       cx = landed.x;
       cy = landed.y;
     }
@@ -3271,7 +3274,10 @@ async function _placeExplosion(payload, { settled = false } = {}) {
         // falsy for `scattered`, and confirms exactly as it always did.
         scattered: !!scatter,
         scatterDirFace: scatter ? scatter.dirFace : 0,
+        // the distance it ACTUALLY moved (the map's edge may have held it short of the roll, kept beside it)
         scatterDriftM: scatter ? scatter.driftM : 0,
+        scatterRolledDriftM: scatter ? scatter.rolledDriftM : 0,
+        scatterClamped: !!scatter?.clamped,
         scatterDirName: scatter ? scatter.dirName : "",
         aimedX, aimedY,
         // ⭐ THE LOAD'S PER-HIT RIDERS TRAVEL WITH THE BLAST (2026-08-28). The flags above are the
@@ -4137,7 +4143,10 @@ export async function _placeSpreadZone(payload) {
         // hurts whoever is standing in it exactly as an aimed one does.
         scattered: !!scatter,
         scatterDirFace: scatter ? scatter.dirFace : 0,
+        // the distance it ACTUALLY moved (the map's edge may have held it short of the roll, kept beside it)
         scatterDriftM: scatter ? scatter.driftM : 0,
+        scatterRolledDriftM: scatter ? scatter.rolledDriftM : 0,
+        scatterClamped: !!scatter?.clamped,
         // ⭐ HAS THE PRESENTATION RAIL ALREADY LIT THIS CORRIDOR'S GROUND? (2026-08-19 ruling — the fires
         // moved onto the shot's own arrival clock.) Recorded for the same reason the geometry and the
         // load key above are: the pattern OUTLIVES the payload, and at confirm time there is nothing

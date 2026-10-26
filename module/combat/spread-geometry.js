@@ -231,7 +231,7 @@ export function scatteredSpreadCorridor({
   // The landed centre comes from the SHARED site (combat/scatter-table.js), because the presentation
   // rail asks the same question of the same two faces and derives the point the rounds fly to. Two
   // derivations — even from identical dice — part company at the clamp.
-  const { x: aimX, y: aimY, driftM, dirName, dirFace: face, clamped } = scatterLandedPoint({
+  const { x: aimX, y: aimY, driftM, rolledDriftM, dirName, dirFace: face, clamped } = scatterLandedPoint({
     aimedX, aimedY, pixelsPerMeter: ppm, dirFace, distFace, sceneRect,
   });
 
@@ -243,6 +243,6 @@ export function scatteredSpreadCorridor({
     lengthM: Math.max(SPREAD_MIN_LENGTH_M, reachM + (Number(overshootM) || 0)),
     widthM: Math.max(SPREAD_MIN_WIDTH_M, spec.widthM),
     band: spec.band,
-    aimX, aimY, driftM, dirName, dirFace: face, clamped,
+    aimX, aimY, driftM, rolledDriftM, dirName, dirFace: face, clamped,
   };
 }

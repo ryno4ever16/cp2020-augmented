@@ -2481,11 +2481,19 @@ const res = await page.evaluate(async () => {
         anyScatterNote().length === 1, `${anyScatterNote().length} scatter notices`);
       ok("§17 the missed shot finished its own presentation and posted its card (the shot really ran)",
         missCarded === true, String(missCarded));
-      ok("§17 and the pattern really did take those faces, so the notification describes what happened",
-        myZones()[0]?.flags?.[SCOPE]?.scattered === true
-        && Number(myZones()[0]?.flags?.[SCOPE]?.scatterDirFace) === Number(faces17?.dirFace)
-        && Number(myZones()[0]?.flags?.[SCOPE]?.scatterDriftM) === wantDrift.distanceM,
-        JSON.stringify({ flags: myZones()[0]?.flags?.[SCOPE]?.scatterDirFace, faces: faces17 }));
+      // ⏪ 2026-10-26: the record's `scatterDriftM` is the distance the pattern ACTUALLY moved — the map's edge may
+      // have held it short of the roll — and `scatterRolledDriftM` keeps the roll beside it (scatter-table.js
+      // scatterLandedPoint). The faces are checked against the ROLL; the moved figure can only be the roll or less.
+      {
+        const zf = myZones()[0]?.flags?.[SCOPE] ?? {};
+        const rolled = Number(zf.scatterRolledDriftM ?? zf.scatterDriftM);
+        ok("§17 and the pattern really did take those faces, so the notification describes what happened",
+          zf.scattered === true
+          && Number(zf.scatterDirFace) === Number(faces17?.dirFace)
+          && rolled === wantDrift.distanceM
+          && Number(zf.scatterDriftM) <= rolled && (zf.scatterClamped === true || Number(zf.scatterDriftM) === rolled),
+          JSON.stringify({ dirFace: zf.scatterDirFace, rolled, moved: zf.scatterDriftM, clamped: zf.scatterClamped, faces: faces17 }));
+      }
       await wipeZones(); await wipeCards();
 
       /* §17b — a shot that LANDS says nothing (the negative that makes the positive mean something) */

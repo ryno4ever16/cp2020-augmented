@@ -85,7 +85,11 @@ export function scatterDriftM(dirFace, distFace) {
  * @param {number} args.dirFace  the 1d10 direction face
  * @param {number} args.distFace the 1d10 distance face, in metres
  * @param {{x:number,y:number,width:number,height:number}} [args.sceneRect]
- * @returns {{x:number, y:number, driftM:number, dirName:string, dirFace:number, clamped:boolean}}
+ * @returns {{x:number, y:number, driftM:number, rolledDriftM:number, dirName:string, dirFace:number, clamped:boolean}}
+ *   `driftM` is the distance the centre ACTUALLY moved — the rolled metres, or less (to 0.01 m) when the edge
+ *   of the map stopped it (then `clamped` is true and `rolledDriftM` keeps the table's figure). A record that said
+ *   "10 m" of a landing the edge held at 8.7 m was caught by the delivery keeper's geometry leg (1.2.12 gate):
+ *   the card and the area's flags state what happened, and the roll stays beside it for the reader.
  */
 export function scatterLandedPoint({
   aimedX = 0, aimedY = 0, pixelsPerMeter = 1, dirFace = 1, distFace = 0, sceneRect = null,
@@ -101,7 +105,8 @@ export function scatterLandedPoint({
     clamped = cx !== x || cy !== y;
     x = cx; y = cy;
   }
-  return { x, y, driftM: drift.distanceM, dirName: drift.name, dirFace: drift.face, clamped };
+  const movedM = clamped ? Math.round(Math.hypot(x - aimedX, y - aimedY) / ppm * 100) / 100 : drift.distanceM;
+  return { x, y, driftM: movedM, rolledDriftM: drift.distanceM, dirName: drift.name, dirFace: drift.face, clamped };
 }
 
 /**
