@@ -1520,6 +1520,20 @@ export function martialOptions(actor, savedOptions={}) {
         return { value: m.value, label: m.label ?? m.value };
       }))
     ];
+    // The base's trainedMartials() drops the thirteen Friday Night Fistfight 2 styles while the optional rule
+    // is off. A trained style is offered whatever the rule says — the rule selects the math the base applies,
+    // never which style a player may declare — so the ones the base omitted are appended here, each resolved
+    // by its stable id through the base's own (repaired) lookup and kept only when it carries a level or chip.
+    const offered = new Set(martialChoices.map(c => c.value));
+    const trained = (skill) => (typeof actor.constructor?._hasAnyPositiveSkillValue === "function")
+      ? actor.constructor._hasAnyPositiveSkillValue(skill)
+      : ((Number(skill?.system?.level) || 0) > 0 || (Number(skill?.system?.chipLevel) || 0) > 0);
+    for (const key of FNFF2_ONLY_MARTIAL_ART_KEYS) {
+      if (offered.has(key)) continue;
+      const skill = actor._getSkillByStableId?.(MARTIAL_ART_ID_BY_KEY[key]) ?? null;
+      if (!skill || !trained(skill)) continue;
+      martialChoices.push({ value: key, label: actor.getMartialDisplayName?.(key) ?? key });
+    }
     // Saved attack options: pre-fill the weapon's last-used martial art, if still a valid choice.
     const savedMartialArt = savedOptions?.martialArt;
     const martialArtDefault = martialChoices.map(c => c.value).includes(savedMartialArt) ? savedMartialArt : "Brawling";

@@ -2576,6 +2576,7 @@
     "SDPSumTooltip": "Total SDP from implants and modules in this hit location",
     "ShotsLeft": "Shots Left",
     "SkillAlreadyOnSheet": "‘{name}’ is already on this sheet — that row is shown below instead of adding a second copy. To take the skill a second time, rename the copy first.",
+    "SkillAlreadyOnSheetFnff2Off": "‘{name}’ is already on this sheet — that row is shown below instead of adding a second copy. “{setting}” is off in this world, so this style rolls at its printed difficulty with no key-attack bonuses; turn the rule on for its full table.",
     "SkillAskModsHint": "Ticked, this skill always stops for modifiers first: a dialog opens so you can add situational bonuses and penalties before the roll. Unticked, it rolls straight away — except when equipped gear grants this skill a bonus, which opens the dialog anyway.",
     "SkillBrawling": "Brawling",
     "SkillChipToggleHint": "Ticked, this skill rolls at its chip level instead of its trained level — the level box then edits the chip level, and any linked chipware is switched on or off to match.",

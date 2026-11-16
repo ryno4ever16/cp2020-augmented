@@ -16,7 +16,6 @@ import {
   MARTIAL_ART_ID_BY_KEY,
   MARTIAL_ART_KEY_BY_ID,
   FNFF2_ONLY_MARTIAL_ART_KEYS,
-  isFnff2Enabled,
   isMartialArtSkillItem,
   martialArtDisplayName,
   martialActions,
@@ -177,11 +176,28 @@ export function getMartialArtSkill(actor, value) {
   return actor.itemTypes.skill.find((s) => normalizeSkillName(s.name) === norm) ?? null;
 }
 
+/**
+ * The built-in key of one of the thirteen Friday Night Fistfight 2 styles, or null for any other skill.
+ * Resolved by the skill's stable ids first (a seeded style keeps its compendium id, a copy carries it on
+ * `_stats.compendiumSource`; five of the thirteen are named with hyphens or spaces in the pack, so a name
+ * match alone misses them), then by the canonical "Martial Arts: <Style>" name.
+ * @param {Item|object} skill
+ * @returns {string|null}
+ */
+export function fnff2OnlyStyleKeyOf(skill) {
+  if (!skill || skill.type !== "skill") return null;
+  for (const id of getItemIdCandidates(skill)) {
+    const key = MARTIAL_ART_KEY_BY_ID[id];
+    if (key) return FNFF2_ONLY_MARTIAL_ART_KEYS.has(key) ? key : null;
+  }
+  const name = String(skill.name ?? "").trim();
+  return FNFF2_ONLY_MARTIAL_ART_KEYS.has(name) ? name : null;
+}
+
 /** Trained martial-art styles for the attack-dialog dropdown: [{ value, label }]. */
 export function trainedMartials(actor) {
   if (!actor) return [];
 
-  const fnff2 = isFnff2Enabled();
   const out = [];
 
   for (const skill of actor.itemTypes.skill) {
@@ -195,8 +211,9 @@ export function trainedMartials(actor) {
     if (!isMartial) continue;
     if (!hasAnyPositiveSkillValue(skill)) continue;
 
-    // Hide FNFF2-only built-in styles when FNFF2 is disabled.
-    if (builtinKey && !fnff2 && FNFF2_ONLY_MARTIAL_ART_KEYS.has(builtinKey)) continue;
+    // A trained style is offered whatever the Friday Night Fistfight 2 rule says — the thirteen styles printed
+    // outside the core book included (fnff2OnlyStyleKeyOf). The rule changes the math the base applies (its
+    // key-attack table zeroes those thirteen with the rule off), never which trained style a player may declare.
 
     const value = builtinKey ?? skill.name;
     const label = martialArtDisplayName(skill.name) || skill.name;

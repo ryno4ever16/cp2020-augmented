@@ -1,4 +1,5 @@
-import { martialOptions, martialActionGroups, martialActions, MARTIAL_ACTION_CATALOG_UUID, unarmedStandInDamage, JUMP_KICK_TO_HIT, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
+import { martialOptions, martialActionGroups, martialActions, MARTIAL_ACTION_CATALOG_UUID, unarmedStandInDamage, JUMP_KICK_TO_HIT, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
+import { fnff2OnlyStyleKeyOf } from "../martial/martial.js";
 import { armSpreadPreview } from "../combat/spread-placement.js";
 import { armAimPointPlacement, aimPreviewRadiusM, aimPointRangeBand } from "../combat/aim-placement.js";
 import { firingTokenIdOf } from "../seam-shim.js";
@@ -2370,11 +2371,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     let currentSkills =
       this.actor.itemTypes?.skill ?? this.actor.items.filter(i => i.type === "skill");
 
-    if (!isFnff2Enabled()) {
-      // Filter by the martial-art KEY (= the skill's name), NOT the embedded _id: a copied/re-created
-      // skill gets a fresh _id, so id-matching would fail to hide it (the documented inverse id-match trap).
-      currentSkills = currentSkills.filter(s => !FNFF2_ONLY_MARTIAL_ART_KEYS.has(s.name));
-    }
+    // Every skill item is listed — the thirteen Friday Night Fistfight 2 styles included, whatever the optional
+    // rule says. With the rule off they follow the ordinary untrained-martial rule (hidden until searched, listed
+    // once trained: _cpIsUntrainedMartial), never filtered out of existence: a row the list omits can never be
+    // revealed, and a drop of its compendium copy then had nowhere to go (community report, 2026-11). The rule
+    // changes the math the base applies (its key-attack table and damage bonus), not the list.
 
     const currentIds = currentSkills.map(s => s.id);
 
@@ -3323,6 +3324,10 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    * that is legitimately taken twice (Play Instrument, Teaching, a second Language) is still added,
    * by renaming the copy before or after the drop.
    *
+   * The reveal must always have a row to show: every style is listed (see _getSortedSkillIDs), so a twin is
+   * redirected, never refused — the warn-not-stop principle. A Friday Night Fistfight 2 style with the rule
+   * off gets the banner that names the rule and its limit.
+   *
    * @param {Item|object} data  the dropped item, as core's _onDrop resolved it before calling _onDropItem
    * @returns {Promise<boolean>} true when the drop was absorbed and must NOT reach the create path
    * @private
@@ -3343,7 +3348,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     } catch (_) { return false; }   // resolution failed → leave it to the normal drop flow
     if (!existing) return false;
 
-    ui.notifications?.warn(localize("SkillAlreadyOnSheet", { name: existing.name }));
+    // The twin is revealed, never refused. One of the thirteen Friday Night Fistfight 2 styles with the optional
+    // rule off is listed like any other (hidden until searched, shown once trained) but plays without its printed
+    // key-attack bonuses — the base's table zeroes it until the rule is on — so its banner says so; a referee who
+    // wants the style under the core rules is told the limit and never stopped.
+    const ruleOff = !isFnff2Enabled() && !!fnff2OnlyStyleKeyOf(existing);
+    ui.notifications?.warn(localize(ruleOff ? "SkillAlreadyOnSheetFnff2Off" : "SkillAlreadyOnSheet", {
+      name: existing.name, setting: game.i18n.localize("SETTINGS.FNFF2Enabled")
+    }));
     this._cpRevealSkillRow(existing);
     return true;
   }
